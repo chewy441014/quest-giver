@@ -1,0 +1,35 @@
+# Default ignored files
+/shelf/
+
+# Gradle and Kotlin
+.gradle/
+.kotlin/
+**/build/
+
+# Local Android configuration
+local.properties
+
+# Android Studio
+.idea/
+*.iml
+captures/
+
+# Native build output
+.externalNativeBuild/
+.cxx/
+
+# Generated packages
+*.apk
+*.aab
+output-metadata.json
+
+# Signing and secrets
+*.jks
+*.keystore
+keystore.properties
+secrets.properties
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db
