@@ -1,0 +1,192 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "efc709a25ecbfaefe0e666942db162ea",
+    "entities": [
+      {
+        "tableName": "habits",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `category` TEXT NOT NULL, `displayOrder` INTEGER NOT NULL, `isVisibleInHistory` INTEGER NOT NULL, `allowsMultipleCompletions` INTEGER NOT NULL, `scheduleType` TEXT NOT NULL, `scheduleTarget` INTEGER NOT NULL, `intervalDays` INTEGER, `intervalBasis` TEXT, `fixedScheduleAnchorEpochDay` INTEGER, `extraCompletionsMoveNextDueDate` INTEGER NOT NULL, `scheduleVisibility` TEXT NOT NULL, `createdAtEpochMillis` INTEGER NOT NULL, `archivedAtEpochMillis` INTEGER)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayOrder",
+            "columnName": "displayOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isVisibleInHistory",
+            "columnName": "isVisibleInHistory",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "allowsMultipleCompletions",
+            "columnName": "allowsMultipleCompletions",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scheduleType",
+            "columnName": "scheduleType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scheduleTarget",
+            "columnName": "scheduleTarget",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "intervalDays",
+            "columnName": "intervalDays",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "intervalBasis",
+            "columnName": "intervalBasis",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "fixedScheduleAnchorEpochDay",
+            "columnName": "fixedScheduleAnchorEpochDay",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "extraCompletionsMoveNextDueDate",
+            "columnName": "extraCompletionsMoveNextDueDate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scheduleVisibility",
+            "columnName": "scheduleVisibility",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtEpochMillis",
+            "columnName": "createdAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAtEpochMillis",
+            "columnName": "archivedAtEpochMillis",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "habit_logs",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `habitId` INTEGER NOT NULL, `completionTimestampMillis` INTEGER NOT NULL, `recordedTimestampMillis` INTEGER NOT NULL, `delta` INTEGER NOT NULL, `reversesLogId` INTEGER, FOREIGN KEY(`habitId`) REFERENCES `habits`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "habitId",
+            "columnName": "habitId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completionTimestampMillis",
+            "columnName": "completionTimestampMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordedTimestampMillis",
+            "columnName": "recordedTimestampMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "delta",
+            "columnName": "delta",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reversesLogId",
+            "columnName": "reversesLogId",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_habit_logs_habitId_completionTimestampMillis",
+            "unique": false,
+            "columnNames": [
+              "habitId",
+              "completionTimestampMillis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_habit_logs_habitId_completionTimestampMillis` ON `${TABLE_NAME}` (`habitId`, `completionTimestampMillis`)"
+          },
+          {
+            "name": "index_habit_logs_reversesLogId",
+            "unique": true,
+            "columnNames": [
+              "reversesLogId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_habit_logs_reversesLogId` ON `${TABLE_NAME}` (`reversesLogId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "habits",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "habitId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'efc709a25ecbfaefe0e666942db162ea')"
+    ]
+  }
+}
