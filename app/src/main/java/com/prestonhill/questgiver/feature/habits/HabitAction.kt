@@ -9,4 +9,10 @@ sealed interface HabitAction {
 
     data object DismissHabitDetails : HabitAction
     data object AddHabit : HabitAction
+    data class UpdateHabitEditor(
+        val editor: HabitEditorUiState
+    ) : HabitAction
+
+    data object SaveHabit : HabitAction
+    data object DismissHabitEditor : HabitAction
 }

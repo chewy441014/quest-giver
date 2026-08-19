@@ -88,6 +88,10 @@ class HabitViewModel(
                 // Editor navigation will be added later.
             }
 
+            is HabitAction.UpdateHabitEditor -> Unit
+            HabitAction.SaveHabit -> Unit
+            HabitAction.DismissHabitEditor -> Unit
+
             HabitAction.AddHabit -> {
                 // Creation dialog will be added later.
             }

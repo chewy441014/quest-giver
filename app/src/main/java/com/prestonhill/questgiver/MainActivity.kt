@@ -72,6 +72,10 @@ private fun reduceHabitState(
 
         is HabitAction.EditHabit -> state
         HabitAction.AddHabit -> state
+
+        is HabitAction.UpdateHabitEditor -> state
+        HabitAction.SaveHabit -> state
+        HabitAction.DismissHabitEditor -> state
     }
 
 private fun HabitScreenUiState.changeCompletion(

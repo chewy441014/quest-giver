@@ -84,6 +84,24 @@ fun HabitScreen(
             onAction = onAction
         )
     }
+    uiState.editor?.let { editor ->
+        HabitEditorDialog(
+            editor = editor,
+            onChange = { updatedEditor ->
+                onAction(
+                    HabitAction.UpdateHabitEditor(
+                        updatedEditor
+                    )
+                )
+            },
+            onSave = {
+                onAction(HabitAction.SaveHabit)
+            },
+            onDismiss = {
+                onAction(HabitAction.DismissHabitEditor)
+            }
+        )
+    }
 }
 
 @Composable
