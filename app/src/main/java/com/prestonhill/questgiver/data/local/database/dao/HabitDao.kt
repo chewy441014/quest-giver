@@ -30,6 +30,14 @@ interface HabitDao {
     @Query("SELECT * FROM habits WHERE id = :habitId LIMIT 1")
     suspend fun getHabit(habitId: Long): HabitEntity?
 
+    @Query(
+        """
+    SELECT * FROM habit_logs
+    ORDER BY completionTimestampMillis, id
+    """
+    )
+    fun observeAllHabitLogs(): Flow<List<HabitLogEntity>>
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertHabit(habit: HabitEntity): Long
 

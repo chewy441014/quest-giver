@@ -195,6 +195,9 @@ class HabitRepository(
             habitDao.deleteHabitPermanently(habit) == 1
         }
 
+    fun observeAllHabitLogs(): Flow<List<HabitLogEntity>> =
+        habitDao.observeAllHabitLogs()
+
     private fun validateHabit(habit: HabitEntity) {
         require(habit.name.isNotBlank())
         require(habit.displayOrder >= 0)
