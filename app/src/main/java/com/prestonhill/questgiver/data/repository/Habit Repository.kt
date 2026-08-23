@@ -215,6 +215,9 @@ class HabitRepository(
     private companion object {
         const val MAXIMUM_DAILY_COMPLETIONS = 100L
     }
+
+    suspend fun getHabit(habitId: Long): HabitEntity? =
+        habitDao.getHabit(habitId)
 }
 
 enum class CompletionChangeResult {

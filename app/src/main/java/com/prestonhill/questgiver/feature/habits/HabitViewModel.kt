@@ -3,12 +3,16 @@ package com.prestonhill.questgiver.feature.habits
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.prestonhill.questgiver.core.time.AppDay
 import com.prestonhill.questgiver.core.time.AppDayCalculator
 import com.prestonhill.questgiver.data.local.database.entity.HabitCategoryDb
 import com.prestonhill.questgiver.data.local.database.entity.HabitEntity
+import com.prestonhill.questgiver.data.local.database.entity.HabitIntervalBasisDb
 import com.prestonhill.questgiver.data.local.database.entity.HabitLogEntity
+import com.prestonhill.questgiver.data.local.database.entity.HabitScheduleTypeDb
+import com.prestonhill.questgiver.data.local.database.entity.HabitScheduleVisibilityDb
 import com.prestonhill.questgiver.data.repository.HabitRepository
-import com.prestonhill.questgiver.core.time.AppDay
+import java.util.concurrent.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -34,20 +38,43 @@ class HabitViewModel(
     private val inspectedHabitId =
         MutableStateFlow<Long?>(null)
 
+    private val editorState =
+        MutableStateFlow<HabitEditorUiState?>(null)
+
+    private val activeHabits =
+        repository.observeActiveHabits()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.Eagerly,
+                initialValue = emptyList()
+            )
+
+    private val overlayState =
+        combine(
+            inspectedHabitId,
+            editorState
+        ) { inspected, editor ->
+            HabitOverlayState(
+                inspectedHabitId = inspected,
+                editor = editor
+            )
+        }
+
     val uiState =
         combine(
-            repository.observeActiveHabits(),
+            activeHabits,
             repository.observeAllHabitLogs(),
             currentAppDay,
             expandedCategories,
-            inspectedHabitId
-        ) { habits, logs, appDay, expanded, inspected ->
+            overlayState
+        ) { habits, logs, appDay, expanded, overlay ->
             createUiState(
                 habits = habits,
                 logs = logs,
                 appDay = appDay,
                 expanded = expanded,
-                inspected = inspected
+                inspected = overlay.inspectedHabitId,
+                editor = overlay.editor
             )
         }.stateIn(
             scope = viewModelScope,
@@ -84,17 +111,22 @@ class HabitViewModel(
                     }
                 }
 
-            is HabitAction.EditHabit -> {
-                // Editor navigation will be added later.
-            }
-
-            is HabitAction.UpdateHabitEditor -> Unit
-            HabitAction.SaveHabit -> Unit
-            HabitAction.DismissHabitEditor -> Unit
-
             HabitAction.AddHabit -> {
-                // Creation dialog will be added later.
+                inspectedHabitId.value = null
+                editorState.value = HabitEditorUiState()
             }
+
+            is HabitAction.EditHabit ->
+                openEditor(action.habitId)
+
+            is HabitAction.UpdateHabitEditor ->
+                updateEditor(action.editor)
+
+            HabitAction.SaveHabit ->
+                saveHabit()
+
+            HabitAction.DismissHabitEditor ->
+                editorState.value = null
         }
     }
 
@@ -104,6 +136,222 @@ class HabitViewModel(
                 System.currentTimeMillis()
             )
     }
+
+    private fun openEditor(habitId: Long) {
+        viewModelScope.launch {
+            val habit = repository.getHabit(habitId)
+                ?: return@launch
+
+            inspectedHabitId.value = null
+            editorState.value = habit.toEditorState()
+        }
+    }
+
+    private fun updateEditor(
+        updated: HabitEditorUiState
+    ) {
+        val existing = editorState.value ?: return
+
+        editorState.value =
+            updated.copy(
+                habitId = existing.habitId,
+
+                // This property cannot change after creation.
+                allowsMultipleCompletions =
+                    if (existing.isEditing) {
+                        existing.allowsMultipleCompletions
+                    } else {
+                        updated.allowsMultipleCompletions
+                    }
+            )
+    }
+
+    private fun saveHabit() {
+        val editor = editorState.value ?: return
+
+        if (!editor.canSave) {
+            editorState.value =
+                editor.copy(
+                    errorMessage =
+                        "Enter a valid name and schedule."
+                )
+            return
+        }
+
+        editorState.value =
+            editor.copy(
+                isSaving = true,
+                errorMessage = null
+            )
+
+        viewModelScope.launch {
+            try {
+                val now = System.currentTimeMillis()
+
+                currentAppDay.value =
+                    appDayCalculator.containing(now)
+
+                if (editor.habitId == null) {
+                    repository.createHabit(
+                        createHabitEntity(
+                            editor = editor,
+                            timestampMillis = now
+                        )
+                    )
+                } else {
+                    val existing =
+                        repository.getHabit(editor.habitId)
+                            ?: error("Habit no longer exists.")
+
+                    val updated =
+                        updateHabitEntity(
+                            existing = existing,
+                            editor = editor
+                        )
+
+                    check(repository.updateHabit(updated)) {
+                        "Habit could not be updated."
+                    }
+                }
+
+                editorState.value = null
+            } catch (error: Exception) {
+                if (error is CancellationException) {
+                    throw error
+                }
+
+                editorState.update { current ->
+                    current?.copy(
+                        isSaving = false,
+                        errorMessage =
+                            error.message
+                                ?: "Habit could not be saved."
+                    )
+                }
+            }
+        }
+    }
+
+    private fun createHabitEntity(
+        editor: HabitEditorUiState,
+        timestampMillis: Long
+    ): HabitEntity {
+        val category = editor.category.toDb()
+
+        return HabitEntity(
+            name = editor.name.trim(),
+            category = category,
+            displayOrder = nextOrder(category),
+            allowsMultipleCompletions =
+                editor.allowsMultipleCompletions,
+            scheduleType = editor.scheduleType.toDb(),
+            scheduleTarget = editor.targetValue(),
+            intervalDays = editor.intervalValue(),
+            intervalBasis = editor.intervalBasisValue(),
+            fixedScheduleAnchorEpochDay =
+                editor.fixedAnchorValue(),
+            extraCompletionsMoveNextDueDate =
+                editor.extraCompletionValue(),
+            scheduleVisibility =
+                editor.scheduleVisibility.toDb(),
+            createdAtEpochMillis = timestampMillis
+        )
+    }
+
+    private fun updateHabitEntity(
+        existing: HabitEntity,
+        editor: HabitEditorUiState
+    ): HabitEntity {
+        val newCategory = editor.category.toDb()
+
+        val newOrder =
+            if (newCategory == existing.category) {
+                existing.displayOrder
+            } else {
+                nextOrder(newCategory)
+            }
+
+        val preserveAnchor =
+            existing.scheduleType ==
+                    HabitScheduleTypeDb.INTERVAL &&
+                    existing.intervalBasis ==
+                    HabitIntervalBasisDb.FIXED_SCHEDULE &&
+                    editor.scheduleType ==
+                    HabitScheduleType.INTERVAL &&
+                    editor.intervalBasis ==
+                    HabitIntervalBasis.FIXED_SCHEDULE
+
+        return existing.copy(
+            name = editor.name.trim(),
+            category = newCategory,
+            displayOrder = newOrder,
+            scheduleType = editor.scheduleType.toDb(),
+            scheduleTarget = editor.targetValue(),
+            intervalDays = editor.intervalValue(),
+            intervalBasis = editor.intervalBasisValue(),
+            fixedScheduleAnchorEpochDay =
+                if (preserveAnchor) {
+                    existing.fixedScheduleAnchorEpochDay
+                } else {
+                    editor.fixedAnchorValue()
+                },
+            extraCompletionsMoveNextDueDate =
+                editor.extraCompletionValue(),
+            scheduleVisibility =
+                editor.scheduleVisibility.toDb()
+        )
+    }
+
+    private fun nextOrder(category: HabitCategoryDb): Int =
+        (
+                activeHabits.value
+                    .filter { habit ->
+                        habit.category == category
+                    }
+                    .maxOfOrNull { habit ->
+                        habit.displayOrder
+                    } ?: -1
+                ) + 1
+
+    private fun HabitEditorUiState.targetValue(): Int =
+        if (scheduleType == HabitScheduleType.INTERVAL) {
+            1
+        } else {
+            scheduleTarget.toInt()
+        }
+
+    private fun HabitEditorUiState.intervalValue(): Int? =
+        if (scheduleType == HabitScheduleType.INTERVAL) {
+            intervalDays.toInt()
+        } else {
+            null
+        }
+
+    private fun HabitEditorUiState.intervalBasisValue():
+            HabitIntervalBasisDb? =
+        if (scheduleType == HabitScheduleType.INTERVAL) {
+            intervalBasis.toDb()
+        } else {
+            null
+        }
+
+    private fun HabitEditorUiState.fixedAnchorValue(): Long? =
+        if (
+            scheduleType == HabitScheduleType.INTERVAL &&
+            intervalBasis ==
+            HabitIntervalBasis.FIXED_SCHEDULE
+        ) {
+            currentAppDay.value.date.toEpochDay()
+        } else {
+            null
+        }
+
+    private fun HabitEditorUiState.extraCompletionValue():
+            Boolean =
+        scheduleType == HabitScheduleType.INTERVAL &&
+                intervalBasis ==
+                HabitIntervalBasis.FROM_COMPLETION &&
+                extraCompletionsMoveNextDueDate
 
     private fun changeCompletion(
         habitId: Long,
@@ -143,7 +391,8 @@ class HabitViewModel(
         logs: List<HabitLogEntity>,
         appDay: AppDay,
         expanded: Set<HabitCategory>,
-        inspected: Long?
+        inspected: Long?,
+        editor: HabitEditorUiState?
     ): HabitScreenUiState {
         val rowsByCategory =
             habits.groupBy { habit ->
@@ -175,7 +424,8 @@ class HabitViewModel(
                                 allowsMultipleCompletions =
                                     habit.allowsMultipleCompletions,
                                 scheduleCompletions =
-                                    evaluation.scheduleCompletionCount,
+                                    evaluation
+                                        .scheduleCompletionCount,
                                 scheduleTarget =
                                     evaluation.scheduleTarget,
                                 dueStatus =
@@ -186,19 +436,42 @@ class HabitViewModel(
             },
             inspectedHabitId = inspected?.takeIf { id ->
                 habits.any { habit -> habit.id == id }
-            }
+            },
+            editor = editor
         )
     }
 
     private fun emptyUiState() =
         HabitScreenUiState(
             categories = HabitCategory.entries.map { category ->
-                HabitCategoryUiState(
-                    category = category
-                )
+                HabitCategoryUiState(category = category)
             }
         )
 }
+
+private data class HabitOverlayState(
+    val inspectedHabitId: Long?,
+    val editor: HabitEditorUiState?
+)
+
+private fun HabitEntity.toEditorState() =
+    HabitEditorUiState(
+        habitId = id,
+        name = name,
+        category = category.toUiCategory(),
+        allowsMultipleCompletions =
+            allowsMultipleCompletions,
+        scheduleType = scheduleType.toUi(),
+        scheduleTarget = scheduleTarget.toString(),
+        intervalDays = (intervalDays ?: 3).toString(),
+        intervalBasis =
+            intervalBasis?.toUi()
+                ?: HabitIntervalBasis.FIXED_SCHEDULE,
+        extraCompletionsMoveNextDueDate =
+            extraCompletionsMoveNextDueDate,
+        scheduleVisibility =
+            scheduleVisibility.toUi()
+    )
 
 private fun HabitCategoryDb.toUiCategory(): HabitCategory =
     when (this) {
@@ -210,6 +483,86 @@ private fun HabitCategoryDb.toUiCategory(): HabitCategory =
 
         HabitCategoryDb.BEFORE_BED ->
             HabitCategory.BEFORE_BED
+    }
+
+private fun HabitCategory.toDb(): HabitCategoryDb =
+    when (this) {
+        HabitCategory.MORNING ->
+            HabitCategoryDb.MORNING
+
+        HabitCategory.ANYTIME ->
+            HabitCategoryDb.ANYTIME
+
+        HabitCategory.BEFORE_BED ->
+            HabitCategoryDb.BEFORE_BED
+    }
+
+private fun HabitScheduleType.toDb(): HabitScheduleTypeDb =
+    when (this) {
+        HabitScheduleType.DAILY ->
+            HabitScheduleTypeDb.DAILY
+
+        HabitScheduleType.WEEKLY_TARGET ->
+            HabitScheduleTypeDb.WEEKLY_TARGET
+
+        HabitScheduleType.INTERVAL ->
+            HabitScheduleTypeDb.INTERVAL
+    }
+
+private fun HabitScheduleTypeDb.toUi(): HabitScheduleType =
+    when (this) {
+        HabitScheduleTypeDb.DAILY ->
+            HabitScheduleType.DAILY
+
+        HabitScheduleTypeDb.WEEKLY_TARGET ->
+            HabitScheduleType.WEEKLY_TARGET
+
+        HabitScheduleTypeDb.INTERVAL ->
+            HabitScheduleType.INTERVAL
+    }
+
+private fun HabitIntervalBasis.toDb(): HabitIntervalBasisDb =
+    when (this) {
+        HabitIntervalBasis.FIXED_SCHEDULE ->
+            HabitIntervalBasisDb.FIXED_SCHEDULE
+
+        HabitIntervalBasis.FROM_COMPLETION ->
+            HabitIntervalBasisDb.FROM_COMPLETION
+    }
+
+private fun HabitIntervalBasisDb.toUi(): HabitIntervalBasis =
+    when (this) {
+        HabitIntervalBasisDb.FIXED_SCHEDULE ->
+            HabitIntervalBasis.FIXED_SCHEDULE
+
+        HabitIntervalBasisDb.FROM_COMPLETION ->
+            HabitIntervalBasis.FROM_COMPLETION
+    }
+
+private fun HabitScheduleVisibility.toDb():
+        HabitScheduleVisibilityDb =
+    when (this) {
+        HabitScheduleVisibility.ALWAYS ->
+            HabitScheduleVisibilityDb.ALWAYS
+
+        HabitScheduleVisibility.WHEN_DUE ->
+            HabitScheduleVisibilityDb.WHEN_DUE
+
+        HabitScheduleVisibility.HIDE_AFTER_TARGET ->
+            HabitScheduleVisibilityDb.HIDE_AFTER_TARGET
+    }
+
+private fun HabitScheduleVisibilityDb.toUi():
+        HabitScheduleVisibility =
+    when (this) {
+        HabitScheduleVisibilityDb.ALWAYS ->
+            HabitScheduleVisibility.ALWAYS
+
+        HabitScheduleVisibilityDb.WHEN_DUE ->
+            HabitScheduleVisibility.WHEN_DUE
+
+        HabitScheduleVisibilityDb.HIDE_AFTER_TARGET ->
+            HabitScheduleVisibility.HIDE_AFTER_TARGET
     }
 
 class HabitViewModelFactory(
