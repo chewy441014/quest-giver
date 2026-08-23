@@ -170,6 +170,17 @@ fun HabitScreen(
             },
         )
     }
+
+    uiState.operationError?.let { message ->
+        OperationErrorDialog(
+            message = message,
+            onDismiss = {
+                onAction(
+                    HabitAction.DismissOperationError
+                )
+            }
+        )
+    }
 }
 
 @Composable
