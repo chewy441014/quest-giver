@@ -60,6 +60,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.datastore.preferences)
 }
 
 room3 {

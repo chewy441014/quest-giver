@@ -1,0 +1,9 @@
+package com.prestonhill.questgiver.core.settings
+
+import java.time.DayOfWeek
+import java.time.LocalTime
+
+data class AppSettings(
+    val dayBoundary: LocalTime = LocalTime.MIDNIGHT,
+    val weekStart: DayOfWeek = DayOfWeek.MONDAY,
+)
