@@ -447,32 +447,54 @@ private fun DeleteConfirmationDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val deletingHistory =
-        confirmation is HabitConfirmationUiState.DeleteHabit
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            if (!confirmation.isDeleting) {
+                onDismiss()
+            }
+        },
         title = {
-            Text(
-                if (deletingHistory) {
-                    "Delete history?"
-                } else {
-                    "Delete habit?"
-                },
-            )
+            Text("Delete habit?")
         },
         text = {
-            Text("Permanently delete \"${confirmation.habitName}\" and all " +
-                    "of its completion history? This cannot be undone."
-            )
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    "Delete " +
+                            "\"${confirmation.habitName}\" and all " +
+                            "of the history? " +
+                            "This cannot be undone."
+                )
+
+                confirmation.errorMessage?.let { message ->
+                    Text(
+                        text = message,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
         },
         confirmButton = {
-            Button(onClick = onConfirm) {
-                Text("Delete")
+            Button(
+                enabled = !confirmation.isDeleting,
+                onClick = onConfirm,
+            ) {
+                Text(
+                    if (confirmation.isDeleting) {
+                        "Deleting..."
+                    } else {
+                        "Delete"
+                    }
+                )
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                enabled = !confirmation.isDeleting,
+                onClick = onDismiss,
+            ) {
                 Text("Cancel")
             }
         },

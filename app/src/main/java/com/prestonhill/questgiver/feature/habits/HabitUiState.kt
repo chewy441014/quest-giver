@@ -105,12 +105,17 @@ data class ArchivedHabitUiState(
     val category: HabitCategory,
 )
 
+
 sealed interface HabitConfirmationUiState {
     val habitId: Long
     val habitName: String
+    val isDeleting: Boolean
+    val errorMessage: String?
 
     data class DeleteHabit(
         override val habitId: Long,
         override val habitName: String,
+        override val isDeleting: Boolean = false,
+        override val errorMessage: String? = null,
     ) : HabitConfirmationUiState
 }

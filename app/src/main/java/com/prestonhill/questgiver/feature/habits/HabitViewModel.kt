@@ -107,16 +107,55 @@ class HabitViewModel(
     }
 
     private fun confirmDelete() {
-        val confirmation = confirmationState.value ?: return
+        val confirmation =
+            confirmationState.value
+                    as? HabitConfirmationUiState.DeleteHabit
+                ?: return
+
+        if (confirmation.isDeleting) {
+            return
+        }
+
+        confirmationState.value =
+            confirmation.copy(
+                isDeleting = true,
+                errorMessage = null,
+            )
+
+        val deletingLastArchivedHabit =
+            showArchivedHabits.value &&
+                    archivedHabits.value.singleOrNull()?.id ==
+                    confirmation.habitId
 
         viewModelScope.launch {
-            when (confirmation) {
-                is HabitConfirmationUiState.DeleteHabit -> {
+            try {
+                val deleted =
                     repository.deleteHabit(confirmation.habitId)
+                if (deleted) {
+                    if (deletingLastArchivedHabit) {
+                        showArchivedHabits.value = false
+                    }
+                    confirmationState.value = null
+                } else {
+                    confirmationState.value =
+                        confirmation.copy(
+                            isDeleting = false,
+                            errorMessage =
+                                "Habit could not be deleted.",
+                        )
                 }
-            }
+            } catch (error: Exception) {
+                if (error is CancellationException) {
+                    throw error
+                }
 
-            confirmationState.value = null
+                confirmationState.value =
+                    confirmation.copy(
+                        isDeleting = false,
+                        errorMessage =
+                            "Habit could not be deleted.",
+                    )
+            }
         }
     }
 
@@ -219,8 +258,18 @@ class HabitViewModel(
             }
 
             is HabitAction.RestoreHabit -> {
+                val restoringLastArchivedHabit =
+                    showArchivedHabits.value &&
+                            archivedHabits.value.singleOrNull()?.id ==
+                            action.habitId
+
                 viewModelScope.launch {
-                    repository.restoreHabit(action.habitId)
+                    val restored =
+                        repository.restoreHabit(action.habitId)
+
+                    if (restored && restoringLastArchivedHabit) {
+                        showArchivedHabits.value = false
+                    }
                 }
             }
 
