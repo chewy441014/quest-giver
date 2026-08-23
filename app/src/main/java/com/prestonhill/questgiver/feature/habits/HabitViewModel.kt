@@ -41,6 +41,28 @@ class HabitViewModel(
     private val editorState =
         MutableStateFlow<HabitEditorUiState?>(null)
 
+    private val operationError =
+        MutableStateFlow<String?>(null)
+
+    private data class HabitDialogState(
+        val confirmation: HabitConfirmationUiState?,
+        val operationError: String?,
+    )
+
+    private val confirmationState =
+        MutableStateFlow<HabitConfirmationUiState?>(null)
+
+    private val dialogState =
+        combine(
+            confirmationState,
+            operationError
+        ) { confirmation, error ->
+            HabitDialogState(
+                confirmation = confirmation,
+                operationError = error
+            )
+        }
+
     private val activeHabits =
         repository.observeActiveHabits()
             .stateIn(
@@ -50,9 +72,6 @@ class HabitViewModel(
             )
 
     private val showArchivedHabits = MutableStateFlow(false)
-
-    private val confirmationState =
-        MutableStateFlow<HabitConfirmationUiState?>(null)
 
     private val archivedHabits = repository.observeArchivedHabits()
         .stateIn(
@@ -65,14 +84,15 @@ class HabitViewModel(
         inspectedHabitId,
         editorState,
         showArchivedHabits,
-        confirmationState,
+        dialogState,
         archivedHabits,
-    ) { inspectedId, editor, showArchived, confirmation, archived ->
+    ) { inspectedId, editor, showArchived, dialogs, archived ->
         OverlayState(
             inspectedHabitId = inspectedId,
             editor = editor,
             showArchivedHabits = showArchived,
-            confirmation = confirmation,
+            confirmation = dialogs.confirmation,
+            operationError = dialogs.operationError,
             archivedHabits = archived,
         )
     }
@@ -238,15 +258,7 @@ class HabitViewModel(
                 editorState.value = null
 
             is HabitAction.ArchiveHabit -> {
-                viewModelScope.launch {
-                    if (repository.archiveHabit(action.habitId)) {
-                        inspectedHabitId.value = null
-
-                        if (editorState.value?.habitId == action.habitId) {
-                            editorState.value = null
-                        }
-                    }
-                }
+                archiveHabit(action.habitId)
             }
 
             HabitAction.ShowArchivedHabits -> {
@@ -258,19 +270,7 @@ class HabitViewModel(
             }
 
             is HabitAction.RestoreHabit -> {
-                val restoringLastArchivedHabit =
-                    showArchivedHabits.value &&
-                            archivedHabits.value.singleOrNull()?.id ==
-                            action.habitId
-
-                viewModelScope.launch {
-                    val restored =
-                        repository.restoreHabit(action.habitId)
-
-                    if (restored && restoringLastArchivedHabit) {
-                        showArchivedHabits.value = false
-                    }
-                }
+                restoreHabit(action.habitId)
             }
 
             is HabitAction.RequestDeleteHabit -> {
@@ -283,6 +283,10 @@ class HabitViewModel(
 
             HabitAction.DismissConfirmation -> {
                 confirmationState.value = null
+            }
+
+            HabitAction.DismissOperationError -> {
+                operationError.value = null
             }
         }
     }
@@ -558,6 +562,7 @@ class HabitViewModel(
             }
 
         return HabitScreenUiState(
+            operationError = overlay.operationError,
             categories = HabitCategory.entries.map { category ->
                 val evaluatedHabits =
                     rowsByCategory[category]
@@ -640,6 +645,69 @@ class HabitViewModel(
                 HabitCategoryUiState(category = category)
             }
         )
+
+    private fun archiveHabit(habitId: Long) {
+        operationError.value = null
+
+        viewModelScope.launch {
+            try {
+                val archived =
+                    repository.archiveHabit(habitId)
+
+                if (!archived) {
+                    operationError.value =
+                        "Habit could not be archived."
+                    return@launch
+                }
+
+                inspectedHabitId.value = null
+
+                if (editorState.value?.habitId == habitId) {
+                    editorState.value = null
+                }
+            } catch (error: Exception) {
+                if (error is CancellationException) {
+                    throw error
+                }
+
+                operationError.value =
+                    "Habit could not be archived."
+            }
+        }
+    }
+
+    private fun restoreHabit(habitId: Long) {
+        operationError.value = null
+
+        val restoringLastArchivedHabit =
+            showArchivedHabits.value &&
+                    archivedHabits.value.singleOrNull()?.id ==
+                    habitId
+
+        viewModelScope.launch {
+            try {
+                val restored =
+                    repository.restoreHabit(habitId)
+
+                if (!restored) {
+                    operationError.value =
+                        "Habit could not be restored."
+                    return@launch
+                }
+
+                if (restoringLastArchivedHabit) {
+                    showArchivedHabits.value = false
+                }
+            } catch (error: Exception) {
+                if (error is CancellationException) {
+                    throw error
+                }
+
+                operationError.value =
+                    "Habit could not be restored."
+            }
+        }
+    }
 }
 
 private data class OverlayState(
@@ -648,8 +716,8 @@ private data class OverlayState(
     val showArchivedHabits: Boolean,
     val confirmation: HabitConfirmationUiState?,
     val archivedHabits: List<HabitEntity>,
+    val operationError: String?,
 )
-
 private data class HabitDisplayState(
     val expandedCategories: Set<HabitCategory>,
     val categoriesShowingHidden: Set<HabitCategory>

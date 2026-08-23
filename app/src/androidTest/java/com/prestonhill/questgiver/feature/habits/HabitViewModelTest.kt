@@ -251,6 +251,62 @@ class HabitViewModelTest {
         assertTrue(state.hasHabit(habitId))
     }
 
+    @Test
+    fun archiveFailureShowsError() = runBlocking {
+        viewModel.onAction(
+            HabitAction.ArchiveHabit(MISSING_HABIT_ID)
+        )
+
+        val state =
+            awaitState {
+                it.operationError != null
+            }
+
+        assertEquals(
+            "Habit could not be archived.",
+            state.operationError
+        )
+    }
+
+    @Test
+    fun restoreFailureShowsError() = runBlocking {
+        viewModel.onAction(
+            HabitAction.RestoreHabit(MISSING_HABIT_ID)
+        )
+
+        val state =
+            awaitState {
+                it.operationError != null
+            }
+
+        assertEquals(
+            "Habit could not be restored.",
+            state.operationError
+        )
+    }
+
+    @Test
+    fun dismissClearsOperationError() = runBlocking {
+        viewModel.onAction(
+            HabitAction.ArchiveHabit(MISSING_HABIT_ID)
+        )
+
+        awaitState {
+            it.operationError != null
+        }
+
+        viewModel.onAction(
+            HabitAction.DismissOperationError
+        )
+
+        val state =
+            awaitState {
+                it.operationError == null
+            }
+
+        assertNull(state.operationError)
+    }
+
     private suspend fun addHabit(): Long =
         repository.createHabit(
             HabitEntity(
@@ -280,4 +336,8 @@ class HabitViewModelTest {
                 habit.id == habitId
             }
         }
+
+    companion object {
+        const val MISSING_HABIT_ID = 999L
+    }
 }

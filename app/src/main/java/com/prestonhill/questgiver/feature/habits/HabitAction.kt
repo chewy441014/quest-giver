@@ -38,4 +38,6 @@ sealed interface HabitAction {
     data object ConfirmDelete : HabitAction
 
     data object DismissConfirmation : HabitAction
+
+    data object DismissOperationError : HabitAction
 }

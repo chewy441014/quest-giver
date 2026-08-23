@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Switch
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 
 @Composable
 fun HabitScreen(
@@ -89,7 +90,7 @@ fun HabitScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Button(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).testTag(HabitTags.ADD),
                 onClick = {
                     onAction(HabitAction.AddHabit)
                 },
@@ -102,6 +103,7 @@ fun HabitScreen(
                     onClick = {
                         onAction(HabitAction.ShowArchivedHabits)
                     },
+                    modifier = Modifier.testTag(HabitTags.ARCHIVED),
                 ) {
                     Text("Archived")
                 }
@@ -203,6 +205,9 @@ private fun CategoryHeader(
                                         .displayName() +
                                     " habits"
                     }
+                    .testTag(
+                        HabitTags.hidden(categoryState.category)
+                    )
             )
         }
 
@@ -223,11 +228,15 @@ private fun HabitRow(
             .clickable {
                 onAction(HabitAction.InspectHabit(habit.id))
             }
-            .padding(vertical = 8.dp),
+            .padding(vertical = 8.dp)
+            .testTag(HabitTags.row(habit.id)),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (habit.showsPlusButton) {
             IconButton(
+                modifier = Modifier.testTag(
+                    HabitTags.completion(habit.id)
+                ),
                 onClick = {
                     onAction(HabitAction.AddCompletion(habit.id))
                 }
@@ -239,6 +248,9 @@ private fun HabitRow(
             }
         } else {
             Checkbox(
+                modifier = Modifier.testTag(
+                    HabitTags.completion(habit.id)
+                ),
                 checked = habit.isCompleted,
                 onCheckedChange = { checked ->
                     onAction(
@@ -351,20 +363,29 @@ private fun HabitDetailsDialog(
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
 
-                TextButton(onClick = onArchive) {
+                TextButton(
+                    modifier = Modifier.testTag(HabitTags.ARCHIVE),
+                    onClick = onArchive,
+                ) {
                     Text("Archive habit")
                 }
 
-                TextButton(onClick = onDeleteHabit) {
+                TextButton(
+                    modifier = Modifier.testTag(
+                        HabitTags.delete(habit.id)
+                    ),
+                    onClick = onDeleteHabit,
+                ) {
                     Text("Delete habit")
                 }
             }
         },
         confirmButton = {
             Button(
+                modifier = Modifier.testTag(HabitTags.EDIT),
                 onClick = {
                     onAction(HabitAction.EditHabit(habit.id))
-                }
+                },
             ) {
                 Text("Edit")
             }
@@ -414,6 +435,9 @@ private fun ArchivedHabitsDialog(
                         )
 
                         TextButton(
+                            modifier = Modifier.testTag(
+                                HabitTags.restore(habit.id)
+                            ),
                             onClick = {
                                 onRestore(habit.id)
                             },
@@ -422,6 +446,9 @@ private fun ArchivedHabitsDialog(
                         }
 
                         TextButton(
+                            modifier = Modifier.testTag(
+                                HabitTags.delete(habit.id)
+                            ),
                             onClick = {
                                 onDelete(habit.id)
                             },
@@ -478,6 +505,9 @@ private fun DeleteConfirmationDialog(
         },
         confirmButton = {
             Button(
+                modifier = Modifier.testTag(
+                    HabitTags.CONFIRM_DELETE
+                ),
                 enabled = !confirmation.isDeleting,
                 onClick = onConfirm,
             ) {
@@ -492,10 +522,34 @@ private fun DeleteConfirmationDialog(
         },
         dismissButton = {
             TextButton(
+                modifier = Modifier.testTag(
+                    HabitTags.CANCEL_DELETE
+                ),
                 enabled = !confirmation.isDeleting,
                 onClick = onDismiss,
             ) {
                 Text("Cancel")
+            }
+        },
+    )
+}
+
+@Composable
+private fun OperationErrorDialog(
+    message: String,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Something went wrong")
+        },
+        text = {
+            Text(message)
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("OK")
             }
         },
     )

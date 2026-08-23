@@ -116,6 +116,51 @@ class HabitScreenTest {
             .assertIsDisplayed()
     }
 
+    @Test
+    fun operationErrorIsVisible() {
+        showScreen(
+            state = HabitScreenUiState(
+                operationError =
+                    "Habit could not be archived."
+            ),
+            actions = mutableListOf()
+        )
+
+        composeRule
+            .onNodeWithText("Something went wrong")
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText(
+                "Habit could not be archived."
+            )
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun operationErrorCanBeDismissed() {
+        val actions = mutableListOf<HabitAction>()
+
+        showScreen(
+            state = HabitScreenUiState(
+                operationError =
+                    "Habit could not be restored."
+            ),
+            actions = actions
+        )
+
+        composeRule
+            .onNodeWithText("OK")
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HabitAction.DismissOperationError
+            ),
+            actions
+        )
+    }
+
     private fun showScreen(
         state: HabitScreenUiState,
         actions: MutableList<HabitAction>

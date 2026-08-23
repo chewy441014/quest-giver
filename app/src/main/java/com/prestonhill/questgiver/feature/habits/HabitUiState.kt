@@ -97,6 +97,7 @@ data class HabitScreenUiState(
     val editor: HabitEditorUiState? = null,
     val showArchivedHabits: Boolean = false,
     val confirmation: HabitConfirmationUiState? = null,
+    val operationError: String? = null,
 )
 
 data class ArchivedHabitUiState(

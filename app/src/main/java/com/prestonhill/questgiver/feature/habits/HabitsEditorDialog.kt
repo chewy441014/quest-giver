@@ -21,6 +21,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
@@ -62,7 +63,9 @@ fun HabitEditorDialog(
                     },
                     label = { Text("Name") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(HabitTags.NAME)
                 )
 
                 SectionLabel("Category")
@@ -231,6 +234,9 @@ fun HabitEditorDialog(
                 HabitScheduleVisibility.entries.forEach {
                         visibility ->
                     ChoiceRow(
+                        modifier = Modifier.testTag(
+                            HabitTags.visibility(visibility)
+                        ),
                         selected =
                             editor.scheduleVisibility ==
                                     visibility,
@@ -256,8 +262,9 @@ fun HabitEditorDialog(
         },
         confirmButton = {
             Button(
+                modifier = Modifier.testTag(HabitTags.SAVE),
                 enabled = editor.canSave,
-                onClick = onSave
+                onClick = onSave,
             ) {
                 Text(
                     if (editor.isSaving) {
@@ -289,10 +296,11 @@ private fun SectionLabel(text: String) {
 private fun ChoiceRow(
     selected: Boolean,
     label: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically
