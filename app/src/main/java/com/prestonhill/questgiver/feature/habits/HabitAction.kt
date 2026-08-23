@@ -15,4 +15,8 @@ sealed interface HabitAction {
 
     data object SaveHabit : HabitAction
     data object DismissHabitEditor : HabitAction
+
+    data class ToggleHiddenHabits(
+        val category: HabitCategory
+    ) : HabitAction
 }

@@ -60,19 +60,33 @@ class HabitViewModel(
             )
         }
 
+    private val categoriesShowingHidden =
+        MutableStateFlow<Set<HabitCategory>>(emptySet())
+
+    private val displayState =
+        combine(
+            expandedCategories,
+            categoriesShowingHidden
+        ) { expanded, showingHidden ->
+            HabitDisplayState(
+                expandedCategories = expanded,
+                categoriesShowingHidden = showingHidden
+            )
+        }
+
     val uiState =
         combine(
             activeHabits,
             repository.observeAllHabitLogs(),
             currentAppDay,
-            expandedCategories,
+            displayState,
             overlayState
-        ) { habits, logs, appDay, expanded, overlay ->
+        ) { habits, logs, appDay, display, overlay ->
             createUiState(
                 habits = habits,
                 logs = logs,
                 appDay = appDay,
-                expanded = expanded,
+                display = display,
                 inspected = overlay.inspectedHabitId,
                 editor = overlay.editor
             )
@@ -108,6 +122,15 @@ class HabitViewModel(
                         expanded - action.category
                     } else {
                         expanded + action.category
+                    }
+                }
+
+            is HabitAction.ToggleHiddenHabits ->
+                categoriesShowingHidden.update { categories ->
+                    if (action.category in categories) {
+                        categories - action.category
+                    } else {
+                        categories + action.category
                     }
                 }
 
@@ -390,7 +413,7 @@ class HabitViewModel(
         habits: List<HabitEntity>,
         logs: List<HabitLogEntity>,
         appDay: AppDay,
-        expanded: Set<HabitCategory>,
+        display: HabitDisplayState,
         inspected: Long?,
         editor: HabitEditorUiState?
     ): HabitScreenUiState {
@@ -401,37 +424,63 @@ class HabitViewModel(
 
         return HabitScreenUiState(
             categories = HabitCategory.entries.map { category ->
-                HabitCategoryUiState(
-                    category = category,
-                    isExpanded = category in expanded,
-                    habits = rowsByCategory[category]
+                val evaluatedHabits =
+                    rowsByCategory[category]
                         .orEmpty()
                         .map { habit ->
-                            val evaluation =
-                                scheduleCalculator.evaluate(
-                                    habit = habit,
-                                    logs = logs,
-                                    appDay = appDay
-                                )
-
-                            HabitRowUiState(
-                                id = habit.id,
-                                name = habit.name,
-                                streakCount =
-                                    evaluation.streakCount,
-                                completionCountToday =
-                                    evaluation.dailyCompletionCount,
-                                allowsMultipleCompletions =
-                                    habit.allowsMultipleCompletions,
-                                scheduleCompletions =
-                                    evaluation
-                                        .scheduleCompletionCount,
-                                scheduleTarget =
-                                    evaluation.scheduleTarget,
-                                dueStatus =
-                                    evaluation.dueStatus
+                            habit to scheduleCalculator.evaluate(
+                                habit = habit,
+                                logs = logs,
+                                appDay = appDay
                             )
                         }
+
+                val normallyVisible =
+                    evaluatedHabits.filter { (habit, evaluation) ->
+                        HabitVisibilityEvaluator.shouldShow(
+                            visibility = habit.scheduleVisibility,
+                            evaluation = evaluation
+                        )
+                    }
+
+                val hasHiddenHabits =
+                    normallyVisible.size < evaluatedHabits.size
+
+                val showHiddenHabits =
+                    hasHiddenHabits &&
+                            category in
+                            display.categoriesShowingHidden
+
+                val displayedHabits =
+                    if (showHiddenHabits) {
+                        evaluatedHabits
+                    } else {
+                        normallyVisible
+                    }
+
+                HabitCategoryUiState(
+                    category = category,
+                    isExpanded =
+                        category in display.expandedCategories,
+                    hasHiddenHabits = hasHiddenHabits,
+                    showHiddenHabits = showHiddenHabits,
+                    habits = displayedHabits.map {
+                            (habit, evaluation) ->
+                        HabitRowUiState(
+                            id = habit.id,
+                            name = habit.name,
+                            streakCount = evaluation.streakCount,
+                            completionCountToday =
+                                evaluation.dailyCompletionCount,
+                            allowsMultipleCompletions =
+                                habit.allowsMultipleCompletions,
+                            scheduleCompletions =
+                                evaluation.scheduleCompletionCount,
+                            scheduleTarget =
+                                evaluation.scheduleTarget,
+                            dueStatus = evaluation.dueStatus
+                        )
+                    }
                 )
             },
             inspectedHabitId = inspected?.takeIf { id ->
@@ -452,6 +501,11 @@ class HabitViewModel(
 private data class HabitOverlayState(
     val inspectedHabitId: Long?,
     val editor: HabitEditorUiState?
+)
+
+private data class HabitDisplayState(
+    val expandedCategories: Set<HabitCategory>,
+    val categoriesShowingHidden: Set<HabitCategory>
 )
 
 private fun HabitEntity.toEditorState() =

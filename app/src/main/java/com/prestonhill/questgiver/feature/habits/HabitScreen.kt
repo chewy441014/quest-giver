@@ -22,6 +22,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.Switch
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 
 @Composable
 fun HabitScreen(
@@ -49,6 +52,13 @@ fun HabitScreen(
                         onClick = {
                             onAction(
                                 HabitAction.ToggleCategory(
+                                    categoryState.category
+                                )
+                            )
+                        },
+                        onToggleHidden = {
+                            onAction(
+                                HabitAction.ToggleHiddenHabits(
                                     categoryState.category
                                 )
                             )
@@ -107,7 +117,8 @@ fun HabitScreen(
 @Composable
 private fun CategoryHeader(
     categoryState: HabitCategoryUiState,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onToggleHidden: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -120,6 +131,24 @@ private fun CategoryHeader(
             text = categoryState.category.displayName(),
             style = MaterialTheme.typography.titleMedium
         )
+
+        if (categoryState.hasHiddenHabits) {
+            Switch(
+                checked = categoryState.showHiddenHabits,
+                onCheckedChange = {
+                    onToggleHidden()
+                },
+                modifier = Modifier
+                    .padding(start = 12.dp)
+                    .semantics {
+                        contentDescription =
+                            "Show hidden " +
+                                    categoryState.category
+                                        .displayName() +
+                                    " habits"
+                    }
+            )
+        }
 
         Spacer(modifier = Modifier.weight(1f))
 

@@ -85,7 +85,9 @@ data class HabitRowUiState(
 data class HabitCategoryUiState(
     val category: HabitCategory,
     val isExpanded: Boolean = true,
-    val habits: List<HabitRowUiState> = emptyList()
+    val habits: List<HabitRowUiState> = emptyList(),
+    val hasHiddenHabits: Boolean = false,
+    val showHiddenHabits: Boolean = false
 )
 
 data class HabitScreenUiState(
