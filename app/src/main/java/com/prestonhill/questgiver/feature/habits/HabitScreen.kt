@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,6 +17,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -80,20 +82,49 @@ fun HabitScreen(
             }
         }
 
-        Button(
-            onClick = { onAction(HabitAction.AddHabit) },
-            modifier = Modifier.fillMaxWidth()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Add habit")
+            Button(
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    onAction(HabitAction.AddHabit)
+                },
+            ) {
+                Text("Add habit")
+            }
+
+            if (uiState.archivedHabits.isNotEmpty()) {
+                OutlinedButton(
+                    onClick = {
+                        onAction(HabitAction.ShowArchivedHabits)
+                    },
+                ) {
+                    Text("Archived")
+                }
+            }
         }
     }
 
     inspectedHabit?.let { habit ->
         HabitDetailsDialog(
             habit = habit,
-            onAction = onAction
+            onAction = onAction,
+            onArchive = {
+                onAction(HabitAction.ArchiveHabit(habit.id))
+            },
+            onDeleteHistory = {
+                onAction(HabitAction.RequestDeleteHistory(habit.id))
+            },
+            onDeletePermanently = {
+                onAction(HabitAction.RequestPermanentDelete(habit.id))
+            },
         )
     }
+
     uiState.editor?.let { editor ->
         HabitEditorDialog(
             editor = editor,
@@ -110,6 +141,33 @@ fun HabitScreen(
             onDismiss = {
                 onAction(HabitAction.DismissHabitEditor)
             }
+        )
+    }
+
+    if (uiState.showArchivedHabits) {
+        ArchivedHabitsDialog(
+            habits = uiState.archivedHabits,
+            onRestore = {
+                onAction(HabitAction.RestoreHabit(it))
+            },
+            onDelete = {
+                onAction(HabitAction.RequestPermanentDelete(it))
+            },
+            onDismiss = {
+                onAction(HabitAction.DismissArchivedHabits)
+            },
+        )
+    }
+
+    uiState.confirmation?.let { confirmation ->
+        DeleteConfirmationDialog(
+            confirmation = confirmation,
+            onConfirm = {
+                onAction(HabitAction.ConfirmDelete)
+            },
+            onDismiss = {
+                onAction(HabitAction.DismissConfirmation)
+            },
         )
     }
 }
@@ -222,7 +280,10 @@ private fun HabitRow(
 @Composable
 private fun HabitDetailsDialog(
     habit: HabitRowUiState,
-    onAction: (HabitAction) -> Unit
+    onAction: (HabitAction) -> Unit,
+    onArchive: () -> Unit,
+    onDeleteHistory: () -> Unit,
+    onDeletePermanently: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = {
@@ -288,6 +349,21 @@ private fun HabitDetailsDialog(
                         )
                     }
                 }
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+
+                TextButton(onClick = onArchive) {
+                    Text("Archive habit")
+                }
+
+                TextButton(onClick = onDeleteHistory) {
+                    Text("Delete completion history")
+                }
+
+                TextButton(onClick = onDeletePermanently) {
+                    Text("Delete habit")
+                }
             }
         },
         confirmButton = {
@@ -308,6 +384,110 @@ private fun HabitDetailsDialog(
                 Text("Close")
             }
         }
+    )
+}
+
+@Composable
+private fun ArchivedHabitsDialog(
+    habits: List<ArchivedHabitUiState>,
+    onRestore: (Long) -> Unit,
+    onDelete: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Archived habits")
+        },
+        text = {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(
+                    items = habits,
+                    key = { it.id },
+                ) { habit ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = habit.name,
+                            modifier = Modifier.weight(1f),
+                        )
+
+                        TextButton(
+                            onClick = {
+                                onRestore(habit.id)
+                            },
+                        ) {
+                            Text("Restore")
+                        }
+
+                        TextButton(
+                            onClick = {
+                                onDelete(habit.id)
+                            },
+                        ) {
+                            Text("Delete")
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        },
+    )
+}
+
+@Composable
+private fun DeleteConfirmationDialog(
+    confirmation: HabitConfirmationUiState,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val deletingHistory =
+        confirmation is HabitConfirmationUiState.DeleteHistory
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                if (deletingHistory) {
+                    "Delete history?"
+                } else {
+                    "Delete habit?"
+                },
+            )
+        },
+        text = {
+            Text(
+                if (deletingHistory) {
+                    "Permanently delete all completion history for " +
+                            "\"${confirmation.habitName}\"? The habit will remain."
+                } else {
+                    "Permanently delete \"${confirmation.habitName}\" and all " +
+                            "of its completion history? This cannot be undone."
+                },
+            )
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text("Delete")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
     )
 }
 
