@@ -93,23 +93,16 @@ class HabitViewModel(
 
     private fun requestDelete(
         habitId: Long,
-        permanently: Boolean,
     ) {
         viewModelScope.launch {
             val habit = repository.getHabit(habitId) ?: return@launch
 
             confirmationState.value =
-                if (permanently) {
-                    HabitConfirmationUiState.DeletePermanently(
-                        habitId = habit.id,
-                        habitName = habit.name,
+                HabitConfirmationUiState.DeleteHabit(
+                    habitId = habit.id,
+                    habitName = habit.name,
                     )
-                } else {
-                    HabitConfirmationUiState.DeleteHistory(
-                        habitId = habit.id,
-                        habitName = habit.name,
-                    )
-                }
+
         }
     }
 
@@ -118,24 +111,8 @@ class HabitViewModel(
 
         viewModelScope.launch {
             when (confirmation) {
-                is HabitConfirmationUiState.DeleteHistory -> {
-                    repository.deleteHistory(confirmation.habitId)
-                }
-
-                is HabitConfirmationUiState.DeletePermanently -> {
-                    repository.deleteHabitPermanently(confirmation.habitId)
-
-                    if (inspectedHabitId.value == confirmation.habitId) {
-                        inspectedHabitId.value = null
-                    }
-
-                    if (editorState.value?.habitId == confirmation.habitId) {
-                        editorState.value = null
-                    }
-
-                    if (archivedHabits.value.size <= 1) {
-                        showArchivedHabits.value = false
-                    }
+                is HabitConfirmationUiState.DeleteHabit -> {
+                    repository.deleteHabit(confirmation.habitId)
                 }
             }
 
@@ -247,12 +224,8 @@ class HabitViewModel(
                 }
             }
 
-            is HabitAction.RequestDeleteHistory -> {
-                requestDelete(action.habitId, permanently = false)
-            }
-
-            is HabitAction.RequestPermanentDelete -> {
-                requestDelete(action.habitId, permanently = true)
+            is HabitAction.RequestDeleteHabit -> {
+                requestDelete(action.habitId)
             }
 
             HabitAction.ConfirmDelete -> {

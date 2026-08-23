@@ -1,7 +1,6 @@
 package com.prestonhill.questgiver.data.local.database.dao
 
 import androidx.room3.Dao
-import androidx.room3.Delete
 import androidx.room3.Insert
 import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
@@ -108,8 +107,8 @@ interface HabitDao {
         endTimestamp: Long
     ): HabitLogEntity?
 
-    @Query("DELETE FROM habit_logs WHERE habitId = :habitId")
-    suspend fun deleteHabitPermanently(habitId: Long): Int
+    @Query("DELETE FROM habits WHERE id = :habitId")
+    suspend fun deleteHabit(habitId: Long): Int
 
 
     @Query(
@@ -129,7 +128,4 @@ interface HabitDao {
     """
     )
     suspend fun restoreHabit(habitId: Long): Int
-
-    @Query("DELETE FROM habit_logs WHERE habitId = :habitId")
-    fun deleteHistoryForHabit(habitId: Long): Int
 }

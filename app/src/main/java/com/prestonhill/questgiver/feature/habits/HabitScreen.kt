@@ -116,11 +116,9 @@ fun HabitScreen(
             onArchive = {
                 onAction(HabitAction.ArchiveHabit(habit.id))
             },
-            onDeleteHistory = {
-                onAction(HabitAction.RequestDeleteHistory(habit.id))
-            },
-            onDeletePermanently = {
-                onAction(HabitAction.RequestPermanentDelete(habit.id))
+
+            onDeleteHabit = {
+                onAction(HabitAction.RequestDeleteHabit(habit.id))
             },
         )
     }
@@ -151,7 +149,7 @@ fun HabitScreen(
                 onAction(HabitAction.RestoreHabit(it))
             },
             onDelete = {
-                onAction(HabitAction.RequestPermanentDelete(it))
+                onAction(HabitAction.RequestDeleteHabit(it))
             },
             onDismiss = {
                 onAction(HabitAction.DismissArchivedHabits)
@@ -282,8 +280,8 @@ private fun HabitDetailsDialog(
     habit: HabitRowUiState,
     onAction: (HabitAction) -> Unit,
     onArchive: () -> Unit,
-    onDeleteHistory: () -> Unit,
-    onDeletePermanently: () -> Unit
+
+    onDeleteHabit: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = {
@@ -357,11 +355,7 @@ private fun HabitDetailsDialog(
                     Text("Archive habit")
                 }
 
-                TextButton(onClick = onDeleteHistory) {
-                    Text("Delete completion history")
-                }
-
-                TextButton(onClick = onDeletePermanently) {
+                TextButton(onClick = onDeleteHabit) {
                     Text("Delete habit")
                 }
             }
@@ -454,7 +448,7 @@ private fun DeleteConfirmationDialog(
     onDismiss: () -> Unit,
 ) {
     val deletingHistory =
-        confirmation is HabitConfirmationUiState.DeleteHistory
+        confirmation is HabitConfirmationUiState.DeleteHabit
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -468,14 +462,8 @@ private fun DeleteConfirmationDialog(
             )
         },
         text = {
-            Text(
-                if (deletingHistory) {
-                    "Permanently delete all completion history for " +
-                            "\"${confirmation.habitName}\"? The habit will remain."
-                } else {
-                    "Permanently delete \"${confirmation.habitName}\" and all " +
-                            "of its completion history? This cannot be undone."
-                },
+            Text("Permanently delete \"${confirmation.habitName}\" and all " +
+                    "of its completion history? This cannot be undone."
             )
         },
         confirmButton = {

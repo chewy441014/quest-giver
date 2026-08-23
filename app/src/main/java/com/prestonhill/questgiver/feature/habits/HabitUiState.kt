@@ -109,12 +109,7 @@ sealed interface HabitConfirmationUiState {
     val habitId: Long
     val habitName: String
 
-    data class DeleteHistory(
-        override val habitId: Long,
-        override val habitName: String,
-    ) : HabitConfirmationUiState
-
-    data class DeletePermanently(
+    data class DeleteHabit(
         override val habitId: Long,
         override val habitName: String,
     ) : HabitConfirmationUiState

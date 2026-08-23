@@ -32,14 +32,9 @@ sealed interface HabitAction {
         val habitId: Long,
     ) : HabitAction
 
-    data class RequestDeleteHistory(
+    data class RequestDeleteHabit(
         val habitId: Long,
     ) : HabitAction
-
-    data class RequestPermanentDelete(
-        val habitId: Long,
-    ) : HabitAction
-
     data object ConfirmDelete : HabitAction
 
     data object DismissConfirmation : HabitAction

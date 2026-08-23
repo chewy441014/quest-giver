@@ -182,15 +182,8 @@ class HabitRepository(
             timestamp = timestampMillis
         ) == 1
 
-    suspend fun deleteHabitPermanently(
-        habitId: Long
-    ): Boolean =
-        database.withWriteTransaction {
-            val habit = habitDao.getHabit(habitId)
-                ?: return@withWriteTransaction false
-
-            habitDao.deleteHabitPermanently(habitId) == 1
-        }
+    suspend fun deleteHabit(
+        habitId: Long): Boolean = habitDao.deleteHabit(habitId) == 1
 
     fun observeAllHabitLogs(): Flow<List<HabitLogEntity>> =
         habitDao.observeAllHabitLogs()
@@ -221,9 +214,6 @@ class HabitRepository(
 
     suspend fun restoreHabit(habitId: Long): Boolean =
         habitDao.restoreHabit(habitId) == 1
-
-    suspend fun deleteHistory(habitId: Long): Int =
-        habitDao.deleteHistoryForHabit(habitId)
 }
 
 enum class CompletionChangeResult {
