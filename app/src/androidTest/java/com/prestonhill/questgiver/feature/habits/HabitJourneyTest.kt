@@ -20,8 +20,6 @@ import androidx.test.core.app.ApplicationProvider
 import com.prestonhill.questgiver.core.time.AppDayCalculator
 import com.prestonhill.questgiver.data.local.database.QuestGiverDatabase
 import com.prestonhill.questgiver.data.repository.HabitRepository
-import java.time.DayOfWeek
-import java.time.LocalTime
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -31,6 +29,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import com.prestonhill.questgiver.core.settings.AppSettings
+import kotlinx.coroutines.flow.flowOf
 
 class HabitJourneyTest {
     @get:Rule
@@ -58,22 +58,13 @@ class HabitJourneyTest {
 
         repository = HabitRepository(database)
 
-        val appDayCalculator =
-            AppDayCalculator(
-                dayBoundary = LocalTime.MIDNIGHT,
-                zoneId = ZoneId.systemDefault()
-            )
-
         val factory =
             HabitViewModelFactory(
                 repository = repository,
-                appDayCalculator = appDayCalculator,
-                scheduleCalculator =
-                    HabitScheduleCalculator(
-                        appDayCalculator = appDayCalculator,
-                        weekStart = DayOfWeek.MONDAY
+                settings = flowOf(AppSettings()),
+                zoneId = ZoneId.systemDefault(),
                     )
-            )
+
 
         viewModelStore = ViewModelStore()
 

@@ -9,14 +9,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.prestonhill.questgiver.core.time.AppDayCalculator
 import com.prestonhill.questgiver.data.local.database.DatabaseProvider
 import com.prestonhill.questgiver.data.repository.HabitRepository
-import com.prestonhill.questgiver.feature.habits.HabitScheduleCalculator
 import com.prestonhill.questgiver.feature.habits.HabitViewModel
 import com.prestonhill.questgiver.feature.habits.HabitViewModelFactory
-import java.time.DayOfWeek
-import java.time.LocalTime
 import java.time.ZoneId
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.mutableStateOf
@@ -44,28 +40,16 @@ class MainActivity : ComponentActivity() {
                 applicationContext.appSettingsDataStore
             )
 
-        val settingsViewModelFactory =
-            SettingsViewModelFactory(
-                repository = settingsRepository
-            )
-
-        val appDayCalculator =
-            AppDayCalculator(
-                dayBoundary = LocalTime.MIDNIGHT,
-                zoneId = ZoneId.systemDefault()
-            )
-
-        val scheduleCalculator =
-            HabitScheduleCalculator(
-                appDayCalculator = appDayCalculator,
-                weekStart = DayOfWeek.MONDAY
-            )
-
         val viewModelFactory =
             HabitViewModelFactory(
                 repository = repository,
-                appDayCalculator = appDayCalculator,
-                scheduleCalculator = scheduleCalculator
+                settings = settingsRepository.settings,
+                zoneId = ZoneId.systemDefault(),
+            )
+
+        val settingsViewModelFactory =
+            SettingsViewModelFactory(
+                repository = settingsRepository
             )
 
         setContent {

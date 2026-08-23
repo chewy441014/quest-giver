@@ -19,17 +19,42 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.prestonhill.questgiver.core.settings.AppSettings
+import java.time.ZoneId
+import kotlinx.coroutines.flow.Flow
 
 class HabitViewModel(
     private val repository: HabitRepository,
-    private val appDayCalculator: AppDayCalculator,
-    private val scheduleCalculator: HabitScheduleCalculator
+    private val settings: Flow<AppSettings>,
+    private val zoneId: ZoneId,
 ) : ViewModel() {
-    private val currentAppDay =
-        MutableStateFlow(
-            appDayCalculator.containing(
-                System.currentTimeMillis()
+    private val currentTimestamp =
+        MutableStateFlow(System.currentTimeMillis())
+
+    private val settingsState =
+        settings.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = AppSettings(),
+        )
+
+    private val timeState =
+        combine(
+            currentTimestamp,
+            settingsState,
+        ) { timestamp, appSettings ->
+            createTimeState(
+                timestamp = timestamp,
+                settings = appSettings,
             )
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue =
+                createTimeState(
+                    timestamp = currentTimestamp.value,
+                    settings = AppSettings(),
+                ),
         )
 
     private val expandedCategories =
@@ -183,14 +208,16 @@ class HabitViewModel(
         combine(
             activeHabits,
             repository.observeAllHabitLogs(),
-            currentAppDay,
+            timeState,
             displayState,
             overlayState
-        ) { habits, logs, appDay, display, overlay ->
+        ) { habits, logs, time, display, overlay ->
             createUiState(
                 habits = habits,
                 logs = logs,
-                appDay = appDay,
+                appDay = time.appDay,
+                scheduleCalculator =
+                    time.scheduleCalculator,
                 display = display,
                 inspected = overlay.inspectedHabitId,
                 editor = overlay.editor,
@@ -292,10 +319,8 @@ class HabitViewModel(
     }
 
     fun refreshAppDay() {
-        currentAppDay.value =
-            appDayCalculator.containing(
-                System.currentTimeMillis()
-            )
+        currentTimestamp.value =
+            System.currentTimeMillis()
     }
 
     private fun openEditor(habitId: Long) {
@@ -349,8 +374,7 @@ class HabitViewModel(
             try {
                 val now = System.currentTimeMillis()
 
-                currentAppDay.value =
-                    appDayCalculator.containing(now)
+                currentTimestamp.value = now
 
                 if (editor.habitId == null) {
                     repository.createHabit(
@@ -502,7 +526,9 @@ class HabitViewModel(
             intervalBasis ==
             HabitIntervalBasis.FIXED_SCHEDULE
         ) {
-            currentAppDay.value.date.toEpochDay()
+            appDayAt(
+                System.currentTimeMillis()
+            ).date.toEpochDay()
         } else {
             null
         }
@@ -520,9 +546,9 @@ class HabitViewModel(
     ) {
         viewModelScope.launch {
             val now = System.currentTimeMillis()
-            val appDay = appDayCalculator.containing(now)
+            val appDay = appDayAt(now)
 
-            currentAppDay.value = appDay
+            currentTimestamp.value = now
 
             if (add) {
                 repository.addCompletion(
@@ -554,7 +580,8 @@ class HabitViewModel(
         display: HabitDisplayState,
         inspected: Long?,
         editor: HabitEditorUiState?,
-        overlay: OverlayState
+        overlay: OverlayState,
+        scheduleCalculator: HabitScheduleCalculator,
     ): HabitScreenUiState {
         val rowsByCategory =
             habits.groupBy { habit ->
@@ -708,6 +735,34 @@ class HabitViewModel(
             }
         }
     }
+
+    private fun createTimeState(
+        timestamp: Long,
+        settings: AppSettings,
+    ): HabitTimeState {
+        val appDayCalculator =
+            AppDayCalculator(
+                dayBoundary = settings.dayBoundary,
+                zoneId = zoneId,
+            )
+
+        return HabitTimeState(
+            appDay =
+                appDayCalculator.containing(timestamp),
+            scheduleCalculator =
+                HabitScheduleCalculator(
+                    appDayCalculator = appDayCalculator,
+                    weekStart = settings.weekStart,
+                ),
+        )
+    }
+
+    private fun appDayAt(timestamp: Long): AppDay =
+        AppDayCalculator(
+            dayBoundary =
+                settingsState.value.dayBoundary,
+            zoneId = zoneId,
+        ).containing(timestamp)
 }
 
 private data class OverlayState(
@@ -721,6 +776,12 @@ private data class OverlayState(
 private data class HabitDisplayState(
     val expandedCategories: Set<HabitCategory>,
     val categoriesShowingHidden: Set<HabitCategory>
+)
+
+private data class HabitTimeState(
+    val appDay: AppDay,
+    val scheduleCalculator:
+    HabitScheduleCalculator,
 )
 
 private fun HabitEntity.toEditorState() =
@@ -836,8 +897,8 @@ private fun HabitScheduleVisibilityDb.toUi():
 
 class HabitViewModelFactory(
     private val repository: HabitRepository,
-    private val appDayCalculator: AppDayCalculator,
-    private val scheduleCalculator: HabitScheduleCalculator
+    private val settings: Flow<AppSettings>,
+    private val zoneId: ZoneId,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(
         modelClass: Class<T>
@@ -850,8 +911,8 @@ class HabitViewModelFactory(
             @Suppress("UNCHECKED_CAST")
             return HabitViewModel(
                 repository = repository,
-                appDayCalculator = appDayCalculator,
-                scheduleCalculator = scheduleCalculator
+                settings = settings,
+                zoneId = zoneId,
             ) as T
         }
 

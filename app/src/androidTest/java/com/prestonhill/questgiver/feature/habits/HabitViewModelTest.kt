@@ -13,8 +13,6 @@ import com.prestonhill.questgiver.data.local.database.entity.HabitCategoryDb
 import com.prestonhill.questgiver.data.local.database.entity.HabitEntity
 import com.prestonhill.questgiver.data.local.database.entity.HabitScheduleTypeDb
 import com.prestonhill.questgiver.data.repository.HabitRepository
-import java.time.DayOfWeek
-import java.time.LocalTime
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -30,6 +28,8 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import kotlin.time.Duration.Companion.milliseconds
+import com.prestonhill.questgiver.core.settings.AppSettings
+import kotlinx.coroutines.flow.MutableStateFlow
 
 @RunWith(AndroidJUnit4::class)
 class HabitViewModelTest {
@@ -37,11 +37,15 @@ class HabitViewModelTest {
     private lateinit var repository: HabitRepository
     private lateinit var viewModel: HabitViewModel
     private lateinit var viewModelStore: ViewModelStore
+    private lateinit var settings: MutableStateFlow<AppSettings>
 
     @Before
     fun setup() {
         val context =
             ApplicationProvider.getApplicationContext<Context>()
+
+        settings =
+            MutableStateFlow(AppSettings())
 
         database =
             Room.inMemoryDatabaseBuilder<QuestGiverDatabase>(
@@ -53,21 +57,11 @@ class HabitViewModelTest {
 
         repository = HabitRepository(database)
 
-        val appDayCalculator =
-            AppDayCalculator(
-                dayBoundary = LocalTime.MIDNIGHT,
-                zoneId = ZoneId.systemDefault()
-            )
-
         val factory =
             HabitViewModelFactory(
                 repository = repository,
-                appDayCalculator = appDayCalculator,
-                scheduleCalculator =
-                    HabitScheduleCalculator(
-                        appDayCalculator = appDayCalculator,
-                        weekStart = DayOfWeek.MONDAY
-                    )
+                settings = settings,
+                zoneId = ZoneId.systemDefault(),
             )
 
         viewModelStore = ViewModelStore()
