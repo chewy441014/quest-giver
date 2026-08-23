@@ -19,4 +19,28 @@ sealed interface HabitAction {
     data class ToggleHiddenHabits(
         val category: HabitCategory
     ) : HabitAction
+
+    data class ArchiveHabit(
+        val habitId: Long,
+    ) : HabitAction
+
+    data object ShowArchivedHabits : HabitAction
+
+    data object DismissArchivedHabits : HabitAction
+
+    data class RestoreHabit(
+        val habitId: Long,
+    ) : HabitAction
+
+    data class RequestDeleteHistory(
+        val habitId: Long,
+    ) : HabitAction
+
+    data class RequestPermanentDelete(
+        val habitId: Long,
+    ) : HabitAction
+
+    data object ConfirmDelete : HabitAction
+
+    data object DismissConfirmation : HabitAction
 }

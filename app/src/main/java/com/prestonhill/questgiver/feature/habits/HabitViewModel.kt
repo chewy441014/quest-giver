@@ -49,16 +49,33 @@ class HabitViewModel(
                 initialValue = emptyList()
             )
 
-    private val overlayState =
-        combine(
-            inspectedHabitId,
-            editorState
-        ) { inspected, editor ->
-            HabitOverlayState(
-                inspectedHabitId = inspected,
-                editor = editor
-            )
-        }
+    private val showArchivedHabits = MutableStateFlow(false)
+
+    private val confirmationState =
+        MutableStateFlow<HabitConfirmationUiState?>(null)
+
+    private val archivedHabits = repository.observeArchivedHabits()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList(),
+        )
+
+    private val overlayState = combine(
+        inspectedHabitId,
+        editorState,
+        showArchivedHabits,
+        confirmationState,
+        archivedHabits,
+    ) { inspectedId, editor, showArchived, confirmation, archived ->
+        OverlayState(
+            inspectedHabitId = inspectedId,
+            editor = editor,
+            showArchivedHabits = showArchived,
+            confirmation = confirmation,
+            archivedHabits = archived,
+        )
+    }
 
     private val categoriesShowingHidden =
         MutableStateFlow<Set<HabitCategory>>(emptySet())
@@ -74,6 +91,58 @@ class HabitViewModel(
             )
         }
 
+    private fun requestDelete(
+        habitId: Long,
+        permanently: Boolean,
+    ) {
+        viewModelScope.launch {
+            val habit = repository.getHabit(habitId) ?: return@launch
+
+            confirmationState.value =
+                if (permanently) {
+                    HabitConfirmationUiState.DeletePermanently(
+                        habitId = habit.id,
+                        habitName = habit.name,
+                    )
+                } else {
+                    HabitConfirmationUiState.DeleteHistory(
+                        habitId = habit.id,
+                        habitName = habit.name,
+                    )
+                }
+        }
+    }
+
+    private fun confirmDelete() {
+        val confirmation = confirmationState.value ?: return
+
+        viewModelScope.launch {
+            when (confirmation) {
+                is HabitConfirmationUiState.DeleteHistory -> {
+                    repository.deleteHistory(confirmation.habitId)
+                }
+
+                is HabitConfirmationUiState.DeletePermanently -> {
+                    repository.deleteHabitPermanently(confirmation.habitId)
+
+                    if (inspectedHabitId.value == confirmation.habitId) {
+                        inspectedHabitId.value = null
+                    }
+
+                    if (editorState.value?.habitId == confirmation.habitId) {
+                        editorState.value = null
+                    }
+
+                    if (archivedHabits.value.size <= 1) {
+                        showArchivedHabits.value = false
+                    }
+                }
+            }
+
+            confirmationState.value = null
+        }
+    }
+
     val uiState =
         combine(
             activeHabits,
@@ -88,7 +157,8 @@ class HabitViewModel(
                 appDay = appDay,
                 display = display,
                 inspected = overlay.inspectedHabitId,
-                editor = overlay.editor
+                editor = overlay.editor,
+                overlay = overlay
             )
         }.stateIn(
             scope = viewModelScope,
@@ -150,6 +220,48 @@ class HabitViewModel(
 
             HabitAction.DismissHabitEditor ->
                 editorState.value = null
+
+            is HabitAction.ArchiveHabit -> {
+                viewModelScope.launch {
+                    if (repository.archiveHabit(action.habitId)) {
+                        inspectedHabitId.value = null
+
+                        if (editorState.value?.habitId == action.habitId) {
+                            editorState.value = null
+                        }
+                    }
+                }
+            }
+
+            HabitAction.ShowArchivedHabits -> {
+                showArchivedHabits.value = true
+            }
+
+            HabitAction.DismissArchivedHabits -> {
+                showArchivedHabits.value = false
+            }
+
+            is HabitAction.RestoreHabit -> {
+                viewModelScope.launch {
+                    repository.restoreHabit(action.habitId)
+                }
+            }
+
+            is HabitAction.RequestDeleteHistory -> {
+                requestDelete(action.habitId, permanently = false)
+            }
+
+            is HabitAction.RequestPermanentDelete -> {
+                requestDelete(action.habitId, permanently = true)
+            }
+
+            HabitAction.ConfirmDelete -> {
+                confirmDelete()
+            }
+
+            HabitAction.DismissConfirmation -> {
+                confirmationState.value = null
+            }
         }
     }
 
@@ -415,7 +527,8 @@ class HabitViewModel(
         appDay: AppDay,
         display: HabitDisplayState,
         inspected: Long?,
-        editor: HabitEditorUiState?
+        editor: HabitEditorUiState?,
+        overlay: OverlayState
     ): HabitScreenUiState {
         val rowsByCategory =
             habits.groupBy { habit ->
@@ -486,7 +599,16 @@ class HabitViewModel(
             inspectedHabitId = inspected?.takeIf { id ->
                 habits.any { habit -> habit.id == id }
             },
-            editor = editor
+            editor = editor,
+            archivedHabits = overlay.archivedHabits.map { habit ->
+                ArchivedHabitUiState(
+                    id = habit.id,
+                    name = habit.name,
+                    category = habit.category.toUiCategory()
+                )
+            },
+            showArchivedHabits = overlay.showArchivedHabits,
+            confirmation = overlay.confirmation,
         )
     }
 
@@ -498,9 +620,12 @@ class HabitViewModel(
         )
 }
 
-private data class HabitOverlayState(
+private data class OverlayState(
     val inspectedHabitId: Long?,
-    val editor: HabitEditorUiState?
+    val editor: HabitEditorUiState?,
+    val showArchivedHabits: Boolean,
+    val confirmation: HabitConfirmationUiState?,
+    val archivedHabits: List<HabitEntity>,
 )
 
 private data class HabitDisplayState(

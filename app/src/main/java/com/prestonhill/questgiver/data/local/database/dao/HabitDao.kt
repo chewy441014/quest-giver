@@ -56,9 +56,6 @@ interface HabitDao {
         timestamp: Long
     ): Int
 
-    @Delete
-    suspend fun deleteHabitPermanently(habit: HabitEntity): Int
-
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertHabitLog(log: HabitLogEntity): Long
 
@@ -112,5 +109,27 @@ interface HabitDao {
     ): HabitLogEntity?
 
     @Query("DELETE FROM habit_logs WHERE habitId = :habitId")
-    suspend fun deleteHistoryForHabit(habitId: Long): Int
+    suspend fun deleteHabitPermanently(habitId: Long): Int
+
+
+    @Query(
+        """
+    SELECT * FROM habits
+    WHERE archivedAtEpochMillis IS NOT NULL
+    ORDER BY archivedAtEpochMillis DESC
+    """
+    )
+    fun observeArchivedHabits(): Flow<List<HabitEntity>>
+
+    @Query(
+        """
+    UPDATE habits
+    SET archivedAtEpochMillis = NULL
+    WHERE id = :habitId
+    """
+    )
+    suspend fun restoreHabit(habitId: Long): Int
+
+    @Query("DELETE FROM habit_logs WHERE habitId = :habitId")
+    fun deleteHistoryForHabit(habitId: Long): Int
 }

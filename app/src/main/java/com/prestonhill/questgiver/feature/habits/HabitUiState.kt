@@ -92,6 +92,30 @@ data class HabitCategoryUiState(
 
 data class HabitScreenUiState(
     val categories: List<HabitCategoryUiState> = emptyList(),
+    val archivedHabits: List<ArchivedHabitUiState> = emptyList(),
     val inspectedHabitId: Long? = null,
-    val editor: HabitEditorUiState? = null
+    val editor: HabitEditorUiState? = null,
+    val showArchivedHabits: Boolean = false,
+    val confirmation: HabitConfirmationUiState? = null,
 )
+
+data class ArchivedHabitUiState(
+    val id: Long,
+    val name: String,
+    val category: HabitCategory,
+)
+
+sealed interface HabitConfirmationUiState {
+    val habitId: Long
+    val habitName: String
+
+    data class DeleteHistory(
+        override val habitId: Long,
+        override val habitName: String,
+    ) : HabitConfirmationUiState
+
+    data class DeletePermanently(
+        override val habitId: Long,
+        override val habitName: String,
+    ) : HabitConfirmationUiState
+}
