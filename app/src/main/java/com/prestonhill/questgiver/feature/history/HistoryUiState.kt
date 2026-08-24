@@ -1,5 +1,7 @@
 package com.prestonhill.questgiver.feature.history
 
+import java.time.LocalDate
+
 enum class HistorySection(
     val label: String,
 ) {
@@ -20,9 +22,46 @@ data class HistoryGraphUiState(
     val message: String,
 )
 
+data class HistoryTaskUiState(
+    val id: Long,
+    val name: String,
+    val category: String?,
+    val schedule: String,
+)
+
+data class HistoryTaskLogUiState(
+    val id: Long,
+    val taskId: Long?,
+    val taskName: String,
+    val category: String?,
+    val date: LocalDate,
+    val completedAtMillis: Long,
+    val isCorrected: Boolean,
+) {
+    val canOpenTask: Boolean
+        get() = taskId != null
+
+    val canCorrect: Boolean
+        get() =
+            taskId != null &&
+                    !isCorrected
+
+    val canDelete: Boolean
+        get() = taskId == null
+}
+
+data class HistoryTaskDayUiState(
+    val date: LocalDate,
+    val logs: List<HistoryTaskLogUiState>,
+)
+
 data class TaskHistoryUiState(
     val page: TaskHistoryPage =
         TaskHistoryPage.DASHBOARD,
+    val allTasks: List<HistoryTaskUiState> =
+        emptyList(),
+    val logDays: List<HistoryTaskDayUiState> =
+        emptyList(),
     val categoryGraph: HistoryGraphUiState =
         HistoryGraphUiState(
             id = "task_categories",
