@@ -43,6 +43,15 @@ object HistoryTags {
     const val PINNED_GRAPHS =
         "history_pinned_graphs"
 
+    const val CORRECT_LOG =
+        "history_correct_log"
+
+    const val DELETE_LOG =
+        "history_delete_log"
+
+    const val CONFIRM_LOG =
+        "history_confirm_log"
+
     fun tab(section: HistorySection) =
         "history_tab_${section.name}"
 
@@ -126,6 +135,35 @@ fun HistoryScreen(
                 onAction = onAction,
             )
         }
+
+    state.tasks.operationError?.let {
+            message ->
+        AlertDialog(
+            onDismissRequest = {
+                onAction(
+                    HistoryAction.DismissError
+                )
+            },
+            title = {
+                Text("Something went wrong")
+            },
+            text = {
+                Text(message)
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onAction(
+                            HistoryAction
+                                .DismissError
+                        )
+                    },
+                ) {
+                    Text("OK")
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -160,6 +198,23 @@ private fun LogDetailsDialog(
 
                     log.taskId == null ->
                         Text("Associated task deleted")
+                }
+                if (log.canDelete) {
+                    TextButton(
+                        modifier =
+                            Modifier.testTag(
+                                HistoryTags.DELETE_LOG
+                            ),
+                        onClick = {
+                            onAction(
+                                HistoryAction.RequestDeleteLog(
+                                    log.id
+                                )
+                            )
+                        },
+                    ) {
+                        Text("Delete history")
+                    }
                 }
             }
         },

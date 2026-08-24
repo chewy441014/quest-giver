@@ -3,17 +3,23 @@ package com.prestonhill.questgiver.feature.history
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.prestonhill.questgiver.data.repository.TaskCompletionResult
 import com.prestonhill.questgiver.data.repository.TaskRepository
+import java.time.Clock
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 class HistoryViewModel(
-    repository: TaskRepository,
+    private val repository: TaskRepository,
     private val mapper: TaskHistoryMapper =
         TaskHistoryMapper(),
+    private val clock: Clock =
+        Clock.systemDefaultZone(),
 ) : ViewModel() {
     private val nav =
         MutableStateFlow(HistoryNavState())
@@ -36,6 +42,10 @@ class HistoryViewModel(
                         navigation.inspectedTaskId,
                     inspectedLogId =
                         navigation.inspectedLogId,
+                    confirmation =
+                        navigation.confirmation,
+                    operationError =
+                        navigation.operationError,
                 ),
             )
         }
@@ -50,53 +60,239 @@ class HistoryViewModel(
             )
 
     fun onAction(action: HistoryAction) {
-        nav.update { current ->
-            when (action) {
-                is HistoryAction.SelectSection ->
-                    current.copy(
+        when (action) {
+            is HistoryAction.SelectSection ->
+                nav.update {
+                    it.copy(
                         section = action.section,
                         taskPage =
                             TaskHistoryPage
                                 .DASHBOARD,
-                        inspectedTaskId = null,
-                        inspectedLogId = null,
-                    )
+                    ).clearOverlays()
+                }
 
-                is HistoryAction.OpenTaskPage ->
-                    current.copy(
-                        taskPage = action.page,
-                        inspectedTaskId = null,
-                        inspectedLogId = null,
-                    )
+            is HistoryAction.OpenTaskPage ->
+                nav.update {
+                    it.copy(
+                        taskPage = action.page
+                    ).clearOverlays()
+                }
 
-                is HistoryAction.InspectTask ->
-                    current.copy(
-                        inspectedTaskId = action.taskId,
-                        inspectedLogId = null,
-                    )
-
-                HistoryAction.DismissTask ->
-                    current.copy(
-                        inspectedTaskId = null
-                    )
-
-                is HistoryAction.InspectLog ->
-                    current.copy(
-                        inspectedLogId = action.logId,
-                        inspectedTaskId = null,
-                    )
-
-                HistoryAction.DismissLog ->
-                    current.copy(
-                        inspectedLogId = null
-                    )
-
-                HistoryAction.BackToDashboard ->
-                    current.copy(
+            HistoryAction.BackToDashboard ->
+                nav.update {
+                    it.copy(
                         taskPage =
                             TaskHistoryPage
                                 .DASHBOARD
+                    ).clearOverlays()
+                }
+
+            is HistoryAction.InspectTask ->
+                nav.update {
+                    it.copy(
+                        inspectedTaskId =
+                            action.taskId,
+                        inspectedLogId = null,
+                        confirmation = null,
+                        operationError = null,
                     )
+                }
+
+            HistoryAction.DismissTask ->
+                nav.update {
+                    it.copy(
+                        inspectedTaskId = null
+                    )
+                }
+
+            is HistoryAction.InspectLog ->
+                nav.update {
+                    it.copy(
+                        inspectedLogId =
+                            action.logId,
+                        inspectedTaskId = null,
+                        confirmation = null,
+                        operationError = null,
+                    )
+                }
+
+            HistoryAction.DismissLog ->
+                nav.update {
+                    it.copy(
+                        inspectedLogId = null
+                    )
+                }
+
+            is HistoryAction.RequestCorrect ->
+                request(
+                    logId = action.logId,
+                    operation =
+                        HistoryLogOperation.CORRECT,
+                )
+
+            is HistoryAction.RequestDeleteLog ->
+                request(
+                    logId = action.logId,
+                    operation =
+                        HistoryLogOperation.DELETE,
+                )
+
+            HistoryAction.ConfirmLog ->
+                confirm()
+
+            HistoryAction.DismissConfirm ->
+                dismissConfirm()
+
+            HistoryAction.DismissError ->
+                nav.update {
+                    it.copy(
+                        operationError = null
+                    )
+                }
+        }
+    }
+
+    private fun request(
+        logId: Long,
+        operation: HistoryLogOperation,
+    ) {
+        val log =
+            uiState.value.tasks.findLog(logId)
+
+        val allowed =
+            when (operation) {
+                HistoryLogOperation.CORRECT ->
+                    log?.canCorrect == true
+
+                HistoryLogOperation.DELETE ->
+                    log?.canDelete == true
+            }
+
+        if (!allowed || log == null) {
+            nav.update {
+                it.copy(
+                    operationError =
+                        when (operation) {
+                            HistoryLogOperation.CORRECT ->
+                                "Completion cannot be corrected."
+
+                            HistoryLogOperation.DELETE ->
+                                "History cannot be deleted."
+                        }
+                )
+            }
+
+            return
+        }
+
+        nav.update {
+            it.copy(
+                inspectedLogId = null,
+                confirmation =
+                    HistoryLogConfirmationUiState(
+                        logId = log.id,
+                        taskName = log.taskName,
+                        operation = operation,
+                    ),
+                operationError = null,
+            )
+        }
+    }
+
+    private fun confirm() {
+        val confirmation =
+            nav.value.confirmation
+                ?: return
+
+        if (confirmation.isWorking) {
+            return
+        }
+
+        nav.update {
+            it.copy(
+                confirmation =
+                    confirmation.copy(
+                        isWorking = true,
+                        errorMessage = null,
+                    )
+            )
+        }
+
+        viewModelScope.launch {
+            val succeeded =
+                try {
+                    when (
+                        confirmation.operation
+                    ) {
+                        HistoryLogOperation.CORRECT ->
+                            repository.correctCompletion(
+                                logId =
+                                    confirmation.logId,
+                                recordedTimestampMillis =
+                                    clock.millis(),
+                            ) ==
+                                    TaskCompletionResult
+                                        .SUCCESS
+
+                        HistoryLogOperation.DELETE ->
+                            repository.deleteHistory(
+                                positiveLogId =
+                                    confirmation.logId
+                            )
+                    }
+                } catch (error: Exception) {
+                    if (
+                        error is
+                                CancellationException
+                    ) {
+                        throw error
+                    }
+
+                    false
+                }
+
+            nav.update { current ->
+                val active =
+                    current.confirmation
+
+                if (
+                    active?.logId !=
+                    confirmation.logId ||
+                    active.operation !=
+                    confirmation.operation
+                ) {
+                    current
+                } else if (succeeded) {
+                    current.copy(
+                        confirmation = null
+                    )
+                } else {
+                    current.copy(
+                        confirmation =
+                            active.copy(
+                                isWorking = false,
+                                errorMessage =
+                                    confirmation
+                                        .operation
+                                        .errorMessage(),
+                            )
+                    )
+                }
+            }
+        }
+    }
+
+    private fun dismissConfirm() {
+        nav.update { current ->
+            if (
+                current.confirmation
+                    ?.isWorking == true
+            ) {
+                current
+            } else {
+                current.copy(
+                    confirmation = null
+                )
             }
         }
     }
@@ -109,7 +305,37 @@ private data class HistoryNavState(
         TaskHistoryPage.DASHBOARD,
     val inspectedTaskId: Long? = null,
     val inspectedLogId: Long? = null,
+    val confirmation:
+    HistoryLogConfirmationUiState? = null,
+    val operationError: String? = null,
 )
+
+private fun HistoryNavState.clearOverlays() =
+    copy(
+        inspectedTaskId = null,
+        inspectedLogId = null,
+        confirmation = null,
+        operationError = null,
+    )
+
+private fun TaskHistoryUiState.findLog(
+    logId: Long,
+): HistoryTaskLogUiState? =
+    logDays.asSequence()
+        .flatMap { it.logs.asSequence() }
+        .firstOrNull {
+            it.id == logId
+        }
+
+private fun HistoryLogOperation.errorMessage():
+        String =
+    when (this) {
+        HistoryLogOperation.CORRECT ->
+            "Completion could not be corrected."
+
+        HistoryLogOperation.DELETE ->
+            "History could not be deleted."
+    }
 
 class HistoryViewModelFactory(
     private val repository: TaskRepository,

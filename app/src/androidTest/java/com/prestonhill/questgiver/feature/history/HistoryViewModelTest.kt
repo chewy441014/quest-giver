@@ -245,6 +245,84 @@ class HistoryViewModelTest {
             assertTrue(log.canDelete)
         }
 
+    @Test
+    fun inspectionChanges(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            repository.complete(
+                taskId = taskId,
+                scheduledEpochDay = DAY,
+                completionTimestampMillis =
+                    COMPLETION_TIME,
+            )
+
+            val logId =
+                repository.observeLogs()
+                    .first { it.isNotEmpty() }
+                    .single()
+                    .id
+
+            awaitState {
+                it.tasks.logDays
+                    .flatMap { day ->
+                        day.logs
+                    }
+                    .any { it.id == logId }
+            }
+
+            viewModel.onAction(
+                HistoryAction.InspectLog(logId)
+            )
+
+            val logState =
+                awaitState {
+                    it.tasks.inspectedLogId ==
+                            logId
+                }
+
+            assertEquals(
+                logId,
+                logState.tasks.inspectedLogId,
+            )
+
+            viewModel.onAction(
+                HistoryAction.DismissLog
+            )
+
+            awaitState {
+                it.tasks.inspectedLogId == null
+            }
+
+            viewModel.onAction(
+                HistoryAction.InspectTask(taskId)
+            )
+
+            val taskState =
+                awaitState {
+                    it.tasks.inspectedTaskId ==
+                            taskId
+                }
+
+            assertEquals(
+                taskId,
+                taskState.tasks.inspectedTaskId,
+            )
+
+            assertEquals(
+                null,
+                taskState.tasks.inspectedLogId,
+            )
+
+            viewModel.onAction(
+                HistoryAction.DismissTask
+            )
+
+            awaitState {
+                it.tasks.inspectedTaskId == null
+            }
+        }
+
     private suspend fun addTask(): Long =
         repository.createTask(
             TaskEntity(

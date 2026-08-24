@@ -16,6 +16,19 @@ enum class TaskHistoryPage {
     ALL_LOGS,
 }
 
+enum class HistoryLogOperation {
+    CORRECT,
+    DELETE,
+}
+
+data class HistoryLogConfirmationUiState(
+    val logId: Long,
+    val taskName: String,
+    val operation: HistoryLogOperation,
+    val isWorking: Boolean = false,
+    val errorMessage: String? = null,
+)
+
 data class HistoryGraphUiState(
     val id: String,
     val title: String,
@@ -80,6 +93,10 @@ data class TaskHistoryUiState(
                     "Pinned category and task graphs will appear here.",
             )
         ),
+    val confirmation:
+    HistoryLogConfirmationUiState? = null,
+
+    val operationError: String? = null,
 )
 
 data class HistoryScreenUiState(

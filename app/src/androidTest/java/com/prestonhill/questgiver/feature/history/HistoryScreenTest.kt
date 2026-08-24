@@ -316,6 +316,174 @@ class HistoryScreenTest {
             .assertIsDisplayed()
     }
 
+    @Test
+    fun taskRowSendsInspect(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = taskState(
+                inspectedTaskId = null
+            ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.task(TASK_ID)
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.InspectTask(TASK_ID)
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun logRowSendsInspect(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = logState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.log(1L)
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.InspectLog(1L)
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun logCanOpenTask(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = logState(
+                inspectedLogId = 1L
+            ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithText("View task")
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.InspectTask(TASK_ID)
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun logCanClose(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = logState(
+                inspectedLogId = 1L
+            ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithText("Close")
+            .performClick()
+
+        assertEquals(
+            listOf(HistoryAction.DismissLog),
+            actions,
+        )
+    }
+
+    @Test
+    fun taskCanClose(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = taskState(
+                inspectedTaskId = TASK_ID
+            ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithText("Close")
+            .performClick()
+
+        assertEquals(
+            listOf(HistoryAction.DismissTask),
+            actions,
+        )
+    }
+
+    private fun taskState(
+        inspectedTaskId: Long?,
+    ): HistoryScreenUiState =
+        HistoryScreenUiState(
+            tasks = TaskHistoryUiState(
+                page = TaskHistoryPage.ALL_TASKS,
+                allTasks = listOf(
+                    HistoryTaskUiState(
+                        id = TASK_ID,
+                        name = "Test task",
+                        category = "General",
+                        schedule = "Daily",
+                    )
+                ),
+                inspectedTaskId =
+                    inspectedTaskId,
+            )
+        )
+
+    private fun logState(
+        inspectedLogId: Long? = null,
+    ): HistoryScreenUiState =
+        HistoryScreenUiState(
+            tasks = TaskHistoryUiState(
+                page = TaskHistoryPage.ALL_LOGS,
+                allTasks = listOf(
+                    HistoryTaskUiState(
+                        id = TASK_ID,
+                        name = "Test task",
+                        category = "General",
+                        schedule = "Daily",
+                    )
+                ),
+                logDays = listOf(
+                    HistoryTaskDayUiState(
+                        date = TEST_DATE,
+                        logs = listOf(
+                            taskLog(
+                                id = 1L,
+                                taskId = TASK_ID,
+                                name = "Test task",
+                            )
+                        ),
+                    )
+                ),
+                inspectedLogId =
+                    inspectedLogId,
+            )
+        )
+
     private fun showScreen(
         state: HistoryScreenUiState,
         actions: MutableList<HistoryAction> =
