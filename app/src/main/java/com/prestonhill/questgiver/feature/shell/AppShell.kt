@@ -23,6 +23,9 @@ import kotlinx.coroutines.launch
 import com.prestonhill.questgiver.feature.tasks.TaskAction
 import com.prestonhill.questgiver.feature.tasks.TaskScreen
 import com.prestonhill.questgiver.feature.tasks.TaskScreenUiState
+import com.prestonhill.questgiver.feature.history.HistoryAction
+import com.prestonhill.questgiver.feature.history.HistoryScreen
+import com.prestonhill.questgiver.feature.history.HistoryScreenUiState
 
 enum class AppPage(
     val title: String,
@@ -54,6 +57,8 @@ fun AppShell(
     habitState: HabitScreenUiState,
     onHabitAction: (HabitAction) -> Unit,
     onOpenSettings: () -> Unit,
+    historyState: HistoryScreenUiState,
+    onHistoryAction: (HistoryAction) -> Unit,
 ) {
     val pages = AppPage.entries
 
@@ -133,8 +138,9 @@ fun AppShell(
                 }
 
                 AppPage.HISTORY -> {
-                    PlaceholderPage(
-                        "History coming soon"
+                    HistoryScreen(
+                        state = historyState,
+                        onAction = onHistoryAction,
                     )
                 }
             }
