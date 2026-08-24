@@ -1,0 +1,181 @@
+package com.prestonhill.questgiver.data.local.database.dao
+
+import androidx.room3.Dao
+import androidx.room3.Insert
+import androidx.room3.OnConflictStrategy
+import androidx.room3.Query
+import androidx.room3.Update
+import com.prestonhill.questgiver.data.local.database.entity.TaskEntity
+import com.prestonhill.questgiver.data.local.database.entity.TaskLogEntity
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface TaskDao {
+    @Query(
+        """
+        SELECT * FROM tasks
+        ORDER BY displayOrder, createdAtEpochMillis, id
+        """
+    )
+    fun observeTasks(): Flow<List<TaskEntity>>
+
+    @Query(
+        """
+        SELECT * FROM task_logs
+        ORDER BY completionTimestampMillis, id
+        """
+    )
+    fun observeLogs(): Flow<List<TaskLogEntity>>
+
+    @Query(
+        """
+        SELECT * FROM tasks
+        WHERE id = :taskId
+        LIMIT 1
+        """
+    )
+    suspend fun getTask(
+        taskId: Long,
+    ): TaskEntity?
+
+    @Query(
+        """
+        SELECT * FROM task_logs
+        WHERE id = :logId
+        LIMIT 1
+        """
+    )
+    suspend fun getLog(
+        logId: Long,
+    ): TaskLogEntity?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertTask(
+        task: TaskEntity,
+    ): Long
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertLog(
+        log: TaskLogEntity,
+    ): Long
+
+    @Update
+    suspend fun updateTask(
+        task: TaskEntity,
+    ): Int
+
+    @Query(
+        """
+        SELECT positive.* FROM task_logs AS positive
+        WHERE positive.taskId = :taskId
+          AND positive.scheduledEpochDay = :scheduledEpochDay
+          AND positive.delta = 1
+          AND NOT EXISTS (
+              SELECT 1 FROM task_logs AS reversal
+              WHERE reversal.reversesLogId = positive.id
+          )
+        ORDER BY
+            positive.completionTimestampMillis DESC,
+            positive.id DESC
+        LIMIT 1
+        """
+    )
+    suspend fun getActiveLog(
+        taskId: Long,
+        scheduledEpochDay: Long,
+    ): TaskLogEntity?
+
+    @Query(
+        """
+        SELECT positive.* FROM task_logs AS positive
+        WHERE positive.id = :logId
+          AND positive.taskId IS NOT NULL
+          AND positive.delta = 1
+          AND NOT EXISTS (
+              SELECT 1 FROM task_logs AS reversal
+              WHERE reversal.reversesLogId = positive.id
+          )
+        LIMIT 1
+        """
+    )
+    suspend fun getReversibleLog(
+        logId: Long,
+    ): TaskLogEntity?
+
+    @Query(
+        """
+        DELETE FROM tasks
+        WHERE id = :taskId
+        """
+    )
+    suspend fun deleteTask(
+        taskId: Long,
+    ): Int
+
+    @Query(
+        """
+        DELETE FROM task_logs
+        WHERE taskId = :taskId
+        """
+    )
+    suspend fun deleteTaskLogs(
+        taskId: Long,
+    ): Int
+
+    @Query(
+        """
+        DELETE FROM task_logs
+        WHERE taskId IS NULL
+          AND (
+              id = :positiveLogId
+              OR reversesLogId = :positiveLogId
+          )
+        """
+    )
+    suspend fun deleteOrphanHistory(
+        positiveLogId: Long,
+    ): Int
+
+    @Query(
+        """
+        DELETE FROM tasks
+        WHERE scheduleType = 'ONE_TIME'
+          AND EXISTS (
+              SELECT 1
+              FROM task_logs AS positive
+              WHERE positive.taskId = tasks.id
+                AND positive.delta = 1
+                AND positive.completionTimestampMillis <
+                    :completedBefore
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM task_logs AS reversal
+                    WHERE reversal.reversesLogId =
+                        positive.id
+                )
+          )
+        """
+    )
+    suspend fun deleteExpiredTasks(
+        completedBefore: Long,
+    ): Int
+
+    @Query(
+        """
+    SELECT positive.* FROM task_logs AS positive
+    WHERE positive.taskId = :taskId
+      AND positive.delta = 1
+      AND NOT EXISTS (
+          SELECT 1 FROM task_logs AS reversal
+          WHERE reversal.reversesLogId = positive.id
+      )
+    ORDER BY
+        positive.completionTimestampMillis DESC,
+        positive.id DESC
+    LIMIT 1
+    """
+    )
+    suspend fun getAnyActiveLog(
+        taskId: Long,
+    ): TaskLogEntity?
+}

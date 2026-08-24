@@ -55,4 +55,22 @@ class AppDayCalculator(
             endTimestampMillis = end
         )
     }
+
+    fun timestampFor(
+        appDate: LocalDate,
+        time: LocalTime,
+    ): Long {
+        val calendarDate =
+            if (time.isBefore(dayBoundary)) {
+                appDate.plusDays(1)
+            } else {
+                appDate
+            }
+
+        return calendarDate
+            .atTime(time)
+            .atZone(zoneId)
+            .toInstant()
+            .toEpochMilli()
+    }
 }
