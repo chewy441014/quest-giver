@@ -22,12 +22,24 @@ import kotlinx.coroutines.launch
 import com.prestonhill.questgiver.core.settings.AppSettings
 import kotlinx.coroutines.flow.Flow
 import java.time.Clock
+import com.prestonhill.questgiver.core.time.BoundaryTimer
+import com.prestonhill.questgiver.core.time.RealBoundaryTimer
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import java.time.LocalTime
+import java.time.ZoneId
 
 class HabitViewModel(
     private val repository: HabitRepository,
     private val settings: Flow<AppSettings>,
     private val clock: Clock,
+    private val timer: BoundaryTimer,
 ) : ViewModel() {
+
+    init {
+        startBoundaryTimer()
+    }
     private val currentTimestamp =
         MutableStateFlow(clock.millis())
 
@@ -321,6 +333,49 @@ class HabitViewModel(
     fun refreshAppDay() {
         currentTimestamp.value =
             clock.millis()
+    }
+
+    private fun startBoundaryTimer() {
+        viewModelScope.launch {
+            settings
+                .map { appSettings ->
+                    BoundarySettings(
+                        dayBoundary =
+                            appSettings.dayBoundary,
+                        daylightSavingEnabled =
+                            appSettings.daylightSavingEnabled,
+                    )
+                }
+                .distinctUntilChanged()
+                .collectLatest { boundarySettings ->
+                    val calculator =
+                        AppDayCalculator(
+                            dayBoundary =
+                                boundarySettings.dayBoundary,
+                            zoneId =
+                                zoneFor(
+                                    boundarySettings
+                                        .daylightSavingEnabled
+                                ),
+                        )
+
+                    while (true) {
+                        val now = clock.millis()
+
+                        val nextBoundary =
+                            calculator
+                                .containing(now)
+                                .endTimestampMillis
+
+                        timer.pause(
+                            (nextBoundary - now)
+                                .coerceAtLeast(1L)
+                        )
+
+                        refreshAppDay()
+                    }
+                }
+        }
     }
 
     private fun openEditor(habitId: Long) {
@@ -743,7 +798,10 @@ class HabitViewModel(
         val appDayCalculator =
             AppDayCalculator(
                 dayBoundary = settings.dayBoundary,
-                zoneId = clock.zone
+                zoneId =
+                    zoneFor(
+                        settings.daylightSavingEnabled
+                    ),
             )
 
         return HabitTimeState(
@@ -757,13 +815,36 @@ class HabitViewModel(
         )
     }
 
-    private fun appDayAt(timestamp: Long): AppDay =
-        AppDayCalculator(
-            dayBoundary =
-                settingsState.value.dayBoundary,
-            zoneId = clock.zone
+    private fun appDayAt(
+        timestamp: Long,
+    ): AppDay {
+        val settings = settingsState.value
+
+        return AppDayCalculator(
+            dayBoundary = settings.dayBoundary,
+            zoneId =
+                zoneFor(
+                    settings.daylightSavingEnabled
+                ),
         ).containing(timestamp)
+    }
+
+    private fun zoneFor(
+        daylightSavingEnabled: Boolean,
+    ): ZoneId =
+        if (daylightSavingEnabled) {
+            clock.zone
+        } else {
+            clock.zone.rules.getStandardOffset(
+                clock.instant()
+            )
+        }
 }
+
+private data class BoundarySettings(
+    val dayBoundary: LocalTime,
+    val daylightSavingEnabled: Boolean,
+)
 
 private data class OverlayState(
     val inspectedHabitId: Long?,
@@ -899,6 +980,7 @@ class HabitViewModelFactory(
     private val repository: HabitRepository,
     private val settings: Flow<AppSettings>,
     private val clock: Clock,
+    private val timer: BoundaryTimer = RealBoundaryTimer,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(
         modelClass: Class<T>
@@ -913,6 +995,7 @@ class HabitViewModelFactory(
                 repository = repository,
                 settings = settings,
                 clock = clock,
+                timer = timer,
             ) as T
         }
 

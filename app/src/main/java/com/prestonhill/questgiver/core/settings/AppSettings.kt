@@ -6,4 +6,5 @@ import java.time.LocalTime
 data class AppSettings(
     val dayBoundary: LocalTime = LocalTime.MIDNIGHT,
     val weekStart: DayOfWeek = DayOfWeek.MONDAY,
+    val daylightSavingEnabled: Boolean = true,
 )

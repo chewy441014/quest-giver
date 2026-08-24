@@ -22,6 +22,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 
 @RunWith(AndroidJUnit4::class)
 class AppSettingsRepositoryTest {
@@ -84,6 +86,23 @@ class AppSettingsRepositoryTest {
         assertEquals(
             DayOfWeek.MONDAY,
             settings.weekStart
+        )
+        assertTrue(
+            settings.daylightSavingEnabled
+        )
+    }
+
+    @Test
+    fun savesDaylightSaving() = runBlocking {
+        repository.setDaylightSaving(false)
+
+        val settings =
+            repository.settings.first {
+                !it.daylightSavingEnabled
+            }
+
+        assertFalse(
+            settings.daylightSavingEnabled
         )
     }
 

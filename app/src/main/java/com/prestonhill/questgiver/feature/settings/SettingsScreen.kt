@@ -34,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.Switch
 import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -45,6 +47,7 @@ object SettingsTags {
     const val DAY_BOUNDARY = "settings_day_boundary"
     const val WEEK_START = "settings_week_start"
     const val CONFIRM_TIME = "settings_confirm_time"
+    const val DAYLIGHT_SAVING = "settings_daylight_saving"
 
     fun weekDay(day: DayOfWeek) =
         "settings_week_${day.name}"
@@ -158,10 +161,43 @@ private fun SettingsContent(
             },
         )
 
-        Text(
-            "Changing these settings may immediately " +
-                    "alter displayed streaks, due status, " +
-                    "and schedule progress."
+        DaylightSavingSetting(
+            checked =
+                state.settings.daylightSavingEnabled,
+            enabled = !state.isSaving,
+            onCheckedChange = { checked ->
+                onAction(
+                    SettingsAction.SetDaylightSaving(
+                        checked
+                    )
+                )
+            },
+        )
+    }
+}
+
+@Composable
+private fun DaylightSavingSetting(
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement =
+            Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Use daylight saving time")
+
+        Switch(
+            modifier =
+                Modifier.testTag(
+                    SettingsTags.DAYLIGHT_SAVING
+                ),
+            checked = checked,
+            enabled = enabled,
+            onCheckedChange = onCheckedChange,
         )
     }
 }

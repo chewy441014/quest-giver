@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import com.prestonhill.questgiver.core.settings.AppSettings
 import java.io.IOException
 import java.time.DayOfWeek
@@ -49,9 +50,19 @@ class AppSettingsRepository(
                         ),
                     weekStart =
                         DayOfWeek.of(weekStartValue),
+                    daylightSavingEnabled =
+                        preferences[DAYLIGHT_SAVING_ENABLED]
+                            ?: DEFAULT_DAYLIGHT_SAVING_ENABLED,
                 )
             }
-
+    suspend fun setDaylightSaving(
+        enabled: Boolean,
+    ) {
+        dataStore.edit { preferences ->
+            preferences[DAYLIGHT_SAVING_ENABLED] =
+                enabled
+        }
+    }
     suspend fun setDayBoundary(
         dayBoundary: LocalTime,
     ) {
@@ -91,5 +102,12 @@ class AppSettingsRepository(
 
         val DEFAULT_WEEK_START =
             DayOfWeek.MONDAY
+
+        val DAYLIGHT_SAVING_ENABLED =
+            booleanPreferencesKey(
+                "daylight_saving_enabled"
+            )
+
+        const val DEFAULT_DAYLIGHT_SAVING_ENABLED = true
     }
 }

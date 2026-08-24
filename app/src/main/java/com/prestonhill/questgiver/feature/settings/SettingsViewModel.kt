@@ -52,6 +52,16 @@ class SettingsViewModel(
                 }
             }
 
+            is SettingsAction.SetDaylightSaving -> {
+                save(
+                    "Daylight saving setting could not be saved."
+                ) {
+                    repository.setDaylightSaving(
+                        action.enabled
+                    )
+                }
+            }
+
             SettingsAction.DismissError -> {
                 errorMessage.value = null
             }

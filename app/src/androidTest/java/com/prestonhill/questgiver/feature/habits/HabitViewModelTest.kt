@@ -35,6 +35,10 @@ import com.prestonhill.questgiver.data.local.database.entity.HabitLogEntity
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
+import com.prestonhill.questgiver.core.time.BoundaryTimer
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.channels.Channel
+import com.prestonhill.questgiver.core.time.AppDayCalculator
 
 @RunWith(AndroidJUnit4::class)
 class HabitViewModelTest {
@@ -43,7 +47,8 @@ class HabitViewModelTest {
     private lateinit var viewModel: HabitViewModel
     private lateinit var viewModelStore: ViewModelStore
     private lateinit var settings: MutableStateFlow<AppSettings>
-    private lateinit var clock: Clock
+    private lateinit var clock: TestClock
+    private lateinit var timer: TestTimer
 
     @Before
     fun setup() {
@@ -51,10 +56,13 @@ class HabitViewModelTest {
             ApplicationProvider.getApplicationContext<Context>()
 
         clock =
-            Clock.fixed(
-                Instant.parse("2026-08-23T17:00:00Z"),
-                ZoneId.of("America/Chicago"),
+            TestClock(
+                initialInstant =
+                    Instant.parse("2026-08-23T17:00:00Z"),
+                zone = ZoneId.of("America/Chicago"),
             )
+
+        timer = TestTimer()
 
         settings =
             MutableStateFlow(AppSettings())
@@ -74,6 +82,7 @@ class HabitViewModelTest {
                 repository = repository,
                 settings = settings,
                 clock = clock,
+                timer = timer,
             )
 
         viewModelStore = ViewModelStore()
@@ -449,6 +458,71 @@ class HabitViewModelTest {
         assertEquals(logsBefore, logsAfter)
     }
 
+    @Test
+    fun boundaryTimerRefreshesDay() = runBlocking {
+        val habitId = addHabit()
+
+        awaitState {
+            it.hasHabit(habitId)
+        }
+
+        viewModel.onAction(
+            HabitAction.AddCompletion(habitId),
+        )
+
+        awaitState {
+            it.habit(habitId)
+                ?.completionCountToday == 1
+        }
+
+        val logsBefore =
+            repository.observeAllHabitLogs().first()
+
+        val wait =
+            withTimeout(5_000.milliseconds) {
+                timer.next()
+            }
+
+        val calculator =
+            AppDayCalculator(
+                dayBoundary = LocalTime.MIDNIGHT,
+                zoneId = clock.zone,
+            )
+
+        val nextBoundary =
+            calculator
+                .containing(clock.millis())
+                .endTimestampMillis
+
+        assertEquals(
+            nextBoundary - clock.millis(),
+            wait.milliseconds,
+        )
+
+        clock.setTime(nextBoundary + 1L)
+        wait.resume.complete(Unit)
+
+        val state =
+            awaitState {
+                it.habit(habitId)
+                    ?.completionCountToday == 0
+            }
+
+        with(requireNotNull(state.habit(habitId))) {
+            assertEquals(0, completionCountToday)
+            assertEquals(0, scheduleCompletions)
+            assertEquals(
+                HabitDueStatus.DUE,
+                dueStatus,
+            )
+        }
+
+        val logsAfter =
+            repository.observeAllHabitLogs().first()
+
+        assertEquals(logsBefore, logsAfter)
+    }
+
     private suspend fun addHabit(
         scheduleType: HabitScheduleTypeDb =
             HabitScheduleTypeDb.DAILY,
@@ -506,4 +580,50 @@ class HabitViewModelTest {
     companion object {
         const val MISSING_HABIT_ID = 999L
     }
+    private class TestClock(
+        initialInstant: Instant,
+        private val zone: ZoneId,
+    ) : Clock() {
+        private var currentInstant = initialInstant
+
+        override fun getZone(): ZoneId = zone
+
+        override fun withZone(zone: ZoneId): Clock =
+            TestClock(
+                initialInstant = currentInstant,
+                zone = zone,
+            )
+
+        override fun instant(): Instant =
+            currentInstant
+
+        fun setTime(milliseconds: Long) {
+            currentInstant =
+                Instant.ofEpochMilli(milliseconds)
+        }
+    }
+
+    private class TestTimer : BoundaryTimer {
+        private val waits =
+            Channel<TimerWait>(Channel.UNLIMITED)
+
+        override suspend fun pause(milliseconds: Long) {
+            val wait =
+                TimerWait(
+                    milliseconds = milliseconds,
+                    resume = CompletableDeferred(),
+                )
+
+            waits.send(wait)
+            wait.resume.await()
+        }
+
+        suspend fun next(): TimerWait =
+            waits.receive()
+    }
+
+    private data class TimerWait(
+        val milliseconds: Long,
+        val resume: CompletableDeferred<Unit>,
+    )
 }

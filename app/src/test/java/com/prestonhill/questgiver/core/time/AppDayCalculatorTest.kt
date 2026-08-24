@@ -4,6 +4,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
+import java.time.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -90,6 +91,47 @@ class AppDayCalculatorTest {
             25L * 60 * 60 * 1000,
             day.endTimestampMillis -
                     day.startTimestampMillis
+        )
+    }
+
+    @Test
+    fun fixedOffsetDaysAre24Hours() {
+        val standardOffset =
+            zone.rules.getStandardOffset(
+                Instant.parse(
+                    "2026-08-23T17:00:00Z"
+                )
+            )
+
+        val calculator =
+            AppDayCalculator(
+                dayBoundary = LocalTime.MIDNIGHT,
+                zoneId = standardOffset,
+            )
+
+        val springDay =
+            calculator.forDate(
+                LocalDate.of(2026, 3, 8)
+            )
+
+        val fallDay =
+            calculator.forDate(
+                LocalDate.of(2026, 11, 1)
+            )
+
+        val expected =
+            24L * 60 * 60 * 1000
+
+        assertEquals(
+            expected,
+            springDay.endTimestampMillis -
+                    springDay.startTimestampMillis
+        )
+
+        assertEquals(
+            expected,
+            fallDay.endTimestampMillis -
+                    fallDay.startTimestampMillis
         )
     }
 

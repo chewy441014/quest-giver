@@ -13,4 +13,8 @@ sealed interface SettingsAction {
     ) : SettingsAction
 
     data object DismissError : SettingsAction
+
+    data class SetDaylightSaving(
+        val enabled: Boolean,
+    ) : SettingsAction
 }
