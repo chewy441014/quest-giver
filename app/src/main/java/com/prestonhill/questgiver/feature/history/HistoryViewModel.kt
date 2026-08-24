@@ -3,9 +3,7 @@ package com.prestonhill.questgiver.feature.history
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.prestonhill.questgiver.data.repository.TaskCompletionResult
 import com.prestonhill.questgiver.data.repository.TaskRepository
-import java.time.Clock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,8 +16,6 @@ class HistoryViewModel(
     private val repository: TaskRepository,
     private val mapper: TaskHistoryMapper =
         TaskHistoryMapper(),
-    private val clock: Clock =
-        Clock.systemDefaultZone(),
 ) : ViewModel() {
     private val nav =
         MutableStateFlow(HistoryNavState())
@@ -123,25 +119,14 @@ class HistoryViewModel(
                     )
                 }
 
-            is HistoryAction.RequestCorrect ->
-                request(
-                    logId = action.logId,
-                    operation =
-                        HistoryLogOperation.CORRECT,
-                )
-
             is HistoryAction.RequestDeleteLog ->
-                request(
-                    logId = action.logId,
-                    operation =
-                        HistoryLogOperation.DELETE,
-                )
+                requestDelete(action.logId)
 
-            HistoryAction.ConfirmLog ->
-                confirm()
+            HistoryAction.ConfirmDeleteLog ->
+                confirmDelete()
 
-            HistoryAction.DismissConfirm ->
-                dismissConfirm()
+            HistoryAction.DismissDeleteLog ->
+                dismissDelete()
 
             HistoryAction.DismissError ->
                 nav.update {
@@ -152,33 +137,17 @@ class HistoryViewModel(
         }
     }
 
-    private fun request(
+    private fun requestDelete(
         logId: Long,
-        operation: HistoryLogOperation,
     ) {
         val log =
             uiState.value.tasks.findLog(logId)
 
-        val allowed =
-            when (operation) {
-                HistoryLogOperation.CORRECT ->
-                    log?.canCorrect == true
-
-                HistoryLogOperation.DELETE ->
-                    log?.canDelete == true
-            }
-
-        if (!allowed || log == null) {
+        if (log?.canDelete != true) {
             nav.update {
                 it.copy(
                     operationError =
-                        when (operation) {
-                            HistoryLogOperation.CORRECT ->
-                                "Completion cannot be corrected."
-
-                            HistoryLogOperation.DELETE ->
-                                "History cannot be deleted."
-                        }
+                        "History cannot be deleted."
                 )
             }
 
@@ -189,22 +158,21 @@ class HistoryViewModel(
             it.copy(
                 inspectedLogId = null,
                 confirmation =
-                    HistoryLogConfirmationUiState(
+                    HistoryDeleteUiState(
                         logId = log.id,
                         taskName = log.taskName,
-                        operation = operation,
                     ),
                 operationError = null,
             )
         }
     }
 
-    private fun confirm() {
+    private fun confirmDelete() {
         val confirmation =
             nav.value.confirmation
                 ?: return
 
-        if (confirmation.isWorking) {
+        if (confirmation.isDeleting) {
             return
         }
 
@@ -212,34 +180,19 @@ class HistoryViewModel(
             it.copy(
                 confirmation =
                     confirmation.copy(
-                        isWorking = true,
+                        isDeleting = true,
                         errorMessage = null,
                     )
             )
         }
 
         viewModelScope.launch {
-            val succeeded =
+            val deleted =
                 try {
-                    when (
-                        confirmation.operation
-                    ) {
-                        HistoryLogOperation.CORRECT ->
-                            repository.correctCompletion(
-                                logId =
-                                    confirmation.logId,
-                                recordedTimestampMillis =
-                                    clock.millis(),
-                            ) ==
-                                    TaskCompletionResult
-                                        .SUCCESS
-
-                        HistoryLogOperation.DELETE ->
-                            repository.deleteHistory(
-                                positiveLogId =
-                                    confirmation.logId
-                            )
-                    }
+                    repository.deleteHistory(
+                        positiveLogId =
+                            confirmation.logId
+                    )
                 } catch (error: Exception) {
                     if (
                         error is
@@ -257,12 +210,10 @@ class HistoryViewModel(
 
                 if (
                     active?.logId !=
-                    confirmation.logId ||
-                    active.operation !=
-                    confirmation.operation
+                    confirmation.logId
                 ) {
                     current
-                } else if (succeeded) {
+                } else if (deleted) {
                     current.copy(
                         confirmation = null
                     )
@@ -270,11 +221,9 @@ class HistoryViewModel(
                     current.copy(
                         confirmation =
                             active.copy(
-                                isWorking = false,
+                                isDeleting = false,
                                 errorMessage =
-                                    confirmation
-                                        .operation
-                                        .errorMessage(),
+                                    "History could not be deleted.",
                             )
                     )
                 }
@@ -282,11 +231,11 @@ class HistoryViewModel(
         }
     }
 
-    private fun dismissConfirm() {
+    private fun dismissDelete() {
         nav.update { current ->
             if (
                 current.confirmation
-                    ?.isWorking == true
+                    ?.isDeleting == true
             ) {
                 current
             } else {
@@ -306,7 +255,7 @@ private data class HistoryNavState(
     val inspectedTaskId: Long? = null,
     val inspectedLogId: Long? = null,
     val confirmation:
-    HistoryLogConfirmationUiState? = null,
+    HistoryDeleteUiState? = null,
     val operationError: String? = null,
 )
 
@@ -327,15 +276,6 @@ private fun TaskHistoryUiState.findLog(
             it.id == logId
         }
 
-private fun HistoryLogOperation.errorMessage():
-        String =
-    when (this) {
-        HistoryLogOperation.CORRECT ->
-            "Completion could not be corrected."
-
-        HistoryLogOperation.DELETE ->
-            "History could not be deleted."
-    }
 
 class HistoryViewModelFactory(
     private val repository: TaskRepository,

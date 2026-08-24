@@ -43,14 +43,11 @@ object HistoryTags {
     const val PINNED_GRAPHS =
         "history_pinned_graphs"
 
-    const val CORRECT_LOG =
-        "history_correct_log"
-
     const val DELETE_LOG =
         "history_delete_log"
 
-    const val CONFIRM_LOG =
-        "history_confirm_log"
+    const val CONFIRM_DELETE_LOG =
+        "history_confirm_delete_log"
 
     fun tab(section: HistorySection) =
         "history_tab_${section.name}"
@@ -164,8 +161,92 @@ fun HistoryScreen(
             },
         )
     }
+    state.tasks.confirmation?.let {
+            confirmation ->
+        DeleteLogDialog(
+            confirmation = confirmation,
+            onAction = onAction,
+        )
+    }
 }
 
+@Composable
+private fun DeleteLogDialog(
+    confirmation: HistoryDeleteUiState,
+    onAction: (HistoryAction) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {
+            if (!confirmation.isDeleting) {
+                onAction(
+                    HistoryAction
+                        .DismissDeleteLog
+                )
+            }
+        },
+        title = {
+            Text("Delete history?")
+        },
+        text = {
+            Column(
+                verticalArrangement =
+                    Arrangement.spacedBy(8.dp),
+            ) {
+                Text(confirmation.taskName)
+
+                Text(
+                    "This permanently deletes this history entry."
+                )
+
+                confirmation.errorMessage
+                    ?.let { message ->
+                        Text(message)
+                    }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                modifier =
+                    Modifier.testTag(
+                        HistoryTags
+                            .CONFIRM_DELETE_LOG
+                    ),
+                enabled =
+                    !confirmation.isDeleting,
+                onClick = {
+                    onAction(
+                        HistoryAction
+                            .ConfirmDeleteLog
+                    )
+                },
+            ) {
+                Text(
+                    if (
+                        confirmation.isDeleting
+                    ) {
+                        "Deleting..."
+                    } else {
+                        "Delete history"
+                    }
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                enabled =
+                    !confirmation.isDeleting,
+                onClick = {
+                    onAction(
+                        HistoryAction
+                            .DismissDeleteLog
+                    )
+                },
+            ) {
+                Text("Cancel")
+            }
+        },
+    )
+}
 @Composable
 private fun LogDetailsDialog(
     log: HistoryTaskLogUiState,

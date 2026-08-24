@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertIsNotEnabled
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -434,6 +435,114 @@ class HistoryScreenTest {
         )
     }
 
+    @Test
+    fun orphanLogRequestsDelete(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = logState(
+                inspectedLogId = 1L,
+                taskId = null,
+            ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.DELETE_LOG
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.RequestDeleteLog(1L)
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun deleteConfirmationSendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = deleteState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.CONFIRM_DELETE_LOG
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.ConfirmDeleteLog
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun deleteConfirmationCancels(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = deleteState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithText("Cancel")
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.DismissDeleteLog
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun deletingDisablesDialog(): Unit {
+        showScreen(
+            state = deleteState(
+                isDeleting = true
+            )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.CONFIRM_DELETE_LOG
+            )
+            .assertIsNotEnabled()
+
+        composeRule
+            .onNodeWithText("Cancel")
+            .assertIsNotEnabled()
+    }
+
+    @Test
+    fun deleteFailureIsVisible(): Unit {
+        showScreen(
+            state = deleteState(
+                errorMessage =
+                    "History could not be deleted."
+            )
+        )
+
+        composeRule
+            .onNodeWithText(
+                "History could not be deleted."
+            )
+            .assertIsDisplayed()
+    }
+
     private fun taskState(
         inspectedTaskId: Long?,
     ): HistoryScreenUiState =
@@ -455,25 +564,31 @@ class HistoryScreenTest {
 
     private fun logState(
         inspectedLogId: Long? = null,
+        taskId: Long? = TASK_ID,
     ): HistoryScreenUiState =
         HistoryScreenUiState(
             tasks = TaskHistoryUiState(
                 page = TaskHistoryPage.ALL_LOGS,
-                allTasks = listOf(
-                    HistoryTaskUiState(
-                        id = TASK_ID,
-                        name = "Test task",
-                        category = "General",
-                        schedule = "Daily",
-                    )
-                ),
+                allTasks =
+                    if (taskId == null) {
+                        emptyList()
+                    } else {
+                        listOf(
+                            HistoryTaskUiState(
+                                id = TASK_ID,
+                                name = "Test task",
+                                category = "General",
+                                schedule = "Daily",
+                            )
+                        )
+                    },
                 logDays = listOf(
                     HistoryTaskDayUiState(
                         date = TEST_DATE,
                         logs = listOf(
                             taskLog(
                                 id = 1L,
-                                taskId = TASK_ID,
+                                taskId = taskId,
                                 name = "Test task",
                             )
                         ),
@@ -481,6 +596,23 @@ class HistoryScreenTest {
                 ),
                 inspectedLogId =
                     inspectedLogId,
+            )
+        )
+
+    private fun deleteState(
+        isDeleting: Boolean = false,
+        errorMessage: String? = null,
+    ): HistoryScreenUiState =
+        HistoryScreenUiState(
+            tasks = TaskHistoryUiState(
+                page = TaskHistoryPage.ALL_LOGS,
+                confirmation =
+                    HistoryDeleteUiState(
+                        logId = 1L,
+                        taskName = "Deleted task",
+                        isDeleting = isDeleting,
+                        errorMessage = errorMessage,
+                    ),
             )
         )
 

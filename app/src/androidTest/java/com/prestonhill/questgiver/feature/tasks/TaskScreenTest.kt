@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.assertIsEnabled
 import java.time.LocalDate
 import java.time.LocalTime
 import org.junit.Assert.assertEquals
@@ -347,9 +348,11 @@ class TaskScreenTest {
 
         assertEquals(
             listOf(
-                TaskAction.Complete(
+                TaskAction.SetCompletion(
                     taskId = TASK_ID,
-                    completionEpochDay = TEST_DATE.toEpochDay(),
+                    completionEpochDay =
+                        TEST_DATE.toEpochDay(),
+                    completed = true,
                 )
             ),
             actions
@@ -357,23 +360,41 @@ class TaskScreenTest {
     }
 
     @Test
-    fun completedIsDisabled(): Unit {
+    fun completedCanBeUnchecked(): Unit {
+        val actions = mutableListOf<TaskAction>()
+
         showScreen(
             state = TaskScreenUiState(
                 today = listOf(
                     taskRow(
                         id = TASK_ID,
                         name = "Completed task",
-                        canComplete = false,
-                        isCompleted = true
+                        canComplete = true,
+                        isCompleted = true,
                     )
                 )
-            )
+            ),
+            actions = actions,
         )
 
         composeRule
-            .onNodeWithTag(TaskTags.check(TASK_ID))
-            .assertIsNotEnabled()
+            .onNodeWithTag(
+                TaskTags.check(TASK_ID)
+            )
+            .assertIsEnabled()
+            .performClick()
+
+        assertEquals(
+            listOf(
+                TaskAction.SetCompletion(
+                    taskId = TASK_ID,
+                    completionEpochDay =
+                        TEST_DATE.toEpochDay(),
+                    completed = false,
+                )
+            ),
+            actions,
+        )
     }
 
     @Test
@@ -556,6 +577,55 @@ class TaskScreenTest {
             .assertIsDisplayed()
     }
 
+    @Test
+    fun changingDisablesCheckbox(): Unit {
+        showScreen(
+            state = TaskScreenUiState(
+                today = listOf(
+                    taskRow(
+                        id = TASK_ID,
+                        name = "Changing task",
+                        isChanging = true,
+                    )
+                )
+            )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                TaskTags.check(TASK_ID)
+            )
+            .assertIsNotEnabled()
+    }
+
+    @Test
+    fun detailCheckboxSendsAction(): Unit {
+        val actions = mutableListOf<TaskAction>()
+
+        showScreen(
+            state = detailState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                TaskTags.detailsCheck(TASK_ID)
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                TaskAction.SetCompletion(
+                    taskId = TASK_ID,
+                    completionEpochDay =
+                        TEST_DATE.toEpochDay(),
+                    completed = true,
+                )
+            ),
+            actions,
+        )
+    }
+
     private fun showScreen(
         state: TaskScreenUiState,
         actions: MutableList<TaskAction> =
@@ -602,7 +672,8 @@ class TaskScreenTest {
         dueTime: LocalTime? = null,
         canComplete: Boolean = true,
         isCompleted: Boolean = false,
-        order: Int = 0
+        order: Int = 0,
+        isChanging: Boolean = false,
     ): TaskRowUiState =
         TaskRowUiState(
             id = id,
@@ -613,7 +684,8 @@ class TaskScreenTest {
             completionEpochDay = date.toEpochDay(),
             canComplete = canComplete,
             isCompleted = isCompleted,
-            displayOrder = order
+            displayOrder = order,
+            isChanging = isChanging,
         )
 
     private companion object {

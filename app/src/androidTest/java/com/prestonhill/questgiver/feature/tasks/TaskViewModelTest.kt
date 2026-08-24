@@ -134,7 +134,7 @@ class TaskViewModelTest {
     }
 
     @Test
-    fun completionMovesTaskUpcoming() = runBlocking {
+    fun completionIsHiddenToday() = runBlocking {
         val taskId =
             addDailyTask(
                 startDate = currentDate
@@ -161,23 +161,15 @@ class TaskViewModelTest {
                 it.today.none { task ->
                     task.id == taskId
                 } &&
-                        it.upcoming.any { day ->
-                            day.tasks.any { task ->
-                                task.id == taskId
-                            }
-                        }
+                        it.hasHiddenToday
             }
 
-        val upcomingDay =
-            state.upcoming.single { day ->
-                day.tasks.any {
+        assertTrue(
+            state.upcoming.all { day ->
+                day.tasks.none {
                     it.id == taskId
                 }
             }
-
-        assertEquals(
-            currentDate.plusDays(1),
-            upcomingDay.date,
         )
     }
 
@@ -382,11 +374,7 @@ class TaskViewModelTest {
                         it.today.none { task ->
                             task.id == taskId
                         } &&
-                        it.upcoming.any { day ->
-                            day.tasks.any { task ->
-                                task.id == taskId
-                            }
-                        }
+                        it.hasHiddenToday
             }
 
         assertNull(state.inspectedTaskId)
@@ -938,6 +926,180 @@ class TaskViewModelTest {
             failedEditor.errorMessage,
         )
     }
+
+    @Test
+    fun actionCorrectsTask(): Unit =
+        runBlocking {
+            val taskId =
+                addDailyTask(
+                    startDate = currentDate
+                )
+
+            val initial =
+                requireNotNull(
+                    awaitState {
+                        it.today.any { task ->
+                            task.id == taskId
+                        }
+                    }.row(taskId)
+                )
+
+            viewModel.onAction(
+                TaskAction.SetCompletion(
+                    taskId = taskId,
+                    completionEpochDay =
+                        initial.completionEpochDay,
+                    completed = true,
+                )
+            )
+
+            awaitState {
+                it.hasHiddenToday &&
+                        it.today.none { task ->
+                            task.id == taskId
+                        }
+            }
+
+            viewModel.onAction(
+                TaskAction.ToggleHidden
+            )
+
+            val completed =
+                requireNotNull(
+                    awaitState {
+                        it.today.any { task ->
+                            task.id == taskId &&
+                                    task.isCompleted
+                        }
+                    }.row(taskId)
+                )
+
+            assertTrue(completed.canComplete)
+
+            viewModel.onAction(
+                TaskAction.SetCompletion(
+                    taskId = taskId,
+                    completionEpochDay =
+                        completed
+                            .completionEpochDay,
+                    completed = false,
+                )
+            )
+
+            val corrected =
+                requireNotNull(
+                    awaitState {
+                        it.today.any { task ->
+                            task.id == taskId &&
+                                    !task.isCompleted
+                        }
+                    }.row(taskId)
+                )
+
+            assertTrue(corrected.canComplete)
+
+            val logs =
+                repository.observeLogs()
+                    .first { it.size == 2 }
+
+            assertEquals(
+                1,
+                logs.count { it.delta == 1 },
+            )
+
+            assertEquals(
+                1,
+                logs.count { it.delta == -1 },
+            )
+        }
+
+    @Test
+    fun repeatedChangesAreIgnored(): Unit =
+        runBlocking {
+            val taskId =
+                addDailyTask(
+                    startDate = currentDate
+                )
+
+            val row =
+                requireNotNull(
+                    awaitState {
+                        it.today.any { task ->
+                            task.id == taskId
+                        }
+                    }.row(taskId)
+                )
+
+            val complete =
+                TaskAction.SetCompletion(
+                    taskId = taskId,
+                    completionEpochDay =
+                        row.completionEpochDay,
+                    completed = true,
+                )
+
+            viewModel.onAction(complete)
+            viewModel.onAction(complete)
+
+            awaitState {
+                it.hasHiddenToday
+            }
+
+            assertEquals(
+                1,
+                repository.observeLogs()
+                    .first {
+                            logs ->
+                        logs.any {
+                            it.delta == 1
+                        }
+                    }
+                    .count { it.delta == 1 },
+            )
+
+            viewModel.onAction(
+                TaskAction.ToggleHidden
+            )
+
+            val completed =
+                requireNotNull(
+                    awaitState {
+                        it.today.any { task ->
+                            task.id == taskId &&
+                                    task.isCompleted
+                        }
+                    }.row(taskId)
+                )
+
+            val correct =
+                TaskAction.SetCompletion(
+                    taskId = taskId,
+                    completionEpochDay =
+                        completed
+                            .completionEpochDay,
+                    completed = false,
+                )
+
+            viewModel.onAction(correct)
+            viewModel.onAction(correct)
+
+            awaitState {
+                it.today.any { task ->
+                    task.id == taskId &&
+                            !task.isCompleted
+                }
+            }
+
+            val logs =
+                repository.observeLogs()
+                    .first { it.size == 2 }
+
+            assertEquals(2, logs.size)
+            assertEquals(
+                1,
+                logs.count { it.delta == -1 },
+            )
+        }
     private suspend fun addDailyTask(
         startDate: LocalDate,
     ): Long =

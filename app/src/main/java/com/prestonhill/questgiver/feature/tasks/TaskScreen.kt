@@ -84,6 +84,9 @@ object TaskTags {
     const val EDITOR_START = "task_editor_start"
     const val EDITOR_DUE_TIME = "task_editor_due_time"
 
+    fun detailsCheck(taskId: Long) =
+        "task_details_check_$taskId"
+
     fun weekday(day: DayOfWeek) =
         "task_weekday_${day.name}"
 
@@ -326,17 +329,18 @@ private fun TodayTaskRow(
                     TaskTags.check(task.id)
                 ),
             checked = task.isCompleted,
-            enabled = task.canComplete,
+            enabled =
+                task.canComplete &&
+                        !task.isChanging,
             onCheckedChange = { checked ->
-                if (checked && task.canComplete) {
-                    onAction(
-                        TaskAction.Complete(
-                            taskId = task.id,
-                            completionEpochDay =
-                                task.completionEpochDay,
-                        )
+                onAction(
+                    TaskAction.SetCompletion(
+                        taskId = task.id,
+                        completionEpochDay =
+                            task.completionEpochDay,
+                        completed = checked,
                     )
-                }
+                )
             },
         )
 
@@ -400,6 +404,39 @@ private fun TaskDetailsDialog(
                 task.dueTime?.let { time ->
                     Text(
                         "Due ${time.format(timeFormatter)}"
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment =
+                        Alignment.CenterVertically,
+                ) {
+                    Text("Completed")
+
+                    Spacer(Modifier.weight(1f))
+
+                    Checkbox(
+                        modifier =
+                            Modifier.testTag(
+                                TaskTags.detailsCheck(
+                                    task.id
+                                )
+                            ),
+                        checked = task.isCompleted,
+                        enabled =
+                            task.canComplete &&
+                                    !task.isChanging,
+                        onCheckedChange = { checked ->
+                            onAction(
+                                TaskAction.SetCompletion(
+                                    taskId = task.id,
+                                    completionEpochDay =
+                                        task.completionEpochDay,
+                                    completed = checked,
+                                )
+                            )
+                        },
                     )
                 }
 

@@ -63,7 +63,7 @@ class TaskUiMapperTest {
     }
 
     @Test
-    fun completionMovesRecurringTaskUpcoming() {
+    fun completionIsReservedForToday() {
         val task =
             task(
                 id = 1,
@@ -86,21 +86,11 @@ class TaskUiMapperTest {
             )
 
         assertTrue(state.today.isEmpty())
-        assertEquals(1, state.upcoming.size)
-
-        val day = state.upcoming.single()
-        val row = day.tasks.single()
+        assertTrue(state.upcoming.isEmpty())
+        assertTrue(state.hasHiddenToday)
 
         assertEquals(
-            currentDate.plusDays(1),
-            day.date,
-        )
-
-        assertEquals(task.id, row.id)
-        assertFalse(row.canComplete)
-
-        assertEquals(
-            1,
+            0,
             state.occurrencesOf(task.id),
         )
     }
@@ -245,10 +235,41 @@ class TaskUiMapperTest {
         assertNull(state.inspectedTaskId)
     }
 
+    @Test
+    fun revealedCompletionCanChange(): Unit {
+        val task =
+            task(
+                id = 1L,
+                scheduleType =
+                    TaskScheduleTypeDb.DAILY,
+                startDate = currentDate,
+            )
+
+        val state =
+            map(
+                tasks = listOf(task),
+                logs = listOf(
+                    completion(
+                        id = 1L,
+                        taskId = task.id,
+                        scheduledDate =
+                            currentDate,
+                    )
+                ),
+                showHiddenToday = true,
+            )
+
+        val row = state.today.single()
+
+        assertTrue(row.isCompleted)
+        assertTrue(row.canComplete)
+    }
+
     private fun map(
         tasks: List<TaskEntity>,
         logs: List<TaskLogEntity> = emptyList(),
         inspectedTaskId: Long? = null,
+        showHiddenToday: Boolean = false,
     ): TaskScreenUiState {
         val timestamp =
             timestamp(
@@ -263,6 +284,7 @@ class TaskUiMapperTest {
                 dayCalculator.containing(timestamp),
             currentTimestampMillis = timestamp,
             inspectedTaskId = inspectedTaskId,
+            showHiddenToday = showHiddenToday,
         )
     }
 

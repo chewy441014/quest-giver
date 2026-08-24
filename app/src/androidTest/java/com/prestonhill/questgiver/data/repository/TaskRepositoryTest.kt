@@ -402,6 +402,223 @@ class TaskRepositoryTest {
             )
         }
 
+    @Test
+    fun setIncompleteAddsReversal(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            repository.complete(
+                taskId = taskId,
+                scheduledEpochDay = TEST_DAY,
+                completionTimestampMillis =
+                    FIRST_COMPLETION,
+            )
+
+            val result =
+                repository.setCompletion(
+                    taskId = taskId,
+                    scheduledEpochDay = TEST_DAY,
+                    completed = false,
+                    completionTimestampMillis =
+                        SECOND_COMPLETION,
+                    recordedTimestampMillis =
+                        SECOND_COMPLETION,
+                )
+
+            assertEquals(
+                TaskCompletionResult.SUCCESS,
+                result,
+            )
+
+            val logs =
+                repository.observeLogs()
+                    .first { it.size == 2 }
+
+            val positive =
+                logs.single { it.delta == 1 }
+
+            val reversal =
+                logs.single { it.delta == -1 }
+
+            assertEquals(
+                positive.id,
+                reversal.reversesLogId,
+            )
+
+            assertEquals(
+                positive.completionTimestampMillis,
+                reversal.completionTimestampMillis,
+            )
+        }
+
+    @Test
+    fun setCompleteRestoresDay(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            repository.complete(
+                taskId = taskId,
+                scheduledEpochDay = TEST_DAY,
+                completionTimestampMillis =
+                    FIRST_COMPLETION,
+            )
+
+            repository.setCompletion(
+                taskId = taskId,
+                scheduledEpochDay = TEST_DAY,
+                completed = false,
+                completionTimestampMillis =
+                    SECOND_COMPLETION,
+            )
+
+            val restored =
+                repository.setCompletion(
+                    taskId = taskId,
+                    scheduledEpochDay = TEST_DAY,
+                    completed = true,
+                    completionTimestampMillis =
+                        SECOND_COMPLETION + 1_000L,
+                )
+
+            assertEquals(
+                TaskCompletionResult.SUCCESS,
+                restored,
+            )
+
+            val logs =
+                repository.observeLogs()
+                    .first { it.size == 3 }
+
+            assertEquals(
+                2,
+                logs.count { it.delta == 1 },
+            )
+
+            assertEquals(
+                1,
+                logs.count { it.delta == -1 },
+            )
+
+            val duplicate =
+                repository.complete(
+                    taskId = taskId,
+                    scheduledEpochDay = TEST_DAY,
+                    completionTimestampMillis =
+                        SECOND_COMPLETION + 2_000L,
+                )
+
+            assertEquals(
+                TaskCompletionResult
+                    .ALREADY_COMPLETED,
+                duplicate,
+            )
+        }
+
+    @Test
+    fun repeatedIncompleteIsSafe(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            repository.complete(
+                taskId = taskId,
+                scheduledEpochDay = TEST_DAY,
+                completionTimestampMillis =
+                    FIRST_COMPLETION,
+            )
+
+            repository.setCompletion(
+                taskId = taskId,
+                scheduledEpochDay = TEST_DAY,
+                completed = false,
+                completionTimestampMillis =
+                    SECOND_COMPLETION,
+            )
+
+            val repeated =
+                repository.setCompletion(
+                    taskId = taskId,
+                    scheduledEpochDay = TEST_DAY,
+                    completed = false,
+                    completionTimestampMillis =
+                        SECOND_COMPLETION + 1_000L,
+                )
+
+            assertEquals(
+                TaskCompletionResult
+                    .ALREADY_INCOMPLETE,
+                repeated,
+            )
+
+            assertEquals(
+                2,
+                repository.observeLogs()
+                    .first()
+                    .size,
+            )
+        }
+
+    @Test
+    fun recurringDaysAreIndependent(): Unit =
+        runBlocking {
+            val nextDay = TEST_DAY + 1L
+
+            val taskId =
+                addTask(
+                    scheduleType =
+                        TaskScheduleTypeDb.DAILY
+                )
+
+            repository.complete(
+                taskId = taskId,
+                scheduledEpochDay = TEST_DAY,
+                completionTimestampMillis =
+                    FIRST_COMPLETION,
+            )
+
+            repository.complete(
+                taskId = taskId,
+                scheduledEpochDay = nextDay,
+                completionTimestampMillis =
+                    FIRST_COMPLETION + 1_000L,
+            )
+
+            repository.setCompletion(
+                taskId = taskId,
+                scheduledEpochDay = nextDay,
+                completed = false,
+                completionTimestampMillis =
+                    SECOND_COMPLETION,
+            )
+
+            val firstDay =
+                repository.complete(
+                    taskId = taskId,
+                    scheduledEpochDay = TEST_DAY,
+                    completionTimestampMillis =
+                        SECOND_COMPLETION + 1_000L,
+                )
+
+            val secondDay =
+                repository.setCompletion(
+                    taskId = taskId,
+                    scheduledEpochDay = nextDay,
+                    completed = true,
+                    completionTimestampMillis =
+                        SECOND_COMPLETION + 2_000L,
+                )
+
+            assertEquals(
+                TaskCompletionResult
+                    .ALREADY_COMPLETED,
+                firstDay,
+            )
+
+            assertEquals(
+                TaskCompletionResult.SUCCESS,
+                secondDay,
+            )
+        }
+
     private suspend fun addTask(
         name: String = "Test task",
         category: String? = "General",

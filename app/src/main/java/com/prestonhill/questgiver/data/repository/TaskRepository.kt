@@ -78,9 +78,30 @@ class TaskRepository(
         recordedTimestampMillis: Long =
             System.currentTimeMillis(),
     ): TaskCompletionResult =
+        setCompletion(
+            taskId = taskId,
+            scheduledEpochDay =
+                scheduledEpochDay,
+            completed = true,
+            completionTimestampMillis =
+                completionTimestampMillis,
+            recordedTimestampMillis =
+                recordedTimestampMillis,
+        )
+
+    suspend fun setCompletion(
+        taskId: Long,
+        scheduledEpochDay: Long,
+        completed: Boolean,
+        completionTimestampMillis: Long,
+        recordedTimestampMillis: Long =
+            System.currentTimeMillis(),
+    ): TaskCompletionResult =
         database.withWriteTransaction {
             val task =
-                dao.getTask(taskId) ?: return@withWriteTransaction TaskCompletionResult.TASK_NOT_FOUND
+                dao.getTask(taskId)
+                    ?: return@withWriteTransaction TaskCompletionResult
+                .TASK_NOT_FOUND
 
             val activeLog =
                 if (
@@ -96,26 +117,36 @@ class TaskRepository(
                     )
                 }
 
-            if (activeLog != null) {
-                return@withWriteTransaction TaskCompletionResult.ALREADY_COMPLETED
-            }
+            when {
+                completed &&
+                        activeLog != null ->
+                    return@withWriteTransaction TaskCompletionResult
+                    .ALREADY_COMPLETED
 
-            dao.insertLog(
-                TaskLogEntity(
-                    taskId = task.id,
-                    taskNameSnapshot = task.name,
-                    categorySnapshot = task.category,
-                    scheduledEpochDay =
-                        scheduledEpochDay,
-                    dueMinuteOfDaySnapshot =
-                        task.dueMinuteOfDay,
-                    completionTimestampMillis =
-                        completionTimestampMillis,
-                    recordedTimestampMillis =
-                        recordedTimestampMillis,
-                    delta = 1,
-                )
-            )
+                    !completed &&
+                        activeLog == null ->
+                return@withWriteTransaction TaskCompletionResult
+                    .ALREADY_INCOMPLETE
+
+                        completed -> insertCompletion(
+                        task = task,
+                        scheduledEpochDay =
+                            scheduledEpochDay,
+                        completionTimestampMillis =
+                            completionTimestampMillis,
+                        recordedTimestampMillis =
+                            recordedTimestampMillis,
+                    )
+
+                else ->
+                    insertReversal(
+                        log = requireNotNull(
+                            activeLog
+                        ),
+                        recordedTimestampMillis =
+                            recordedTimestampMillis,
+                    )
+            }
 
             TaskCompletionResult.SUCCESS
         }
@@ -128,40 +159,28 @@ class TaskRepository(
         database.withWriteTransaction {
             val original =
                 dao.getLog(logId)
-                    ?: return@withWriteTransaction TaskCompletionResult.LOG_NOT_FOUND
+                    ?: return@withWriteTransaction TaskCompletionResult
+                .LOG_NOT_FOUND
 
             if (original.delta != 1) {
-                return@withWriteTransaction TaskCompletionResult.ALREADY_CORRECTED
+                return@withWriteTransaction TaskCompletionResult
+                    .ALREADY_CORRECTED
             }
 
             if (original.taskId == null) {
-                return@withWriteTransaction TaskCompletionResult.TASK_DELETED
+                return@withWriteTransaction TaskCompletionResult
+                    .TASK_DELETED
             }
 
             val reversible =
                 dao.getReversibleLog(logId)
-                    ?: return@withWriteTransaction TaskCompletionResult.ALREADY_CORRECTED
+                    ?: return@withWriteTransaction TaskCompletionResult
+                .ALREADY_CORRECTED
 
-            dao.insertLog(
-                TaskLogEntity(
-                    taskId = reversible.taskId,
-                    taskNameSnapshot =
-                        reversible.taskNameSnapshot,
-                    categorySnapshot =
-                        reversible.categorySnapshot,
-                    scheduledEpochDay =
-                        reversible.scheduledEpochDay,
-                    dueMinuteOfDaySnapshot =
-                        reversible
-                            .dueMinuteOfDaySnapshot,
-                    completionTimestampMillis =
-                        reversible
-                            .completionTimestampMillis,
-                    recordedTimestampMillis =
-                        recordedTimestampMillis,
-                    delta = -1,
-                    reversesLogId = reversible.id,
-                )
+            insertReversal(
+                log = reversible,
+                recordedTimestampMillis =
+                    recordedTimestampMillis,
             )
 
             TaskCompletionResult.SUCCESS
@@ -206,6 +225,55 @@ class TaskRepository(
         completedBefore: Long,
     ): Int =
         dao.deleteExpiredTasks(completedBefore)
+
+    private suspend fun insertCompletion(
+        task: TaskEntity,
+        scheduledEpochDay: Long,
+        completionTimestampMillis: Long,
+        recordedTimestampMillis: Long,
+    ) {
+        dao.insertLog(
+            TaskLogEntity(
+                taskId = task.id,
+                taskNameSnapshot = task.name,
+                categorySnapshot = task.category,
+                scheduledEpochDay =
+                    scheduledEpochDay,
+                dueMinuteOfDaySnapshot =
+                    task.dueMinuteOfDay,
+                completionTimestampMillis =
+                    completionTimestampMillis,
+                recordedTimestampMillis =
+                    recordedTimestampMillis,
+                delta = 1,
+            )
+        )
+    }
+
+    private suspend fun insertReversal(
+        log: TaskLogEntity,
+        recordedTimestampMillis: Long,
+    ) {
+        dao.insertLog(
+            TaskLogEntity(
+                taskId = log.taskId,
+                taskNameSnapshot =
+                    log.taskNameSnapshot,
+                categorySnapshot =
+                    log.categorySnapshot,
+                scheduledEpochDay =
+                    log.scheduledEpochDay,
+                dueMinuteOfDaySnapshot =
+                    log.dueMinuteOfDaySnapshot,
+                completionTimestampMillis =
+                    log.completionTimestampMillis,
+                recordedTimestampMillis =
+                    recordedTimestampMillis,
+                delta = -1,
+                reversesLogId = log.id,
+            )
+        )
+    }
 
     private fun validate(task: TaskEntity) {
         require(task.name.isNotBlank())
@@ -282,4 +350,5 @@ enum class TaskCompletionResult {
     TASK_DELETED,
     ALREADY_COMPLETED,
     ALREADY_CORRECTED,
+    ALREADY_INCOMPLETE,
 }

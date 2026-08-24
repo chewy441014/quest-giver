@@ -52,18 +52,23 @@ class TaskViewModel(
     private val showHiddenToday =
         MutableStateFlow(false)
 
+    private val changingTaskIds =
+        MutableStateFlow<Set<Long>>(emptySet())
+
     private val overlayState =
         combine(
             inspectedTaskId,
             editorState,
             confirmationState,
             operationError,
-        ) { inspected, editor, confirmation, error ->
+            changingTaskIds,
+        ) { inspected, editor, confirmation, error, changing ->
             TaskOverlayState(
                 inspectedTaskId = inspected,
                 editor = editor,
                 confirmation = confirmation,
                 operationError = error,
+                changingTaskIds = changing,
             )
         }
     private val settingsState =
@@ -115,6 +120,8 @@ class TaskViewModel(
                 operationError =
                     overlay.operationError,
                 showHiddenToday = showHidden,
+                changingTaskIds =
+                    overlay.changingTaskIds,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -132,10 +139,11 @@ class TaskViewModel(
     fun onAction(action: TaskAction) {
         when (action) {
             is TaskAction.Complete ->
-                complete(
+                setCompletion(
                     taskId = action.taskId,
                     completionEpochDay =
                         action.completionEpochDay,
+                    completed = true,
                 )
 
             is TaskAction.Inspect ->
@@ -153,6 +161,14 @@ class TaskViewModel(
 
             is TaskAction.UpdateEditor ->
                 updateEditor(action.editor)
+
+            is TaskAction.SetCompletion ->
+                setCompletion(
+                    taskId = action.taskId,
+                    completionEpochDay =
+                        action.completionEpochDay,
+                    completed = action.completed,
+                )
 
             TaskAction.Save ->
                 saveTask()
@@ -351,11 +367,20 @@ class TaskViewModel(
             )
         }
 
-    private fun complete(
+    private fun setCompletion(
         taskId: Long,
         completionEpochDay: Long,
+        completed: Boolean,
     ) {
+        if (
+            taskId in changingTaskIds.value
+        ) {
+            return
+        }
+
         operationError.value = null
+
+        changingTaskIds.value += taskId
 
         viewModelScope.launch {
             try {
@@ -364,40 +389,54 @@ class TaskViewModel(
                 currentTimestamp.value = now
 
                 val result =
-                    repository.complete(
+                    repository.setCompletion(
                         taskId = taskId,
                         scheduledEpochDay =
                             completionEpochDay,
+                        completed = completed,
                         completionTimestampMillis =
                             now,
                         recordedTimestampMillis =
                             now,
                     )
 
-                when (result) {
-                    TaskCompletionResult.SUCCESS,
-                    TaskCompletionResult.ALREADY_COMPLETED -> {
-                        if (
-                            inspectedTaskId.value ==
-                            taskId
-                        ) {
-                            inspectedTaskId.value =
-                                null
-                        }
+                val accepted =
+                    if (completed) {
+                        result ==
+                                TaskCompletionResult
+                                    .SUCCESS ||
+                                result ==
+                                TaskCompletionResult
+                                    .ALREADY_COMPLETED
+                    } else {
+                        result ==
+                                TaskCompletionResult
+                                    .SUCCESS ||
+                                result ==
+                                TaskCompletionResult
+                                    .ALREADY_INCOMPLETE
                     }
 
-                    else -> {
-                        operationError.value =
-                            "Task could not be completed."
-                    }
+                if (!accepted) {
+                    operationError.value =
+                        "Task completion could not be changed."
+                } else if (
+                    completed &&
+                    inspectedTaskId.value == taskId
+                ) {
+                    inspectedTaskId.value = null
                 }
             } catch (error: Exception) {
-                if (error is CancellationException) {
+                if (
+                    error is CancellationException
+                ) {
                     throw error
                 }
 
                 operationError.value =
-                    "Task could not be completed."
+                    "Task completion could not be changed."
+            } finally {
+                changingTaskIds.value -= taskId
             }
         }
     }
@@ -672,6 +711,7 @@ private data class TaskOverlayState(
     val editor: TaskEditorUiState?,
     val confirmation: TaskDeleteUiState?,
     val operationError: String?,
+    val changingTaskIds: Set<Long>,
 )
 
 private fun TaskEntity.toEditorState() =

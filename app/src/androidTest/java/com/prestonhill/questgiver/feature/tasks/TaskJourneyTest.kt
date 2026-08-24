@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -205,7 +205,7 @@ class TaskJourneyTest {
             .onNodeWithTag(
                 TaskTags.check(taskId)
             )
-            .assertIsNotEnabled()
+            .assertIsEnabled()
     }
 
     private fun deleteTask() {

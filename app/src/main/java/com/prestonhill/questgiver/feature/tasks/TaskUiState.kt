@@ -26,6 +26,7 @@ data class TaskRowUiState(
     val canComplete: Boolean,
     val displayOrder: Int,
     val isCompleted: Boolean,
+    val isChanging: Boolean = false,
 )
 
 data class TaskDayUiState(

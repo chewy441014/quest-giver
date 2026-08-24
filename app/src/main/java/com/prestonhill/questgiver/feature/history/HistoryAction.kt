@@ -23,15 +23,12 @@ sealed interface HistoryAction {
 
     data object DismissLog : HistoryAction
 
-    data class RequestCorrect(
-        val logId: Long,
-    ) : HistoryAction
+    data object ConfirmDeleteLog : HistoryAction
 
+    data object DismissDeleteLog : HistoryAction
     data class RequestDeleteLog(
         val logId: Long,
     ) : HistoryAction
 
-    data object ConfirmLog : HistoryAction
-    data object DismissConfirm : HistoryAction
     data object DismissError : HistoryAction
 }

@@ -33,4 +33,9 @@ sealed interface TaskAction {
     data object Save : TaskAction
     data object DismissEditor : TaskAction
     data object ToggleHidden : TaskAction
+    data class SetCompletion(
+        val taskId: Long,
+        val completionEpochDay: Long,
+        val completed: Boolean,
+    ) : TaskAction
 }

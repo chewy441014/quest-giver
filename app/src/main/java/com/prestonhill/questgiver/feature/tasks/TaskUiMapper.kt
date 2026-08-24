@@ -19,6 +19,7 @@ class TaskUiMapper(
         confirmation: TaskDeleteUiState? = null,
         operationError: String? = null,
         showHiddenToday: Boolean = false,
+        changingTaskIds: Set<Long> = emptySet(),
     ): TaskScreenUiState {
         val visibleToday =
             mutableListOf<TaskRowUiState>()
@@ -55,6 +56,8 @@ class TaskUiMapper(
                             completionDay,
                         canComplete = true,
                         isCompleted = false,
+                        isChanging =
+                            task.id in changingTaskIds,
                     )
 
                 return@forEach
@@ -81,9 +84,11 @@ class TaskUiMapper(
                             ),
                         completionEpochDay =
                             completionDay,
-                        canComplete = false,
+                        canComplete = true,
                         isCompleted =
                             evaluation.isCompleted,
+                        isChanging =
+                            task.id in changingTaskIds,
                     )
 
                 // Reserve this task for Today even when
@@ -103,6 +108,8 @@ class TaskUiMapper(
                         nextDate.toEpochDay(),
                     canComplete = false,
                     isCompleted = false,
+                    isChanging =
+                        task.id in changingTaskIds,
                 )
         }
 
@@ -168,6 +175,7 @@ class TaskUiMapper(
         completionEpochDay: Long,
         canComplete: Boolean,
         isCompleted: Boolean,
+        isChanging: Boolean,
     ): TaskRowUiState =
         TaskRowUiState(
             id = id,
@@ -185,5 +193,6 @@ class TaskUiMapper(
             canComplete = canComplete,
             isCompleted = isCompleted,
             displayOrder = displayOrder,
+            isChanging = isChanging,
         )
 }

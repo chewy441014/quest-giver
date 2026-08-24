@@ -16,16 +16,10 @@ enum class TaskHistoryPage {
     ALL_LOGS,
 }
 
-enum class HistoryLogOperation {
-    CORRECT,
-    DELETE,
-}
-
-data class HistoryLogConfirmationUiState(
+data class HistoryDeleteUiState(
     val logId: Long,
     val taskName: String,
-    val operation: HistoryLogOperation,
-    val isWorking: Boolean = false,
+    val isDeleting: Boolean = false,
     val errorMessage: String? = null,
 )
 
@@ -94,7 +88,7 @@ data class TaskHistoryUiState(
             )
         ),
     val confirmation:
-    HistoryLogConfirmationUiState? = null,
+    HistoryDeleteUiState? = null,
 
     val operationError: String? = null,
 )
