@@ -20,6 +20,9 @@ import com.prestonhill.questgiver.feature.habits.HabitAction
 import com.prestonhill.questgiver.feature.habits.HabitScreen
 import com.prestonhill.questgiver.feature.habits.HabitScreenUiState
 import kotlinx.coroutines.launch
+import com.prestonhill.questgiver.feature.tasks.TaskAction
+import com.prestonhill.questgiver.feature.tasks.TaskScreen
+import com.prestonhill.questgiver.feature.tasks.TaskScreenUiState
 
 enum class AppPage(
     val title: String,
@@ -37,11 +40,17 @@ enum class AppPage(
         title = "Nutrition",
         shortLabel = "N",
     ),
+    HISTORY(
+        title = "History",
+        shortLabel = "Y",
+    ),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppShell(
+    taskState: TaskScreenUiState,
+    onTaskAction: (TaskAction) -> Unit,
     habitState: HabitScreenUiState,
     onHabitAction: (HabitAction) -> Unit,
     onOpenSettings: () -> Unit,
@@ -104,7 +113,10 @@ fun AppShell(
         ) { pageIndex ->
             when (pages[pageIndex]) {
                 AppPage.TASKS -> {
-                    PlaceholderPage("Tasks coming soon")
+                    TaskScreen(
+                        state = taskState,
+                        onAction = onTaskAction,
+                    )
                 }
 
                 AppPage.HABITS -> {
@@ -117,6 +129,12 @@ fun AppShell(
                 AppPage.NUTRITION -> {
                     PlaceholderPage(
                         "Nutrition coming soon"
+                    )
+                }
+
+                AppPage.HISTORY -> {
+                    PlaceholderPage(
+                        "History coming soon"
                     )
                 }
             }

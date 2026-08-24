@@ -16,6 +16,7 @@ data class TaskScheduleEvaluation(
     val completionEpochDay: Long?,
     val dueTimestampMillis: Long?,
     val upcomingDates: List<LocalDate>,
+    val wasCompletedToday: Boolean,
 )
 
 class TaskScheduleCalculator(
@@ -34,6 +35,15 @@ class TaskScheduleCalculator(
                 taskId = task.id,
                 logs = logs,
             )
+
+        val wasCompletedToday =
+            activeLogs.any { log ->
+                appDayCalculator
+                    .containing(
+                        log.completionTimestampMillis
+                    )
+                    .date == currentDate
+            }
 
         val completed =
             if (
@@ -128,7 +138,9 @@ class TaskScheduleCalculator(
                     task = task,
                     activeLogs = activeLogs,
                     currentDate = currentDate,
+
                 ),
+            wasCompletedToday = wasCompletedToday,
         )
     }
 

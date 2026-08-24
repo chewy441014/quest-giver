@@ -24,6 +24,9 @@ import com.prestonhill.questgiver.data.repository.AppSettingsRepository
 import com.prestonhill.questgiver.feature.settings.SettingsScreen
 import com.prestonhill.questgiver.feature.settings.SettingsViewModel
 import com.prestonhill.questgiver.feature.settings.SettingsViewModelFactory
+import com.prestonhill.questgiver.data.repository.TaskRepository
+import com.prestonhill.questgiver.feature.tasks.TaskViewModel
+import com.prestonhill.questgiver.feature.tasks.TaskViewModelFactory
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,6 +38,12 @@ class MainActivity : ComponentActivity() {
         val repository =
             HabitRepository(database)
 
+        val taskRepository =
+            TaskRepository(database)
+
+        val appClock =
+            Clock.systemDefaultZone()
+
         val settingsRepository =
             AppSettingsRepository(
                 applicationContext.appSettingsDataStore
@@ -44,7 +53,14 @@ class MainActivity : ComponentActivity() {
             HabitViewModelFactory(
                 repository = repository,
                 settings = settingsRepository.settings,
-                clock = Clock.systemDefaultZone(),
+                clock = appClock,
+            )
+
+        val taskViewModelFactory =
+            TaskViewModelFactory(
+                repository = taskRepository,
+                settings = settingsRepository.settings,
+                clock = appClock,
             )
 
         val settingsViewModelFactory =
@@ -54,6 +70,13 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
+                val taskViewModel: TaskViewModel =
+                    viewModel(factory = taskViewModelFactory)
+
+                val taskState by
+                taskViewModel.uiState
+                    .collectAsStateWithLifecycle()
+
                 val settingsViewModel: SettingsViewModel =
                     viewModel(factory = settingsViewModelFactory)
 
@@ -72,6 +95,7 @@ class MainActivity : ComponentActivity() {
                     event = Lifecycle.Event.ON_RESUME
                 ) {
                     habitViewModel.refreshAppDay()
+                    taskViewModel.refresh()
                 }
 
                 var showSettings by rememberSaveable {
@@ -92,8 +116,11 @@ class MainActivity : ComponentActivity() {
                     )
                 } else {
                     AppShell(
+                        taskState = taskState,
+                        onTaskAction = taskViewModel::onAction,
                         habitState = uiState,
-                        onHabitAction = habitViewModel::onAction,
+                        onHabitAction =
+                            habitViewModel::onAction,
                         onOpenSettings = {
                             showSettings = true
                         },

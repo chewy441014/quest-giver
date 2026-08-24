@@ -25,6 +25,7 @@ data class TaskRowUiState(
     val completionEpochDay: Long,
     val canComplete: Boolean,
     val displayOrder: Int,
+    val isCompleted: Boolean,
 )
 
 data class TaskDayUiState(
@@ -97,4 +98,6 @@ data class TaskScreenUiState(
     val editor: TaskEditorUiState? = null,
     val confirmation: TaskDeleteUiState? = null,
     val operationError: String? = null,
+    val hasHiddenToday: Boolean = false,
+    val showHiddenToday: Boolean = false,
 )

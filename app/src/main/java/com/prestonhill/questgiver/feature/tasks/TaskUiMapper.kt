@@ -18,8 +18,14 @@ class TaskUiMapper(
         editor: TaskEditorUiState? = null,
         confirmation: TaskDeleteUiState? = null,
         operationError: String? = null,
+        showHiddenToday: Boolean = false,
     ): TaskScreenUiState {
-        val today = mutableListOf<TaskRowUiState>()
+        val visibleToday =
+            mutableListOf<TaskRowUiState>()
+
+        val hiddenToday =
+            mutableListOf<TaskRowUiState>()
+
         val upcoming =
             mutableListOf<TaskRowUiState>()
 
@@ -39,7 +45,7 @@ class TaskUiMapper(
                         evaluation.completionEpochDay
                     )
 
-                today +=
+                visibleToday +=
                     task.toRow(
                         scheduledDate =
                             LocalDate.ofEpochDay(
@@ -48,10 +54,40 @@ class TaskUiMapper(
                         completionEpochDay =
                             completionDay,
                         canComplete = true,
+                        isCompleted = false,
                     )
 
-                // A task shown today cannot also appear
-                // in Upcoming.
+                return@forEach
+            }
+
+            val isHiddenToday =
+                evaluation.wasCompletedToday ||
+                        (
+                                evaluation.isScheduledToday &&
+                                        !evaluation.shouldShowToday
+                                )
+
+            if (isHiddenToday) {
+                val completionDay =
+                    requireNotNull(
+                        evaluation.completionEpochDay
+                    )
+
+                hiddenToday +=
+                    task.toRow(
+                        scheduledDate =
+                            LocalDate.ofEpochDay(
+                                completionDay
+                            ),
+                        completionEpochDay =
+                            completionDay,
+                        canComplete = false,
+                        isCompleted =
+                            evaluation.isCompleted,
+                    )
+
+                // Reserve this task for Today even when
+                // the hidden toggle is off.
                 return@forEach
             }
 
@@ -66,6 +102,7 @@ class TaskUiMapper(
                     completionEpochDay =
                         nextDate.toEpochDay(),
                     canComplete = false,
+                    isCompleted = false,
                 )
         }
 
@@ -101,7 +138,18 @@ class TaskUiMapper(
 
         return TaskScreenUiState(
             today =
-                today.sortedWith(rowOrder),
+                (
+                        visibleToday +
+                                if (showHiddenToday) {
+                                    hiddenToday
+                                } else {
+                                    emptyList()
+                                }
+                        ).sortedWith(rowOrder),
+            hasHiddenToday = hiddenToday.isNotEmpty(),
+            showHiddenToday =
+                showHiddenToday &&
+                        hiddenToday.isNotEmpty(),
             upcoming = upcomingDays,
             inspectedTaskId =
                 inspectedTaskId?.takeIf { id ->
@@ -119,6 +167,7 @@ class TaskUiMapper(
         scheduledDate: LocalDate,
         completionEpochDay: Long,
         canComplete: Boolean,
+        isCompleted: Boolean,
     ): TaskRowUiState =
         TaskRowUiState(
             id = id,
@@ -134,6 +183,7 @@ class TaskUiMapper(
             completionEpochDay =
                 completionEpochDay,
             canComplete = canComplete,
+            isCompleted = isCompleted,
             displayOrder = displayOrder,
         )
 }
