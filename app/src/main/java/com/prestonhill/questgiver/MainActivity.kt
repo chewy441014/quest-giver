@@ -13,7 +13,7 @@ import com.prestonhill.questgiver.data.local.database.DatabaseProvider
 import com.prestonhill.questgiver.data.repository.HabitRepository
 import com.prestonhill.questgiver.feature.habits.HabitViewModel
 import com.prestonhill.questgiver.feature.habits.HabitViewModelFactory
-import java.time.ZoneId
+import java.time.Clock
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -44,7 +44,7 @@ class MainActivity : ComponentActivity() {
             HabitViewModelFactory(
                 repository = repository,
                 settings = settingsRepository.settings,
-                zoneId = ZoneId.systemDefault(),
+                clock = Clock.systemDefaultZone(),
             )
 
         val settingsViewModelFactory =

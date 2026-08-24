@@ -20,16 +20,16 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.prestonhill.questgiver.core.settings.AppSettings
-import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
+import java.time.Clock
 
 class HabitViewModel(
     private val repository: HabitRepository,
     private val settings: Flow<AppSettings>,
-    private val zoneId: ZoneId,
+    private val clock: Clock,
 ) : ViewModel() {
     private val currentTimestamp =
-        MutableStateFlow(System.currentTimeMillis())
+        MutableStateFlow(clock.millis())
 
     private val settingsState =
         settings.stateIn(
@@ -320,7 +320,7 @@ class HabitViewModel(
 
     fun refreshAppDay() {
         currentTimestamp.value =
-            System.currentTimeMillis()
+            clock.millis()
     }
 
     private fun openEditor(habitId: Long) {
@@ -372,7 +372,7 @@ class HabitViewModel(
 
         viewModelScope.launch {
             try {
-                val now = System.currentTimeMillis()
+                val now = clock.millis()
 
                 currentTimestamp.value = now
 
@@ -527,7 +527,7 @@ class HabitViewModel(
             HabitIntervalBasis.FIXED_SCHEDULE
         ) {
             appDayAt(
-                System.currentTimeMillis()
+                clock.millis()
             ).date.toEpochDay()
         } else {
             null
@@ -545,7 +545,7 @@ class HabitViewModel(
         add: Boolean
     ) {
         viewModelScope.launch {
-            val now = System.currentTimeMillis()
+            val now = clock.millis()
             val appDay = appDayAt(now)
 
             currentTimestamp.value = now
@@ -743,7 +743,7 @@ class HabitViewModel(
         val appDayCalculator =
             AppDayCalculator(
                 dayBoundary = settings.dayBoundary,
-                zoneId = zoneId,
+                zoneId = clock.zone
             )
 
         return HabitTimeState(
@@ -761,7 +761,7 @@ class HabitViewModel(
         AppDayCalculator(
             dayBoundary =
                 settingsState.value.dayBoundary,
-            zoneId = zoneId,
+            zoneId = clock.zone
         ).containing(timestamp)
 }
 
@@ -898,7 +898,7 @@ private fun HabitScheduleVisibilityDb.toUi():
 class HabitViewModelFactory(
     private val repository: HabitRepository,
     private val settings: Flow<AppSettings>,
-    private val zoneId: ZoneId,
+    private val clock: Clock,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(
         modelClass: Class<T>
@@ -912,7 +912,7 @@ class HabitViewModelFactory(
             return HabitViewModel(
                 repository = repository,
                 settings = settings,
-                zoneId = zoneId,
+                clock = clock,
             ) as T
         }
 

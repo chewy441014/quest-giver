@@ -17,10 +17,11 @@ import androidx.lifecycle.ViewModelStore
 import androidx.room3.Room
 import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
-import com.prestonhill.questgiver.core.time.AppDayCalculator
 import com.prestonhill.questgiver.data.local.database.QuestGiverDatabase
 import com.prestonhill.questgiver.data.repository.HabitRepository
 import java.time.ZoneId
+import java.time.Clock
+import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -48,6 +49,12 @@ class HabitJourneyTest {
         val context =
             ApplicationProvider.getApplicationContext<Context>()
 
+        val clock =
+            Clock.fixed(
+                Instant.parse("2026-08-23T17:00:00Z"),
+                ZoneId.of("America/Chicago"),
+            )
+
         database =
             Room.inMemoryDatabaseBuilder<QuestGiverDatabase>(
                 context
@@ -62,8 +69,8 @@ class HabitJourneyTest {
             HabitViewModelFactory(
                 repository = repository,
                 settings = flowOf(AppSettings()),
-                zoneId = ZoneId.systemDefault(),
-                    )
+                clock = clock,
+            )
 
 
         viewModelStore = ViewModelStore()

@@ -7,13 +7,11 @@ import androidx.room3.Room
 import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.prestonhill.questgiver.core.time.AppDayCalculator
 import com.prestonhill.questgiver.data.local.database.QuestGiverDatabase
 import com.prestonhill.questgiver.data.local.database.entity.HabitCategoryDb
 import com.prestonhill.questgiver.data.local.database.entity.HabitEntity
 import com.prestonhill.questgiver.data.local.database.entity.HabitScheduleTypeDb
 import com.prestonhill.questgiver.data.repository.HabitRepository
-import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -30,6 +28,13 @@ import org.junit.runner.RunWith
 import kotlin.time.Duration.Companion.milliseconds
 import com.prestonhill.questgiver.core.settings.AppSettings
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneId
+import com.prestonhill.questgiver.data.local.database.entity.HabitLogEntity
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.LocalTime
 
 @RunWith(AndroidJUnit4::class)
 class HabitViewModelTest {
@@ -38,11 +43,18 @@ class HabitViewModelTest {
     private lateinit var viewModel: HabitViewModel
     private lateinit var viewModelStore: ViewModelStore
     private lateinit var settings: MutableStateFlow<AppSettings>
+    private lateinit var clock: Clock
 
     @Before
     fun setup() {
         val context =
             ApplicationProvider.getApplicationContext<Context>()
+
+        clock =
+            Clock.fixed(
+                Instant.parse("2026-08-23T17:00:00Z"),
+                ZoneId.of("America/Chicago"),
+            )
 
         settings =
             MutableStateFlow(AppSettings())
@@ -61,7 +73,7 @@ class HabitViewModelTest {
             HabitViewModelFactory(
                 repository = repository,
                 settings = settings,
-                zoneId = ZoneId.systemDefault(),
+                clock = clock,
             )
 
         viewModelStore = ViewModelStore()
@@ -301,19 +313,179 @@ class HabitViewModelTest {
         assertNull(state.operationError)
     }
 
-    private suspend fun addHabit(): Long =
+    @Test
+    fun boundaryRecalculatesWithoutChangingLogs() = runBlocking {
+        val habitId =
+            addHabit(
+                createdAt =
+                    timestamp(
+                        date = LocalDate.of(2026, 8, 22),
+                        time = LocalTime.NOON,
+                    ),
+            )
+
+        val completionTime =
+            timestamp(
+                date = LocalDate.of(2026, 8, 23),
+                time = LocalTime.of(1, 0),
+            )
+
+        database.habitDao().insertHabitLog(
+            HabitLogEntity(
+                habitId = habitId,
+                completionTimestampMillis = completionTime,
+                recordedTimestampMillis = completionTime,
+                delta = 1,
+            ),
+        )
+
+        val before =
+            awaitState {
+                it.habit(habitId)?.completionCountToday == 1
+            }
+
+        with(requireNotNull(before.habit(habitId))) {
+            assertEquals(1, completionCountToday)
+            assertEquals(1, scheduleCompletions)
+            assertEquals(
+                HabitDueStatus.COMPLETED,
+                dueStatus,
+            )
+        }
+
+        val logsBefore =
+            repository.observeAllHabitLogs().first()
+
+        settings.value =
+            settings.value.copy(
+                dayBoundary = LocalTime.of(4, 0),
+            )
+
+        val after =
+            awaitState {
+                it.habit(habitId)?.completionCountToday == 0
+            }
+
+        with(requireNotNull(after.habit(habitId))) {
+            assertEquals(0, completionCountToday)
+            assertEquals(0, scheduleCompletions)
+            assertEquals(
+                HabitDueStatus.DUE,
+                dueStatus,
+            )
+        }
+
+        val logsAfter =
+            repository.observeAllHabitLogs().first()
+
+        assertEquals(logsBefore, logsAfter)
+    }
+
+    @Test
+    fun weekStartRecalculatesWithoutChangingLogs() = runBlocking {
+        val habitId =
+            addHabit(
+                scheduleType =
+                    HabitScheduleTypeDb.WEEKLY_TARGET,
+                createdAt =
+                    timestamp(
+                        date = LocalDate.of(2026, 8, 16),
+                        time = LocalTime.NOON,
+                    ),
+            )
+
+        val completionTime =
+            timestamp(
+                date = LocalDate.of(2026, 8, 17),
+                time = LocalTime.NOON,
+            )
+
+        database.habitDao().insertHabitLog(
+            HabitLogEntity(
+                habitId = habitId,
+                completionTimestampMillis = completionTime,
+                recordedTimestampMillis = completionTime,
+                delta = 1,
+            ),
+        )
+
+        val before =
+            awaitState {
+                it.habit(habitId)?.scheduleCompletions == 1
+            }
+
+        with(requireNotNull(before.habit(habitId))) {
+            assertEquals(1, scheduleCompletions)
+            assertEquals(
+                HabitDueStatus.COMPLETED,
+                dueStatus,
+            )
+        }
+
+        val logsBefore =
+            repository.observeAllHabitLogs().first()
+
+        settings.value =
+            settings.value.copy(
+                weekStart = DayOfWeek.SUNDAY,
+            )
+
+        val after =
+            awaitState {
+                it.habit(habitId)?.scheduleCompletions == 0
+            }
+
+        with(requireNotNull(after.habit(habitId))) {
+            assertEquals(0, scheduleCompletions)
+            assertEquals(
+                HabitDueStatus.DUE,
+                dueStatus,
+            )
+        }
+
+        val logsAfter =
+            repository.observeAllHabitLogs().first()
+
+        assertEquals(logsBefore, logsAfter)
+    }
+
+    private suspend fun addHabit(
+        scheduleType: HabitScheduleTypeDb =
+            HabitScheduleTypeDb.DAILY,
+        createdAt: Long = clock.millis(),
+    ): Long =
         repository.createHabit(
             HabitEntity(
                 name = "Test habit",
                 category = HabitCategoryDb.ANYTIME,
                 displayOrder = 0,
                 allowsMultipleCompletions = false,
-                scheduleType = HabitScheduleTypeDb.DAILY,
+                scheduleType = scheduleType,
                 scheduleTarget = 1,
-                createdAtEpochMillis =
-                    System.currentTimeMillis()
-            )
+                createdAtEpochMillis = createdAt,
+            ),
         )
+
+    private fun timestamp(
+        date: LocalDate,
+        time: LocalTime,
+    ): Long =
+        date.atTime(time)
+            .atZone(clock.zone)
+            .toInstant()
+            .toEpochMilli()
+
+    private fun HabitScreenUiState.habit(
+        habitId: Long,
+    ): HabitRowUiState? =
+        categories
+            .asSequence()
+            .flatMap { category ->
+                category.habits.asSequence()
+            }
+            .firstOrNull { habit ->
+                habit.id == habitId
+            }
 
     private suspend fun awaitState(
         condition: (HabitScreenUiState) -> Boolean
