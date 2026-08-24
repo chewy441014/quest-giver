@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTextReplacement
 import java.time.LocalDate
 import java.time.LocalTime
 import org.junit.Assert.assertEquals
@@ -19,6 +20,268 @@ import org.junit.Test
 class TaskScreenTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun detailEditSendsAction(): Unit {
+        val actions = mutableListOf<TaskAction>()
+
+        showScreen(
+            state = detailState(),
+            actions = actions
+        )
+
+        composeRule
+            .onNodeWithTag(TaskTags.EDIT)
+            .performClick()
+
+        assertEquals(
+            listOf(TaskAction.Edit(TASK_ID)),
+            actions
+        )
+    }
+
+    @Test
+    fun detailDeleteSendsAction(): Unit {
+        val actions = mutableListOf<TaskAction>()
+
+        showScreen(
+            state = detailState(),
+            actions = actions
+        )
+
+        composeRule
+            .onNodeWithText("Delete")
+            .performClick()
+
+        assertEquals(
+            listOf(TaskAction.RequestDelete(TASK_ID)),
+            actions
+        )
+    }
+
+    @Test
+    fun detailCloseSendsAction(): Unit {
+        val actions = mutableListOf<TaskAction>()
+
+        showScreen(
+            state = detailState(),
+            actions = actions
+        )
+
+        composeRule
+            .onNodeWithText("Close")
+            .performClick()
+
+        assertEquals(
+            listOf(TaskAction.DismissDetails),
+            actions
+        )
+    }
+
+    @Test
+    fun deleteOnlySendsAction(): Unit {
+        val actions = mutableListOf<TaskAction>()
+
+        showScreen(
+            state = deleteState(),
+            actions = actions
+        )
+
+        composeRule
+            .onNodeWithTag(TaskTags.DELETE_TASK)
+            .performClick()
+
+        assertEquals(
+            listOf(TaskAction.DeleteTask),
+            actions
+        )
+    }
+
+    @Test
+    fun deleteHistorySendsAction(): Unit {
+        val actions = mutableListOf<TaskAction>()
+
+        showScreen(
+            state = deleteState(),
+            actions = actions
+        )
+
+        composeRule
+            .onNodeWithTag(TaskTags.DELETE_HISTORY)
+            .performClick()
+
+        assertEquals(
+            listOf(TaskAction.DeleteTaskAndHistory),
+            actions
+        )
+    }
+
+    @Test
+    fun deleteCancelSendsAction(): Unit {
+        val actions = mutableListOf<TaskAction>()
+
+        showScreen(
+            state = deleteState(),
+            actions = actions
+        )
+
+        composeRule
+            .onNodeWithText("Cancel")
+            .performClick()
+
+        assertEquals(
+            listOf(TaskAction.DismissDelete),
+            actions
+        )
+    }
+
+    @Test
+    fun deletingDisablesButtons(): Unit {
+        showScreen(
+            state = deleteState(isDeleting = true)
+        )
+
+        composeRule
+            .onNodeWithTag(TaskTags.DELETE_TASK)
+            .assertIsNotEnabled()
+
+        composeRule
+            .onNodeWithTag(TaskTags.DELETE_HISTORY)
+            .assertIsNotEnabled()
+
+        composeRule
+            .onNodeWithText("Cancel")
+            .assertIsNotEnabled()
+    }
+
+    @Test
+    fun deleteErrorIsVisible(): Unit {
+        showScreen(
+            state = deleteState(
+                errorMessage =
+                    "Task could not be deleted."
+            )
+        )
+
+        composeRule
+            .onNodeWithText(
+                "Task could not be deleted."
+            )
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun editorSaveSendsAction(): Unit {
+        val actions = mutableListOf<TaskAction>()
+
+        showScreen(
+            state = TaskScreenUiState(
+                editor = TaskEditorUiState(
+                    name = "New task",
+                    scheduledDate = TEST_DATE
+                )
+            ),
+            actions = actions
+        )
+
+        composeRule
+            .onNodeWithTag(TaskTags.EDITOR_SAVE)
+            .performClick()
+
+        assertEquals(
+            listOf(TaskAction.Save),
+            actions
+        )
+    }
+
+    @Test
+    fun editorNameSendsUpdate(): Unit {
+        val actions = mutableListOf<TaskAction>()
+        val editor = TaskEditorUiState(
+            scheduledDate = TEST_DATE
+        )
+
+        showScreen(
+            state = TaskScreenUiState(
+                editor = editor
+            ),
+            actions = actions
+        )
+
+        composeRule
+            .onNodeWithTag(TaskTags.EDITOR_NAME)
+            .performTextReplacement("New task")
+
+        assertEquals(
+            listOf(
+                TaskAction.UpdateEditor(
+                    editor.copy(name = "New task")
+                )
+            ),
+            actions
+        )
+    }
+
+    @Test
+    fun invalidEditorDisablesSave(): Unit {
+        showScreen(
+            state = TaskScreenUiState(
+                editor = TaskEditorUiState(
+                    name = "",
+                    scheduledDate = TEST_DATE
+                )
+            )
+        )
+
+        composeRule
+            .onNodeWithTag(TaskTags.EDITOR_SAVE)
+            .assertIsNotEnabled()
+    }
+
+    @Test
+    fun editorCancelSendsAction(): Unit {
+        val actions = mutableListOf<TaskAction>()
+
+        showScreen(
+            state = TaskScreenUiState(
+                editor = TaskEditorUiState(
+                    scheduledDate = TEST_DATE
+                )
+            ),
+            actions = actions
+        )
+
+        composeRule
+            .onNodeWithText("Cancel")
+            .performClick()
+
+        assertEquals(
+            listOf(TaskAction.DismissEditor),
+            actions
+        )
+    }
+
+    @Test
+    fun errorDismisses(): Unit {
+        val actions = mutableListOf<TaskAction>()
+
+        showScreen(
+            state = TaskScreenUiState(
+                operationError =
+                    "Task could not be opened."
+            ),
+            actions = actions
+        )
+
+        composeRule
+            .onNodeWithText("OK")
+            .performClick()
+
+        assertEquals(
+            listOf(TaskAction.DismissError),
+            actions
+        )
+    }
 
     @Test
     fun showsBothSections(): Unit {
@@ -307,6 +570,30 @@ class TaskScreenTest {
             }
         }
     }
+
+    private fun detailState(): TaskScreenUiState =
+        TaskScreenUiState(
+            today = listOf(
+                taskRow(
+                    id = TASK_ID,
+                    name = "Test task"
+                )
+            ),
+            inspectedTaskId = TASK_ID
+        )
+
+    private fun deleteState(
+        isDeleting: Boolean = false,
+        errorMessage: String? = null
+    ): TaskScreenUiState =
+        TaskScreenUiState(
+            confirmation = TaskDeleteUiState(
+                taskId = TASK_ID,
+                taskName = "Test task",
+                isDeleting = isDeleting,
+                errorMessage = errorMessage
+            )
+        )
 
     private fun taskRow(
         id: Long,
