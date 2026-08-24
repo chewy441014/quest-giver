@@ -28,6 +28,7 @@ import com.prestonhill.questgiver.data.repository.TaskRepository
 import com.prestonhill.questgiver.feature.tasks.TaskViewModel
 import com.prestonhill.questgiver.feature.tasks.TaskViewModelFactory
 import com.prestonhill.questgiver.feature.history.HistoryViewModel
+import com.prestonhill.questgiver.feature.history.HistoryViewModelFactory
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,18 +72,25 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
-                val historyViewModel: HistoryViewModel =
-                    viewModel()
-
-                val historyState by
-                historyViewModel.uiState
-                    .collectAsStateWithLifecycle()
-
                 val taskViewModel: TaskViewModel =
                     viewModel(factory = taskViewModelFactory)
 
                 val taskState by
                 taskViewModel.uiState
+                    .collectAsStateWithLifecycle()
+
+                val historyViewModelFactory =
+                    HistoryViewModelFactory(
+                        repository = taskRepository
+                    )
+
+                val historyViewModel: HistoryViewModel =
+                    viewModel(
+                        factory = historyViewModelFactory
+                    )
+
+                val historyState by
+                historyViewModel.uiState
                     .collectAsStateWithLifecycle()
 
                 val settingsViewModel: SettingsViewModel =

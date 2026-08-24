@@ -58,6 +58,8 @@ data class HistoryTaskDayUiState(
 data class TaskHistoryUiState(
     val page: TaskHistoryPage =
         TaskHistoryPage.DASHBOARD,
+    val inspectedTaskId: Long? = null,
+    val inspectedLogId: Long? = null,
     val allTasks: List<HistoryTaskUiState> =
         emptyList(),
     val logDays: List<HistoryTaskDayUiState> =

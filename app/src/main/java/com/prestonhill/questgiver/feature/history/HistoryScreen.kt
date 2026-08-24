@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.remember
+import java.time.format.DateTimeFormatter
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -23,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.AlertDialog
 
 object HistoryTags {
     const val TASK_DASHBOARD =
@@ -42,6 +45,12 @@ object HistoryTags {
 
     fun tab(section: HistorySection) =
         "history_tab_${section.name}"
+
+    fun task(taskId: Long) =
+        "history_task_$taskId"
+
+    fun log(logId: Long) =
+        "history_log_$logId"
 }
 
 @Composable
@@ -100,7 +109,147 @@ fun HistoryScreen(
                 )
         }
     }
+    state.tasks.inspectedLogId
+        ?.let(state.tasks::findLog)
+        ?.let { log ->
+            LogDetailsDialog(
+                log = log,
+                onAction = onAction,
+            )
+        }
+
+    state.tasks.inspectedTaskId
+        ?.let(state.tasks::findTask)
+        ?.let { task ->
+            HistoryTaskDialog(
+                task = task,
+                onAction = onAction,
+            )
+        }
 }
+
+@Composable
+private fun LogDetailsDialog(
+    log: HistoryTaskLogUiState,
+    onAction: (HistoryAction) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {
+            onAction(
+                HistoryAction.DismissLog
+            )
+        },
+        title = {
+            Text(log.taskName)
+        },
+        text = {
+            Column(
+                verticalArrangement =
+                    Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    log.category
+                        ?: "Uncategorized"
+                )
+
+                Text(log.date.toString())
+
+                when {
+                    log.isCorrected ->
+                        Text("Corrected")
+
+                    log.taskId == null ->
+                        Text("Associated task deleted")
+                }
+            }
+        },
+        confirmButton = {
+            if (log.canOpenTask) {
+                TextButton(
+                    onClick = {
+                        onAction(
+                            HistoryAction.InspectTask(
+                                requireNotNull(
+                                    log.taskId
+                                )
+                            )
+                        )
+                    },
+                ) {
+                    Text("View task")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = {
+                    onAction(
+                        HistoryAction.DismissLog
+                    )
+                },
+            ) {
+                Text("Close")
+            }
+        },
+    )
+}
+
+@Composable
+private fun HistoryTaskDialog(
+    task: HistoryTaskUiState,
+    onAction: (HistoryAction) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {
+            onAction(
+                HistoryAction.DismissTask
+            )
+        },
+        title = {
+            Text(task.name)
+        },
+        text = {
+            Column(
+                verticalArrangement =
+                    Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    task.category
+                        ?: "Uncategorized"
+                )
+
+                Text(task.schedule)
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onAction(
+                        HistoryAction.DismissTask
+                    )
+                },
+            ) {
+                Text("Close")
+            }
+        },
+    )
+}
+
+private fun TaskHistoryUiState.findTask(
+    taskId: Long,
+): HistoryTaskUiState? =
+    allTasks.firstOrNull {
+        it.id == taskId
+    }
+
+private fun TaskHistoryUiState.findLog(
+    logId: Long,
+): HistoryTaskLogUiState? =
+    logDays.asSequence()
+        .flatMap { it.logs.asSequence() }
+        .firstOrNull {
+            it.id == logId
+        }
 
 @Composable
 private fun TaskHistory(
@@ -115,29 +264,23 @@ private fun TaskHistory(
             )
 
         TaskHistoryPage.ALL_TASKS ->
-            EmptyTaskPage(
-                title = "All tasks",
-                message =
-                    "No tasks to show yet.",
-                tag = HistoryTags.ALL_TASKS,
+            AllTasksPage(
+                tasks = state.allTasks,
+                onAction = onAction,
                 onBack = {
                     onAction(
-                        HistoryAction
-                            .BackToDashboard
+                        HistoryAction.BackToDashboard
                     )
                 },
             )
 
         TaskHistoryPage.ALL_LOGS ->
-            EmptyTaskPage(
-                title = "All task logs",
-                message =
-                    "No task logs to show yet.",
-                tag = HistoryTags.ALL_LOGS,
+            AllLogsPage(
+                days = state.logDays,
+                onAction = onAction,
                 onBack = {
                     onAction(
-                        HistoryAction
-                            .BackToDashboard
+                        HistoryAction.BackToDashboard
                     )
                 },
             )
@@ -276,17 +419,214 @@ private fun GraphPlaceholder(
 }
 
 @Composable
-private fun EmptyTaskPage(
-    title: String,
-    message: String,
-    tag: String,
+private fun AllTasksPage(
+    tasks: List<HistoryTaskUiState>,
     onBack: () -> Unit,
+    onAction: (HistoryAction) -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .testTag(tag)
-            .padding(16.dp),
+            .testTag(HistoryTags.ALL_TASKS),
+    ) {
+        HistoryHeader(
+            title = "All tasks",
+            onBack = onBack,
+        )
+
+        if (tasks.isEmpty()) {
+            EmptyList("No tasks to show yet.")
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding =
+                    androidx.compose.foundation.layout
+                        .PaddingValues(16.dp),
+                verticalArrangement =
+                    Arrangement.spacedBy(8.dp),
+            ) {
+                items(
+                    items = tasks,
+                    key = HistoryTaskUiState::id,
+                ) { task ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(
+                                HistoryTags.task(task.id)
+                            ),
+                        onClick = {
+                            onAction(
+                                HistoryAction.InspectTask(
+                                    task.id
+                                )
+                            )
+                        },
+                    ) {
+                        Column(
+                            modifier =
+                                Modifier.padding(16.dp),
+                            verticalArrangement =
+                                Arrangement.spacedBy(
+                                    4.dp
+                                ),
+                        ) {
+                            Text(
+                                text = task.name,
+                                style =
+                                    MaterialTheme
+                                        .typography
+                                        .titleMedium,
+                            )
+
+                            Text(
+                                task.category
+                                    ?: "Uncategorized"
+                            )
+
+                            Text(task.schedule)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AllLogsPage(
+    days: List<HistoryTaskDayUiState>,
+    onBack: () -> Unit,
+    onAction: (HistoryAction) -> Unit,
+) {
+    val dateFormatter =
+        remember {
+            DateTimeFormatter.ofPattern(
+                "EEE, MMM d"
+            )
+        }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag(HistoryTags.ALL_LOGS),
+    ) {
+        HistoryHeader(
+            title = "All task logs",
+            onBack = onBack,
+        )
+
+        if (days.isEmpty()) {
+            EmptyList(
+                "No task logs to show yet."
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding =
+                    androidx.compose.foundation.layout
+                        .PaddingValues(16.dp),
+                verticalArrangement =
+                    Arrangement.spacedBy(8.dp),
+            ) {
+                days.forEach { day ->
+                    item(
+                        key =
+                            "day_${day.date.toEpochDay()}"
+                    ) {
+                        Text(
+                            text =
+                                day.date.format(
+                                    dateFormatter
+                                ),
+                            style =
+                                MaterialTheme
+                                    .typography
+                                    .titleMedium,
+                            modifier =
+                                Modifier.padding(
+                                    top = 8.dp
+                                ),
+                        )
+                    }
+
+                    items(
+                        items = day.logs,
+                        key =
+                            HistoryTaskLogUiState::id,
+                    ) { log ->
+                        TaskLogCard(
+                            log = log,
+                            onClick = {
+                                onAction(
+                                    HistoryAction.InspectLog(
+                                        log.id
+                                    )
+                                )
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TaskLogCard(
+    log: HistoryTaskLogUiState,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(
+                HistoryTags.log(log.id)
+            ),
+        onClick = onClick,
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement =
+                Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = log.taskName,
+                style =
+                    MaterialTheme
+                        .typography.titleMedium,
+            )
+
+            Text(
+                log.category
+                    ?: "Uncategorized"
+            )
+
+            when {
+                log.isCorrected ->
+                    Text("Corrected")
+
+                log.taskId == null ->
+                    Text("Task deleted")
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryHeader(
+    title: String,
+    onBack: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = 8.dp,
+                vertical = 4.dp,
+            ),
+        verticalAlignment =
+            Alignment.CenterVertically,
     ) {
         TextButton(onClick = onBack) {
             Text("Back")
@@ -298,15 +638,19 @@ private fun EmptyTaskPage(
                 MaterialTheme
                     .typography.headlineSmall,
         )
+    }
+}
 
-        Box(
-            modifier =
-                Modifier.fillMaxSize(),
-            contentAlignment =
-                Alignment.Center,
-        ) {
-            Text(message)
-        }
+@Composable
+private fun EmptyList(
+    message: String,
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment =
+            Alignment.Center,
+    ) {
+        Text(message)
     }
 }
 

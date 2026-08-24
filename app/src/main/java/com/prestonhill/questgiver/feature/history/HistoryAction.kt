@@ -10,4 +10,16 @@ sealed interface HistoryAction {
     ) : HistoryAction
 
     data object BackToDashboard : HistoryAction
+
+    data class InspectTask(
+        val taskId: Long,
+    ) : HistoryAction
+
+    data object DismissTask : HistoryAction
+
+    data class InspectLog(
+        val logId: Long,
+    ) : HistoryAction
+
+    data object DismissLog : HistoryAction
 }
