@@ -17,19 +17,6 @@ sealed interface HistoryAction {
 
     data object DismissTask : HistoryAction
 
-    data class InspectLog(
-        val logId: Long,
-    ) : HistoryAction
-
-    data object DismissLog : HistoryAction
-
-    data object ConfirmDeleteLog : HistoryAction
-
-    data object DismissDeleteLog : HistoryAction
-    data class RequestDeleteLog(
-        val logId: Long,
-    ) : HistoryAction
-
     data object DismissError : HistoryAction
 
     data class SetTaskCompletion(

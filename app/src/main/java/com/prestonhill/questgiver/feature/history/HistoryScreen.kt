@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.runtime.remember
-import java.time.format.DateTimeFormatter
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -30,33 +28,17 @@ import androidx.compose.material3.AlertDialog
 object HistoryTags {
     const val TASK_DASHBOARD =
         "history_task_dashboard"
-
     const val ALL_TASKS =
         "history_all_tasks"
-
-    const val ALL_LOGS =
-        "history_all_logs"
-
     const val CATEGORY_GRAPH =
         "history_category_graph"
-
     const val PINNED_GRAPHS =
         "history_pinned_graphs"
-
-    const val DELETE_LOG =
-        "history_delete_log"
-
-    const val CONFIRM_DELETE_LOG =
-        "history_confirm_delete_log"
-
     fun tab(section: HistorySection) =
         "history_tab_${section.name}"
 
     fun task(taskId: Long) =
         "history_task_$taskId"
-
-    fun log(logId: Long) =
-        "history_log_$logId"
 }
 
 @Composable
@@ -115,14 +97,6 @@ fun HistoryScreen(
                 )
         }
     }
-    state.tasks.inspectedLogId
-        ?.let(state.tasks::findLog)
-        ?.let { log ->
-            LogDetailsDialog(
-                log = log,
-                onAction = onAction,
-            )
-        }
 
     state.tasks.inspectedTaskId
         ?.let(state.tasks::findTask)
@@ -161,170 +135,6 @@ fun HistoryScreen(
             },
         )
     }
-    state.tasks.confirmation?.let {
-            confirmation ->
-        DeleteLogDialog(
-            confirmation = confirmation,
-            onAction = onAction,
-        )
-    }
-}
-
-@Composable
-private fun DeleteLogDialog(
-    confirmation: HistoryDeleteUiState,
-    onAction: (HistoryAction) -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = {
-            if (!confirmation.isDeleting) {
-                onAction(
-                    HistoryAction
-                        .DismissDeleteLog
-                )
-            }
-        },
-        title = {
-            Text("Delete history?")
-        },
-        text = {
-            Column(
-                verticalArrangement =
-                    Arrangement.spacedBy(8.dp),
-            ) {
-                Text(confirmation.taskName)
-
-                Text(
-                    "This permanently deletes this history entry."
-                )
-
-                confirmation.errorMessage
-                    ?.let { message ->
-                        Text(message)
-                    }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                modifier =
-                    Modifier.testTag(
-                        HistoryTags
-                            .CONFIRM_DELETE_LOG
-                    ),
-                enabled =
-                    !confirmation.isDeleting,
-                onClick = {
-                    onAction(
-                        HistoryAction
-                            .ConfirmDeleteLog
-                    )
-                },
-            ) {
-                Text(
-                    if (
-                        confirmation.isDeleting
-                    ) {
-                        "Deleting..."
-                    } else {
-                        "Delete history"
-                    }
-                )
-            }
-        },
-        dismissButton = {
-            TextButton(
-                enabled =
-                    !confirmation.isDeleting,
-                onClick = {
-                    onAction(
-                        HistoryAction
-                            .DismissDeleteLog
-                    )
-                },
-            ) {
-                Text("Cancel")
-            }
-        },
-    )
-}
-@Composable
-private fun LogDetailsDialog(
-    log: HistoryTaskLogUiState,
-    onAction: (HistoryAction) -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = {
-            onAction(
-                HistoryAction.DismissLog
-            )
-        },
-        title = {
-            Text(log.taskName)
-        },
-        text = {
-            Column(
-                verticalArrangement =
-                    Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    log.category
-                        ?: "Uncategorized"
-                )
-
-                Text(log.date.toString())
-
-                when {
-                    log.taskId == null ->
-                        Text("Associated task deleted")
-                }
-                if (log.canDelete) {
-                    TextButton(
-                        modifier =
-                            Modifier.testTag(
-                                HistoryTags.DELETE_LOG
-                            ),
-                        onClick = {
-                            onAction(
-                                HistoryAction.RequestDeleteLog(
-                                    log.id
-                                )
-                            )
-                        },
-                    ) {
-                        Text("Delete history")
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            if (log.canOpenTask) {
-                TextButton(
-                    onClick = {
-                        onAction(
-                            HistoryAction.InspectTask(
-                                requireNotNull(
-                                    log.taskId
-                                )
-                            )
-                        )
-                    },
-                ) {
-                    Text("View task")
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = {
-                    onAction(
-                        HistoryAction.DismissLog
-                    )
-                },
-            ) {
-                Text("Close")
-            }
-        },
-    )
 }
 
 @Composable
@@ -375,15 +185,6 @@ private fun TaskHistoryUiState.findTask(
         it.id == taskId
     }
 
-private fun TaskHistoryUiState.findLog(
-    logId: Long,
-): HistoryTaskLogUiState? =
-    logDays.asSequence()
-        .flatMap { it.logs.asSequence() }
-        .firstOrNull {
-            it.id == logId
-        }
-
 @Composable
 private fun TaskHistory(
     state: TaskHistoryUiState,
@@ -399,17 +200,6 @@ private fun TaskHistory(
         TaskHistoryPage.ALL_TASKS ->
             AllTasksPage(
                 tasks = state.allTasks,
-                onAction = onAction,
-                onBack = {
-                    onAction(
-                        HistoryAction.BackToDashboard
-                    )
-                },
-            )
-
-        TaskHistoryPage.ALL_LOGS ->
-            AllLogsPage(
-                days = state.logDays,
                 onAction = onAction,
                 onBack = {
                     onAction(
@@ -457,21 +247,6 @@ private fun TaskDashboard(
                     },
                 ) {
                     Text("View all tasks")
-                }
-
-                OutlinedButton(
-                    modifier =
-                        Modifier.weight(1f),
-                    onClick = {
-                        onAction(
-                            HistoryAction.OpenTaskPage(
-                                TaskHistoryPage
-                                    .ALL_LOGS
-                            )
-                        )
-                    },
-                ) {
-                    Text("View all logs")
                 }
             }
         }
@@ -621,123 +396,6 @@ private fun AllTasksPage(
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AllLogsPage(
-    days: List<HistoryTaskDayUiState>,
-    onBack: () -> Unit,
-    onAction: (HistoryAction) -> Unit,
-) {
-    val dateFormatter =
-        remember {
-            DateTimeFormatter.ofPattern(
-                "EEE, MMM d"
-            )
-        }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .testTag(HistoryTags.ALL_LOGS),
-    ) {
-        HistoryHeader(
-            title = "All task logs",
-            onBack = onBack,
-        )
-
-        if (days.isEmpty()) {
-            EmptyList(
-                "No task logs to show yet."
-            )
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding =
-                    androidx.compose.foundation.layout
-                        .PaddingValues(16.dp),
-                verticalArrangement =
-                    Arrangement.spacedBy(8.dp),
-            ) {
-                days.forEach { day ->
-                    item(
-                        key =
-                            "day_${day.date.toEpochDay()}"
-                    ) {
-                        Text(
-                            text =
-                                day.date.format(
-                                    dateFormatter
-                                ),
-                            style =
-                                MaterialTheme
-                                    .typography
-                                    .titleMedium,
-                            modifier =
-                                Modifier.padding(
-                                    top = 8.dp
-                                ),
-                        )
-                    }
-
-                    items(
-                        items = day.logs,
-                        key =
-                            HistoryTaskLogUiState::id,
-                    ) { log ->
-                        TaskLogCard(
-                            log = log,
-                            onClick = {
-                                onAction(
-                                    HistoryAction.InspectLog(
-                                        log.id
-                                    )
-                                )
-                            },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TaskLogCard(
-    log: HistoryTaskLogUiState,
-    onClick: () -> Unit,
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag(
-                HistoryTags.log(log.id)
-            ),
-        onClick = onClick,
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement =
-                Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                text = log.taskName,
-                style =
-                    MaterialTheme
-                        .typography.titleMedium,
-            )
-
-            Text(
-                log.category
-                    ?: "Uncategorized"
-            )
-
-            when {
-                log.taskId == null ->
-                    Text("Task deleted")
             }
         }
     }

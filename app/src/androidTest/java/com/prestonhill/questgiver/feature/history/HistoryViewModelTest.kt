@@ -80,7 +80,7 @@ class HistoryViewModelTest {
         runBlocking {
             viewModel.onAction(
                 HistoryAction.OpenTaskPage(
-                    TaskHistoryPage.ALL_LOGS
+                    TaskHistoryPage.ALL_TASKS
                 )
             )
 
@@ -88,11 +88,11 @@ class HistoryViewModelTest {
                 awaitState {
                     it.tasks.page ==
                             TaskHistoryPage
-                                .ALL_LOGS
+                                .ALL_TASKS
                 }
 
             assertEquals(
-                TaskHistoryPage.ALL_LOGS,
+                TaskHistoryPage.ALL_TASKS,
                 logsState.tasks.page,
             )
 
@@ -261,7 +261,7 @@ class HistoryViewModelTest {
         }
 
     @Test
-    fun logUncheckRemovesHistory(): Unit =
+    fun taskUncheckRemovesHistory(): Unit =
         runBlocking {
             val taskId = addTask()
 
@@ -306,15 +306,6 @@ class HistoryViewModelTest {
                     }
 
             viewModel.onAction(
-                HistoryAction.InspectLog(log.id)
-            )
-
-            awaitState {
-                it.tasks.inspectedLogId ==
-                        log.id
-            }
-
-            viewModel.onAction(
                 HistoryAction.SetTaskCompletion(
                     taskId = taskId,
                     scheduledEpochDay =
@@ -325,14 +316,13 @@ class HistoryViewModelTest {
 
             val state =
                 awaitState {
-                    it.tasks.inspectedLogId == null &&
-                            it.tasks.logDays
-                                .flatMap { dayState ->
-                                    dayState.logs
-                                }
-                                .none {
-                                    it.id == log.id
-                                }
+                    it.tasks.logDays
+                        .flatMap { dayState ->
+                            dayState.logs
+                        }
+                        .none {
+                            it.id == log.id
+                        }
                 }
 
             assertFalse(
@@ -431,112 +421,23 @@ class HistoryViewModelTest {
             )
         }
 
+
     @Test
-    fun deletionOrphansLog(): Unit =
+    fun taskInspectionChanges(): Unit =
         runBlocking {
             val taskId = addTask()
 
-            repository.complete(
-                taskId = taskId,
-                scheduledEpochDay = DAY,
-                completionTimestampMillis =
-                    COMPLETION_TIME,
-            )
-
             awaitState {
-                it.tasks.logDays
-                    .flatMap { day ->
-                        day.logs
-                    }
-                    .any { log ->
-                        log.taskId == taskId
-                    }
-            }
-
-            repository.deleteTask(
-                taskId = taskId,
-                deleteHistory = false,
-            )
-
-            val state =
-                awaitState {
-                    it.tasks.allTasks.none {
-                            task ->
-                        task.id == taskId
-                    } &&
-                            it.tasks.logDays
-                                .flatMap { day ->
-                                    day.logs
-                                }
-                                .any { log ->
-                                    log.taskId == null
-                                }
+                it.tasks.allTasks.any { task ->
+                    task.id == taskId
                 }
-
-            val log =
-                state.tasks.logDays
-                    .flatMap { it.logs }
-                    .single()
-
-            assertFalse(log.canOpenTask)
-            assertFalse(log.canChangeTaskCompletion)
-            assertTrue(log.canDelete)
-        }
-
-    @Test
-    fun inspectionChanges(): Unit =
-        runBlocking {
-            val taskId = addTask()
-
-            repository.complete(
-                taskId = taskId,
-                scheduledEpochDay = DAY,
-                completionTimestampMillis =
-                    COMPLETION_TIME,
-            )
-
-            val logId =
-                repository.observeLogs()
-                    .first { it.isNotEmpty() }
-                    .single()
-                    .id
-
-            awaitState {
-                it.tasks.logDays
-                    .flatMap { day ->
-                        day.logs
-                    }
-                    .any { it.id == logId }
-            }
-
-            viewModel.onAction(
-                HistoryAction.InspectLog(logId)
-            )
-
-            val logState =
-                awaitState {
-                    it.tasks.inspectedLogId ==
-                            logId
-                }
-
-            assertEquals(
-                logId,
-                logState.tasks.inspectedLogId,
-            )
-
-            viewModel.onAction(
-                HistoryAction.DismissLog
-            )
-
-            awaitState {
-                it.tasks.inspectedLogId == null
             }
 
             viewModel.onAction(
                 HistoryAction.InspectTask(taskId)
             )
 
-            val taskState =
+            val inspected =
                 awaitState {
                     it.tasks.inspectedTaskId ==
                             taskId
@@ -544,12 +445,7 @@ class HistoryViewModelTest {
 
             assertEquals(
                 taskId,
-                taskState.tasks.inspectedTaskId,
-            )
-
-            assertEquals(
-                null,
-                taskState.tasks.inspectedLogId,
+                inspected.tasks.inspectedTaskId,
             )
 
             viewModel.onAction(
@@ -559,185 +455,6 @@ class HistoryViewModelTest {
             awaitState {
                 it.tasks.inspectedTaskId == null
             }
-        }
-
-    @Test
-    fun orphanHistoryDeletes(): Unit =
-        runBlocking {
-            val taskId = addTask()
-
-            repository.complete(
-                taskId = taskId,
-                scheduledEpochDay = DAY,
-                completionTimestampMillis =
-                    COMPLETION_TIME,
-            )
-
-            val logId =
-                repository.observeLogs()
-                    .first { it.isNotEmpty() }
-                    .single()
-                    .id
-
-            repository.deleteTask(
-                taskId = taskId,
-                deleteHistory = false,
-            )
-
-            awaitState {
-                it.tasks.logDays
-                    .flatMap { day ->
-                        day.logs
-                    }
-                    .any { log ->
-                        log.id == logId &&
-                                log.canDelete
-                    }
-            }
-
-            viewModel.onAction(
-                HistoryAction.RequestDeleteLog(
-                    logId
-                )
-            )
-
-            awaitState {
-                it.tasks.confirmation?.logId ==
-                        logId
-            }
-
-            viewModel.onAction(
-                HistoryAction.ConfirmDeleteLog
-            )
-
-            val state =
-                awaitState {
-                    it.tasks.confirmation == null &&
-                            it.tasks.logDays.isEmpty()
-                }
-
-            assertTrue(state.tasks.logDays.isEmpty())
-
-            assertTrue(
-                repository.observeLogs()
-                    .first()
-                    .isEmpty()
-            )
-        }
-
-    @Test
-    fun attachedHistoryCannotDelete(): Unit =
-        runBlocking {
-            val taskId = addTask()
-
-            repository.complete(
-                taskId = taskId,
-                scheduledEpochDay = DAY,
-                completionTimestampMillis =
-                    COMPLETION_TIME,
-            )
-
-            val logId =
-                repository.observeLogs()
-                    .first { it.isNotEmpty() }
-                    .single()
-                    .id
-
-            awaitState {
-                it.tasks.logDays
-                    .flatMap { day ->
-                        day.logs
-                    }
-                    .any { it.id == logId }
-            }
-
-            viewModel.onAction(
-                HistoryAction.RequestDeleteLog(
-                    logId
-                )
-            )
-
-            val state =
-                awaitState {
-                    it.tasks.operationError != null
-                }
-
-            assertEquals(
-                "History cannot be deleted.",
-                state.tasks.operationError,
-            )
-
-            assertEquals(
-                null,
-                state.tasks.confirmation,
-            )
-        }
-
-    @Test
-    fun failedHistoryDeleteStaysOpen(): Unit =
-        runBlocking {
-            val taskId = addTask()
-
-            repository.complete(
-                taskId = taskId,
-                scheduledEpochDay = DAY,
-                completionTimestampMillis =
-                    COMPLETION_TIME,
-            )
-
-            val logId =
-                repository.observeLogs()
-                    .first { it.isNotEmpty() }
-                    .single()
-                    .id
-
-            repository.deleteTask(
-                taskId = taskId,
-                deleteHistory = false,
-            )
-
-            awaitState {
-                it.tasks.logDays
-                    .flatMap { day ->
-                        day.logs
-                    }
-                    .any { it.id == logId }
-            }
-
-            viewModel.onAction(
-                HistoryAction.RequestDeleteLog(
-                    logId
-                )
-            )
-
-            awaitState {
-                it.tasks.confirmation?.logId ==
-                        logId
-            }
-
-            repository.deleteHistory(logId)
-
-            viewModel.onAction(
-                HistoryAction.ConfirmDeleteLog
-            )
-
-            val confirmation =
-                awaitState {
-                    it.tasks.confirmation
-                        ?.errorMessage != null
-                }
-                    .tasks
-                    .confirmation
-
-            assertEquals(
-                "History could not be deleted.",
-                confirmation?.errorMessage,
-            )
-
-            assertEquals(
-                false,
-                confirmation?.isDeleting,
-            )
         }
 
     private suspend fun addTask(): Long =

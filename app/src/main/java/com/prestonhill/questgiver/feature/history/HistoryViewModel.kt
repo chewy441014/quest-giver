@@ -107,10 +107,6 @@ class HistoryViewModel(
                         ),
                     inspectedTaskId =
                         navigation.inspectedTaskId,
-                    inspectedLogId =
-                        navigation.inspectedLogId,
-                    confirmation =
-                        navigation.confirmation,
                     operationError =
                         navigation.operationError,
                 ),
@@ -256,10 +252,7 @@ class HistoryViewModel(
             is HistoryAction.InspectTask ->
                 nav.update {
                     it.copy(
-                        inspectedTaskId =
-                            action.taskId,
-                        inspectedLogId = null,
-                        confirmation = null,
+                        inspectedTaskId = action.taskId,
                         operationError = null,
                     )
                 }
@@ -270,33 +263,6 @@ class HistoryViewModel(
                         inspectedTaskId = null
                     )
                 }
-
-            is HistoryAction.InspectLog ->
-                nav.update {
-                    it.copy(
-                        inspectedLogId =
-                            action.logId,
-                        inspectedTaskId = null,
-                        confirmation = null,
-                        operationError = null,
-                    )
-                }
-
-            HistoryAction.DismissLog ->
-                nav.update {
-                    it.copy(
-                        inspectedLogId = null
-                    )
-                }
-
-            is HistoryAction.RequestDeleteLog ->
-                requestDelete(action.logId)
-
-            HistoryAction.ConfirmDeleteLog ->
-                confirmDelete()
-
-            HistoryAction.DismissDeleteLog ->
-                dismissDelete()
 
             HistoryAction.DismissError ->
                 nav.update {
@@ -315,9 +281,6 @@ class HistoryViewModel(
         if (taskId in changingTaskIds.value) {
             return
         }
-
-        val inspectedLogId =
-            nav.value.inspectedLogId
 
         nav.update {
             it.copy(
@@ -367,19 +330,6 @@ class HistoryViewModel(
                                 "Task completion could not be changed."
                         )
                     }
-                } else if (!completed) {
-                    nav.update { current ->
-                        if (
-                            current.inspectedLogId ==
-                            inspectedLogId
-                        ) {
-                            current.copy(
-                                inspectedLogId = null
-                            )
-                        } else {
-                            current
-                        }
-                    }
                 }
             } catch (error: Exception) {
                 if (
@@ -400,114 +350,6 @@ class HistoryViewModel(
         }
     }
 
-    private fun requestDelete(
-        logId: Long,
-    ) {
-        val log =
-            uiState.value.tasks.findLog(logId)
-
-        if (log?.canDelete != true) {
-            nav.update {
-                it.copy(
-                    operationError =
-                        "History cannot be deleted."
-                )
-            }
-
-            return
-        }
-
-        nav.update {
-            it.copy(
-                inspectedLogId = null,
-                confirmation =
-                    HistoryDeleteUiState(
-                        logId = log.id,
-                        taskName = log.taskName,
-                    ),
-                operationError = null,
-            )
-        }
-    }
-
-    private fun confirmDelete() {
-        val confirmation =
-            nav.value.confirmation
-                ?: return
-
-        if (confirmation.isDeleting) {
-            return
-        }
-
-        nav.update {
-            it.copy(
-                confirmation =
-                    confirmation.copy(
-                        isDeleting = true,
-                        errorMessage = null,
-                    )
-            )
-        }
-
-        viewModelScope.launch {
-            val deleted =
-                try {
-                    repository.deleteHistory(
-                        positiveLogId =
-                            confirmation.logId
-                    )
-                } catch (error: Exception) {
-                    if (
-                        error is
-                                CancellationException
-                    ) {
-                        throw error
-                    }
-
-                    false
-                }
-
-            nav.update { current ->
-                val active =
-                    current.confirmation
-
-                if (
-                    active?.logId !=
-                    confirmation.logId
-                ) {
-                    current
-                } else if (deleted) {
-                    current.copy(
-                        confirmation = null
-                    )
-                } else {
-                    current.copy(
-                        confirmation =
-                            active.copy(
-                                isDeleting = false,
-                                errorMessage =
-                                    "History could not be deleted.",
-                            )
-                    )
-                }
-            }
-        }
-    }
-
-    private fun dismissDelete() {
-        nav.update { current ->
-            if (
-                current.confirmation
-                    ?.isDeleting == true
-            ) {
-                current
-            } else {
-                current.copy(
-                    confirmation = null
-                )
-            }
-        }
-    }
 }
 
 private data class HistoryTimeState(
@@ -527,29 +369,14 @@ private data class HistoryNavState(
     val taskPage: TaskHistoryPage =
         TaskHistoryPage.DASHBOARD,
     val inspectedTaskId: Long? = null,
-    val inspectedLogId: Long? = null,
-    val confirmation:
-    HistoryDeleteUiState? = null,
     val operationError: String? = null,
 )
 
 private fun HistoryNavState.clearOverlays() =
     copy(
         inspectedTaskId = null,
-        inspectedLogId = null,
-        confirmation = null,
         operationError = null,
     )
-
-private fun TaskHistoryUiState.findLog(
-    logId: Long,
-): HistoryTaskLogUiState? =
-    logDays.asSequence()
-        .flatMap { it.logs.asSequence() }
-        .firstOrNull {
-            it.id == logId
-        }
-
 
 class HistoryViewModelFactory(
     private val repository: TaskRepository,

@@ -13,7 +13,6 @@ enum class HistorySection(
 enum class TaskHistoryPage {
     DASHBOARD,
     ALL_TASKS,
-    ALL_LOGS,
 }
 
 data class HistoryDeleteUiState(
@@ -69,7 +68,6 @@ data class TaskHistoryUiState(
     val page: TaskHistoryPage =
         TaskHistoryPage.DASHBOARD,
     val inspectedTaskId: Long? = null,
-    val inspectedLogId: Long? = null,
     val allTasks: List<HistoryTaskUiState> =
         emptyList(),
     val logDays: List<HistoryTaskDayUiState> =
@@ -90,9 +88,6 @@ data class TaskHistoryUiState(
                     "Pinned category and task graphs will appear here.",
             )
         ),
-    val confirmation:
-    HistoryDeleteUiState? = null,
-
     val operationError: String? = null,
 )
 
