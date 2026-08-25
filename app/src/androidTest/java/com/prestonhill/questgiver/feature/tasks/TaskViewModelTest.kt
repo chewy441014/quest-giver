@@ -432,47 +432,54 @@ class TaskViewModelTest {
     }
 
     @Test
-    fun deleteRequestCanBeDismissed() = runBlocking {
+    fun archiveRemovesTaskAndClosesDetails() = runBlocking {
         val taskId =
             addDailyTask(
                 startDate = currentDate
             )
 
         awaitState {
-            it.today.any { task ->
-                task.id == taskId
-            }
+            it.row(taskId) != null
         }
 
         viewModel.onAction(
-            TaskAction.RequestDelete(taskId)
-        )
-
-        val confirmation =
-            awaitState {
-                it.confirmation?.taskId == taskId
-            }.confirmation
-
-        assertEquals(
-            "Daily task",
-            confirmation?.taskName,
-        )
-
-        viewModel.onAction(
-            TaskAction.DismissDelete
+            TaskAction.Inspect(taskId)
         )
 
         awaitState {
-            it.confirmation == null
+            it.inspectedTaskId == taskId
         }
 
-        assertNotNull(
-            repository.getTask(taskId)
+        viewModel.onAction(
+            TaskAction.ArchiveTask(taskId)
+        )
+
+        val archived =
+            withTimeout(5_000.milliseconds) {
+                repository
+                    .observeArchivedTasks()
+                    .first { tasks ->
+                        tasks.any { it.id == taskId }
+                    }
+                    .single { it.id == taskId }
+            }
+
+        val state =
+            awaitState {
+                it.inspectedTaskId == null &&
+                        it.row(taskId) == null
+            }
+
+        assertNull(state.operationError)
+
+        assertEquals(
+            clock.millis(),
+            archived.archivedAtEpochMillis,
         )
     }
 
     @Test
-    fun deletionKeepsTaskHistory() = runBlocking {
+    fun archiveKeepsTaskHistory() = runBlocking {
         val taskId =
             addOneTimeTask(
                 name = "Keep history",
@@ -485,35 +492,24 @@ class TaskViewModelTest {
         )
 
         viewModel.onAction(
-            TaskAction.RequestDelete(taskId)
-        )
-
-        awaitState {
-            it.confirmation?.taskId == taskId
-        }
-
-        viewModel.onAction(
-            TaskAction.DeleteTask
+            TaskAction.ArchiveTask(taskId)
         )
 
         withTimeout(5_000.milliseconds) {
-            repository.observeTasks().first { tasks ->
-                tasks.none { task ->
-                    task.id == taskId
+            repository
+                .observeArchivedTasks()
+                .first { tasks ->
+                    tasks.any { it.id == taskId }
                 }
-            }
-        }
-
-        awaitState {
-            it.confirmation == null
         }
 
         val log =
-            repository.observeLogs()
+            repository
+                .observeLogs()
                 .first()
                 .single()
 
-        assertNull(log.taskId)
+        assertEquals(taskId, log.taskId)
         assertEquals(
             "Keep history",
             log.taskNameSnapshot,
@@ -521,126 +517,69 @@ class TaskViewModelTest {
     }
 
     @Test
-    fun deletionCanRemoveTaskHistory() = runBlocking {
-        val taskId =
-            addOneTimeTask(
-                name = "Remove history",
-                scheduledDate = currentDate,
-            )
-
-        completeOneTime(
-            taskId = taskId,
-            date = currentDate,
-        )
-
-        viewModel.onAction(
-            TaskAction.RequestDelete(taskId)
-        )
-
-        awaitState {
-            it.confirmation?.taskId == taskId
-        }
-
-        viewModel.onAction(
-            TaskAction.DeleteTaskAndHistory
-        )
-
-        withTimeout(5_000.milliseconds) {
-            repository.observeTasks().first { tasks ->
-                tasks.none { task ->
-                    task.id == taskId
-                }
-            }
-        }
-
-        awaitState {
-            it.confirmation == null
-        }
-
-        assertTrue(
-            repository.observeLogs()
-                .first()
-                .isEmpty()
-        )
-    }
-
-    @Test
-    fun repeatedDeletionIsIgnored() = runBlocking {
+    fun repeatedArchiveIsIgnored() = runBlocking {
         val taskId =
             addDailyTask(
                 startDate = currentDate
             )
 
-        viewModel.onAction(
-            TaskAction.RequestDelete(taskId)
-        )
-
         awaitState {
-            it.confirmation?.taskId == taskId
+            it.row(taskId) != null
         }
 
-        viewModel.onAction(
-            TaskAction.DeleteTask
-        )
+        val action =
+            TaskAction.ArchiveTask(taskId)
 
-        viewModel.onAction(
-            TaskAction.DeleteTask
-        )
+        viewModel.onAction(action)
+        viewModel.onAction(action)
 
         withTimeout(5_000.milliseconds) {
-            repository.observeTasks().first { tasks ->
-                tasks.none { task ->
-                    task.id == taskId
+            repository
+                .observeArchivedTasks()
+                .first { tasks ->
+                    tasks.count { it.id == taskId } == 1
                 }
-            }
         }
 
         val state =
             awaitState {
-                it.confirmation == null
+                it.row(taskId) == null
             }
 
         assertNull(state.operationError)
     }
 
     @Test
-    fun failedDeletionStaysOpen() = runBlocking {
+    fun failedArchiveShowsError() = runBlocking {
         val taskId =
             addDailyTask(
                 startDate = currentDate
             )
 
-        viewModel.onAction(
-            TaskAction.RequestDelete(taskId)
-        )
-
         awaitState {
-            it.confirmation?.taskId == taskId
+            it.row(taskId) != null
         }
 
-        repository.deleteTask(
-            taskId = taskId,
-            deleteHistory = false,
+        assertTrue(
+            repository.archiveTask(
+                taskId = taskId,
+                timestampMillis = clock.millis(),
+            )
         )
 
         viewModel.onAction(
-            TaskAction.DeleteTask
+            TaskAction.ArchiveTask(taskId)
         )
 
-        val confirmation =
+        val state =
             awaitState {
-                it.confirmation
-                    ?.errorMessage != null
-            }.confirmation
+                it.operationError ==
+                        "Task could not be archived."
+            }
 
         assertEquals(
-            "Task could not be deleted.",
-            confirmation?.errorMessage,
-        )
-
-        assertEquals(
-            false,
-            confirmation?.isDeleting,
+            "Task could not be archived.",
+            state.operationError,
         )
     }
 

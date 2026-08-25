@@ -68,12 +68,7 @@ object TaskTags {
     const val UPCOMING_LIST =
         "task_upcoming_list"
 
-    const val DELETE_TASK =
-        "task_delete"
-
-    const val DELETE_HISTORY =
-        "task_delete_history"
-
+    const val ARCHIVE = "task_archive"
     const val ADD = "task_add"
     const val EDIT = "task_edit"
     const val EDITOR_NAME = "task_editor_name"
@@ -271,13 +266,6 @@ fun TaskScreen(
             )
         }
 
-    state.confirmation?.let { confirmation ->
-        DeleteTaskDialog(
-            confirmation = confirmation,
-            onAction = onAction,
-        )
-    }
-
     state.operationError?.let { message ->
         AlertDialog(
             onDismissRequest = {
@@ -455,15 +443,21 @@ private fun TaskDetailsDialog(
         },
         confirmButton = {
             TextButton(
+                modifier = Modifier.testTag(TaskTags.ARCHIVE),
+                enabled = !task.isChanging,
                 onClick = {
                     onAction(
-                        TaskAction.RequestDelete(
-                            task.id
-                        )
+                        TaskAction.ArchiveTask(task.id)
                     )
                 },
             ) {
-                Text("Delete")
+                Text(
+                    if (task.isChanging) {
+                        "Archiving..."
+                    } else {
+                        "Archive"
+                    }
+                )
             }
         },
         dismissButton = {
@@ -475,80 +469,6 @@ private fun TaskDetailsDialog(
                 },
             ) {
                 Text("Close")
-            }
-        },
-    )
-}
-
-@Composable
-private fun DeleteTaskDialog(
-    confirmation: TaskDeleteUiState,
-    onAction: (TaskAction) -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = {
-            if (!confirmation.isDeleting) {
-                onAction(
-                    TaskAction.DismissDelete
-                )
-            }
-        },
-        title = {
-            Text("Delete ${confirmation.taskName}?")
-        },
-        text = {
-            Column {
-                Text(
-                    confirmation.errorMessage
-                        ?: "Choose what should be deleted."
-                )
-
-                TextButton(
-                    modifier =
-                        Modifier.testTag(
-                            TaskTags.DELETE_HISTORY
-                        ),
-                    enabled =
-                        !confirmation.isDeleting,
-                    onClick = {
-                        onAction(
-                            TaskAction
-                                .DeleteTaskAndHistory
-                        )
-                    },
-                ) {
-                    Text("Delete task and history")
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                modifier =
-                    Modifier.testTag(
-                        TaskTags.DELETE_TASK
-                    ),
-                enabled =
-                    !confirmation.isDeleting,
-                onClick = {
-                    onAction(
-                        TaskAction.DeleteTask
-                    )
-                },
-            ) {
-                Text("Delete task only")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                enabled =
-                    !confirmation.isDeleting,
-                onClick = {
-                    onAction(
-                        TaskAction.DismissDelete
-                    )
-                },
-            ) {
-                Text("Cancel")
             }
         },
     )

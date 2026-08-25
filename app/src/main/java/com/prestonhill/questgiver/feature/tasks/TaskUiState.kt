@@ -85,19 +85,11 @@ data class TaskEditorUiState(
         }
 }
 
-data class TaskDeleteUiState(
-    val taskId: Long,
-    val taskName: String,
-    val isDeleting: Boolean = false,
-    val errorMessage: String? = null,
-)
-
 data class TaskScreenUiState(
     val today: List<TaskRowUiState> = emptyList(),
     val upcoming: List<TaskDayUiState> = emptyList(),
     val inspectedTaskId: Long? = null,
     val editor: TaskEditorUiState? = null,
-    val confirmation: TaskDeleteUiState? = null,
     val operationError: String? = null,
     val hasHiddenToday: Boolean = false,
     val showHiddenToday: Boolean = false,

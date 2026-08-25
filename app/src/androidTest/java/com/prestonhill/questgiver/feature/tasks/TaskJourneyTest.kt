@@ -9,7 +9,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
@@ -31,7 +30,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -123,7 +121,7 @@ class TaskJourneyTest {
         editTask()
         completeTask()
         revealTask()
-        deleteTask()
+        archiveTask()
         verifyHistory()
     }
 
@@ -208,7 +206,7 @@ class TaskJourneyTest {
             .assertIsEnabled()
     }
 
-    private fun deleteTask() {
+    private fun archiveTask() {
         composeRule
             .onNodeWithTag(
                 TaskTags.row(taskId)
@@ -216,12 +214,8 @@ class TaskJourneyTest {
             .performClick()
 
         composeRule
-            .onNodeWithText("Delete")
-            .performClick()
-
-        composeRule
             .onNodeWithTag(
-                TaskTags.DELETE_TASK
+                TaskTags.ARCHIVE
             )
             .performClick()
 
@@ -242,13 +236,23 @@ class TaskJourneyTest {
 
             assertEquals(1, logs.size)
 
-            val log = logs.single()
+            val archived =
+                repository
+                    .observeArchivedTasks()
+                    .first()
+                    .single()
 
-            assertNull(log.taskId)
-            assertEquals(
-                EDITED_NAME,
-                log.taskNameSnapshot,
-            )
+            assertEquals(taskId, archived.id)
+            assertTrue(archived.archivedAtEpochMillis != null)
+
+            val log =
+                repository
+                    .observeLogs()
+                    .first()
+                    .single()
+
+            assertEquals(taskId, log.taskId)
+            assertEquals(EDITED_NAME, log.taskNameSnapshot)
             assertEquals(1, log.delta)
         }
     }

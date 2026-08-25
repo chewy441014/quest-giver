@@ -44,8 +44,6 @@ class TaskViewModel(
     private val inspectedTaskId =
         MutableStateFlow<Long?>(null)
 
-    private val confirmationState =
-        MutableStateFlow<TaskDeleteUiState?>(null)
 
     private val editorState =
         MutableStateFlow<TaskEditorUiState?>(null)
@@ -59,14 +57,11 @@ class TaskViewModel(
         combine(
             inspectedTaskId,
             editorState,
-            confirmationState,
             operationError,
             changingTaskIds,
-        ) { inspected, editor, confirmation, error, changing ->
-            TaskOverlayState(
+        ) { inspected, editor, error, changing -> TaskOverlayState(
                 inspectedTaskId = inspected,
                 editor = editor,
-                confirmation = confirmation,
                 operationError = error,
                 changingTaskIds = changing,
             )
@@ -115,8 +110,6 @@ class TaskViewModel(
                 inspectedTaskId =
                     overlay.inspectedTaskId,
                 editor = overlay.editor,
-                confirmation =
-                    overlay.confirmation,
                 operationError =
                     overlay.operationError,
                 showHiddenToday = showHidden,
@@ -150,8 +143,6 @@ class TaskViewModel(
                 inspectedTaskId.value =
                     action.taskId
 
-            is TaskAction.RequestDelete ->
-                requestDelete(action.taskId)
 
             TaskAction.Add ->
                 openNewEditor()
@@ -179,21 +170,11 @@ class TaskViewModel(
             TaskAction.DismissDetails ->
                 inspectedTaskId.value = null
 
-            TaskAction.DismissDelete ->
-                dismissDelete()
-
-            TaskAction.DeleteTask ->
-                confirmDelete(
-                    deleteHistory = false
-                )
-
-            TaskAction.DeleteTaskAndHistory ->
-                confirmDelete(
-                    deleteHistory = true
-                )
-
             TaskAction.DismissError ->
                 dismissError()
+
+            is TaskAction.ArchiveTask ->
+                archiveTask(action.taskId)
 
             TaskAction.ToggleHidden ->
                 showHiddenToday.value =
@@ -311,7 +292,7 @@ class TaskViewModel(
             }
 
             operationError.value =
-                "Completed tasks could not be cleaned up."
+                "Completed tasks could not be archived."
         }
     }
 
@@ -367,6 +348,49 @@ class TaskViewModel(
                 clock.instant()
             )
         }
+
+    private fun archiveTask(
+        taskId: Long,
+    ) {
+        if (taskId in changingTaskIds.value) {
+            return
+        }
+
+        operationError.value = null
+        changingTaskIds.value += taskId
+
+        viewModelScope.launch {
+            try {
+                val archived =
+                    repository.archiveTask(
+                        taskId = taskId,
+                        timestampMillis = clock.millis(),
+                    )
+
+                if (archived) {
+                    if (inspectedTaskId.value == taskId) {
+                        inspectedTaskId.value = null
+                    }
+
+                    if (editorState.value?.taskId == taskId) {
+                        editorState.value = null
+                    }
+                } else {
+                    operationError.value =
+                        "Task could not be archived."
+                }
+            } catch (error: Exception) {
+                if (error is CancellationException) {
+                    throw error
+                }
+
+                operationError.value =
+                    "Task could not be archived."
+            } finally {
+                changingTaskIds.value -= taskId
+            }
+        }
+    }
 
     private fun setCompletion(
         taskId: Long,
@@ -438,115 +462,6 @@ class TaskViewModel(
                     "Task completion could not be changed."
             } finally {
                 changingTaskIds.value -= taskId
-            }
-        }
-    }
-
-    private fun requestDelete(
-        taskId: Long,
-    ) {
-        viewModelScope.launch {
-            try {
-                val task =
-                    repository.getTask(taskId)
-
-                if (task == null) {
-                    operationError.value =
-                        "Task could not be found."
-                    return@launch
-                }
-
-                confirmationState.value =
-                    TaskDeleteUiState(
-                        taskId = task.id,
-                        taskName = task.name,
-                    )
-            } catch (error: Exception) {
-                if (error is CancellationException) {
-                    throw error
-                }
-
-                operationError.value =
-                    "Task could not be found."
-            }
-        }
-    }
-
-    private fun dismissDelete() {
-        val confirmation =
-            confirmationState.value
-
-        if (
-            confirmation?.isDeleting == true
-        ) {
-            return
-        }
-
-        confirmationState.value = null
-    }
-
-    private fun confirmDelete(
-        deleteHistory: Boolean,
-    ) {
-        val confirmation =
-            confirmationState.value
-                ?: return
-
-        if (confirmation.isDeleting) {
-            return
-        }
-
-        confirmationState.value =
-            confirmation.copy(
-                isDeleting = true,
-                errorMessage = null,
-            )
-
-        viewModelScope.launch {
-            try {
-                val deleted =
-                    repository.deleteTask(
-                        taskId =
-                            confirmation.taskId,
-                        deleteHistory =
-                            deleteHistory,
-                    )
-
-                if (deleted) {
-                    if (
-                        inspectedTaskId.value ==
-                        confirmation.taskId
-                    ) {
-                        inspectedTaskId.value =
-                            null
-                    }
-                    if (
-                        editorState.value?.taskId ==
-                        confirmation.taskId
-                    ) {
-                        editorState.value = null
-                    }
-
-                    confirmationState.value = null
-                } else {
-                    confirmationState.value =
-                        confirmation.copy(
-                            isDeleting = false,
-                            errorMessage =
-                                "Task could not be deleted.",
-                        )
-                }
-            } catch (error: Exception) {
-                if (error is CancellationException) {
-                    throw error
-                }
-
-                confirmationState.value =
-                    confirmation.copy(
-                        isDeleting = false,
-                        errorMessage =
-                            "Task could not be deleted.",
-                    )
             }
         }
     }
@@ -710,7 +625,6 @@ private data class TaskBoundarySettings(
 private data class TaskOverlayState(
     val inspectedTaskId: Long?,
     val editor: TaskEditorUiState?,
-    val confirmation: TaskDeleteUiState?,
     val operationError: String?,
     val changingTaskIds: Set<Long>,
 )

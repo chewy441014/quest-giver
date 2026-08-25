@@ -16,7 +16,6 @@ class TaskUiMapper(
         currentTimestampMillis: Long,
         inspectedTaskId: Long? = null,
         editor: TaskEditorUiState? = null,
-        confirmation: TaskDeleteUiState? = null,
         operationError: String? = null,
         showHiddenToday: Boolean = false,
         changingTaskIds: Set<Long> = emptySet(),
@@ -165,7 +164,6 @@ class TaskUiMapper(
                     }
                 },
             editor = editor,
-            confirmation = confirmation,
             operationError = operationError,
         )
     }

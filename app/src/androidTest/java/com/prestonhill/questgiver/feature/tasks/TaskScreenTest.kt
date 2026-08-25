@@ -42,21 +42,21 @@ class TaskScreenTest {
     }
 
     @Test
-    fun detailDeleteSendsAction(): Unit {
+    fun detailArchiveSendsAction(): Unit {
         val actions = mutableListOf<TaskAction>()
 
         showScreen(
             state = detailState(),
-            actions = actions
+            actions = actions,
         )
 
         composeRule
-            .onNodeWithText("Delete")
+            .onNodeWithTag(TaskTags.ARCHIVE)
             .performClick()
 
         assertEquals(
-            listOf(TaskAction.RequestDelete(TASK_ID)),
-            actions
+            listOf(TaskAction.ArchiveTask(TASK_ID)),
+            actions,
         )
     }
 
@@ -80,94 +80,20 @@ class TaskScreenTest {
     }
 
     @Test
-    fun deleteOnlySendsAction(): Unit {
-        val actions = mutableListOf<TaskAction>()
-
+    fun changingTaskDisablesArchive(): Unit {
         showScreen(
-            state = deleteState(),
-            actions = actions
+            state =
+                detailState(
+                    isChanging = true
+                )
         )
 
         composeRule
-            .onNodeWithTag(TaskTags.DELETE_TASK)
-            .performClick()
-
-        assertEquals(
-            listOf(TaskAction.DeleteTask),
-            actions
-        )
-    }
-
-    @Test
-    fun deleteHistorySendsAction(): Unit {
-        val actions = mutableListOf<TaskAction>()
-
-        showScreen(
-            state = deleteState(),
-            actions = actions
-        )
-
-        composeRule
-            .onNodeWithTag(TaskTags.DELETE_HISTORY)
-            .performClick()
-
-        assertEquals(
-            listOf(TaskAction.DeleteTaskAndHistory),
-            actions
-        )
-    }
-
-    @Test
-    fun deleteCancelSendsAction(): Unit {
-        val actions = mutableListOf<TaskAction>()
-
-        showScreen(
-            state = deleteState(),
-            actions = actions
-        )
-
-        composeRule
-            .onNodeWithText("Cancel")
-            .performClick()
-
-        assertEquals(
-            listOf(TaskAction.DismissDelete),
-            actions
-        )
-    }
-
-    @Test
-    fun deletingDisablesButtons(): Unit {
-        showScreen(
-            state = deleteState(isDeleting = true)
-        )
-
-        composeRule
-            .onNodeWithTag(TaskTags.DELETE_TASK)
+            .onNodeWithTag(TaskTags.ARCHIVE)
             .assertIsNotEnabled()
 
         composeRule
-            .onNodeWithTag(TaskTags.DELETE_HISTORY)
-            .assertIsNotEnabled()
-
-        composeRule
-            .onNodeWithText("Cancel")
-            .assertIsNotEnabled()
-    }
-
-    @Test
-    fun deleteErrorIsVisible(): Unit {
-        showScreen(
-            state = deleteState(
-                errorMessage =
-                    "Task could not be deleted."
-            )
-        )
-
-        composeRule
-            .onNodeWithText(
-                "Task could not be deleted."
-            )
+            .onNodeWithText("Archiving...")
             .assertIsDisplayed()
     }
 
@@ -641,28 +567,18 @@ class TaskScreenTest {
         }
     }
 
-    private fun detailState(): TaskScreenUiState =
+    private fun detailState(
+        isChanging: Boolean = false,
+    ): TaskScreenUiState =
         TaskScreenUiState(
             today = listOf(
                 taskRow(
                     id = TASK_ID,
-                    name = "Test task"
+                    name = "Test task",
+                    isChanging = isChanging,
                 )
             ),
-            inspectedTaskId = TASK_ID
-        )
-
-    private fun deleteState(
-        isDeleting: Boolean = false,
-        errorMessage: String? = null
-    ): TaskScreenUiState =
-        TaskScreenUiState(
-            confirmation = TaskDeleteUiState(
-                taskId = TASK_ID,
-                taskName = "Test task",
-                isDeleting = isDeleting,
-                errorMessage = errorMessage
-            )
+            inspectedTaskId = TASK_ID,
         )
 
     private fun taskRow(
