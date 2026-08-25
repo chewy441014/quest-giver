@@ -24,6 +24,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.Checkbox
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 
 object HistoryTags {
     const val TASK_DASHBOARD =
@@ -34,6 +38,12 @@ object HistoryTags {
         "history_category_graph"
     const val PINNED_GRAPHS =
         "history_pinned_graphs"
+
+    const val TASK_HISTORY_PLACEHOLDER =
+        "history_task_history_placeholder"
+
+    fun taskCompletion(taskId: Long) =
+        "history_task_completion_$taskId"
     fun tab(section: HistorySection) =
         "history_tab_${section.name}"
 
@@ -162,6 +172,62 @@ private fun HistoryTaskDialog(
                 )
 
                 Text(task.schedule)
+
+                task.completionEpochDay
+                    ?.let { completionDay ->
+                        Row(
+                            verticalAlignment =
+                                Alignment.CenterVertically,
+                        ) {
+                            Checkbox(
+                                modifier =
+                                    Modifier
+                                        .testTag(
+                                            HistoryTags
+                                                .taskCompletion(
+                                                    task.id
+                                                )
+                                        )
+                                        .semantics {
+                                            contentDescription =
+                                                "Task completed"
+                                        },
+                                checked =
+                                    task.isCompleted,
+                                enabled =
+                                    task.canChangeCompletion &&
+                                            !task.isChanging,
+                                onCheckedChange = {
+                                        completed ->
+                                    onAction(
+                                        HistoryAction
+                                            .SetTaskCompletion(
+                                                taskId =
+                                                    task.id,
+                                                scheduledEpochDay =
+                                                    completionDay,
+                                                completed =
+                                                    completed,
+                                            )
+                                    )
+                                },
+                            )
+
+                            Text("Task completed")
+                        }
+                    }
+
+                OutlinedButton(
+                    modifier =
+                        Modifier.testTag(
+                            HistoryTags
+                                .TASK_HISTORY_PLACEHOLDER
+                        ),
+                    enabled = false,
+                    onClick = {},
+                ) {
+                    Text("View task history")
+                }
             }
         },
         confirmButton = {

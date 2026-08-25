@@ -6,6 +6,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -272,8 +276,136 @@ class HistoryScreenTest {
         )
     }
 
+    @Test
+    fun taskCheckSendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = taskState(
+                inspectedTaskId = TASK_ID,
+            ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.taskCompletion(
+                    TASK_ID
+                )
+            )
+            .assertIsOff()
+            .assertIsEnabled()
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.SetTaskCompletion(
+                    taskId = TASK_ID,
+                    scheduledEpochDay =
+                        TASK_DAY,
+                    completed = true,
+                )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun taskUncheckSendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = taskState(
+                inspectedTaskId = TASK_ID,
+                isCompleted = true,
+            ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.taskCompletion(
+                    TASK_ID
+                )
+            )
+            .assertIsOn()
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.SetTaskCompletion(
+                    taskId = TASK_ID,
+                    scheduledEpochDay =
+                        TASK_DAY,
+                    completed = false,
+                )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun unavailableTaskCheckIsDisabled(): Unit {
+        showScreen(
+            state = taskState(
+                inspectedTaskId = TASK_ID,
+                canChangeCompletion = false,
+            )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.taskCompletion(
+                    TASK_ID
+                )
+            )
+            .assertIsNotEnabled()
+    }
+
+    @Test
+    fun changingTaskCheckIsDisabled(): Unit {
+        showScreen(
+            state = taskState(
+                inspectedTaskId = TASK_ID,
+                isChanging = true,
+            )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.taskCompletion(
+                    TASK_ID
+                )
+            )
+            .assertIsNotEnabled()
+    }
+
+    @Test
+    fun taskHistoryPlaceholderIsDisabled(): Unit {
+        showScreen(
+            state = taskState(
+                inspectedTaskId = TASK_ID,
+            )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .TASK_HISTORY_PLACEHOLDER
+            )
+            .assertIsDisplayed()
+            .assertIsNotEnabled()
+    }
+
     private fun taskState(
         inspectedTaskId: Long?,
+        completionEpochDay: Long? =
+            TASK_DAY,
+        isCompleted: Boolean = false,
+        canChangeCompletion: Boolean = true,
+        isChanging: Boolean = false,
     ): HistoryScreenUiState =
         HistoryScreenUiState(
             tasks = TaskHistoryUiState(
@@ -284,6 +416,12 @@ class HistoryScreenTest {
                         name = "Test task",
                         category = "General",
                         schedule = "Daily",
+                        completionEpochDay =
+                            completionEpochDay,
+                        isCompleted = isCompleted,
+                        canChangeCompletion =
+                            canChangeCompletion,
+                        isChanging = isChanging,
                     )
                 ),
                 inspectedTaskId =
@@ -311,5 +449,7 @@ class HistoryScreenTest {
 
         val TEST_DATE: LocalDate =
             LocalDate.of(2026, 8, 24)
+
+        const val TASK_DAY = 20_000L
     }
 }
