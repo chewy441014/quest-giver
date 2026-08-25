@@ -8,6 +8,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.prestonhill.questgiver.data.local.database.QuestGiverDatabase
 import com.prestonhill.questgiver.data.local.database.dao.TaskDao
 import com.prestonhill.questgiver.data.local.database.entity.TaskEntity
+import com.prestonhill.questgiver.data.local.database.entity.TaskLogEntity
 import com.prestonhill.questgiver.data.local.database.entity.TaskScheduleTypeDb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -219,7 +220,7 @@ class TaskRepositoryTest {
         )
 
         assertNull(
-            dao.getAnyActiveLog(taskId)
+            dao.getLatestActiveLog(taskId)
         )
 
         val logs =
@@ -618,6 +619,72 @@ class TaskRepositoryTest {
                 secondDay,
             )
         }
+    @Test
+    fun latestActiveLogWins(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            dao.insertLog(
+                testLog(
+                    taskId = taskId,
+                    completionTime = 1_000L,
+                )
+            )
+
+            val expectedId =
+                dao.insertLog(
+                    testLog(
+                        taskId = taskId,
+                        completionTime = 2_000L,
+                    )
+                )
+
+            val correctedId =
+                dao.insertLog(
+                    testLog(
+                        taskId = taskId,
+                        completionTime = 3_000L,
+                    )
+                )
+
+            dao.insertLog(
+                testLog(
+                    taskId = taskId,
+                    completionTime = 3_000L,
+                    recordedTime = 4_000L,
+                    delta = -1,
+                    reversesLogId = correctedId,
+                )
+            )
+
+            val active =
+                dao.getLatestActiveLog(taskId)
+
+            assertEquals(
+                expectedId,
+                active?.id,
+            )
+        }
+    private fun testLog(
+        taskId: Long,
+        completionTime: Long,
+        recordedTime: Long = completionTime,
+        delta: Int = 1,
+        reversesLogId: Long? = null,
+    ): TaskLogEntity =
+        TaskLogEntity(
+            taskId = taskId,
+            taskNameSnapshot = "Test task",
+            categorySnapshot = "General",
+            scheduledEpochDay = TEST_DAY,
+            dueMinuteOfDaySnapshot = 9 * 60,
+            completionTimestampMillis =
+                completionTime,
+            recordedTimestampMillis =
+                recordedTime,
+            delta = delta,
+            reversesLogId = reversesLogId,
+        )
 
     private suspend fun addTask(
         name: String = "Test task",

@@ -10,6 +10,7 @@ import com.prestonhill.questgiver.core.time.AppDayCalculator
 import com.prestonhill.questgiver.core.time.BoundaryTimer
 import com.prestonhill.questgiver.core.time.RealBoundaryTimer
 import com.prestonhill.questgiver.feature.tasks.TaskScheduleCalculator
+import com.prestonhill.questgiver.data.repository.TaskCompletionResult
 import java.time.Clock
 import java.time.LocalTime
 import java.time.ZoneId
@@ -39,6 +40,11 @@ class HistoryViewModel(
 ) : ViewModel() {
     private val nav =
         MutableStateFlow(HistoryNavState())
+
+    private val changingTaskIds =
+        MutableStateFlow<Set<Long>>(
+            emptySet()
+        )
 
     private val currentTimestamp =
         MutableStateFlow(clock.millis())
@@ -77,7 +83,8 @@ class HistoryViewModel(
             repository.observeTasks(),
             repository.observeLogs(),
             timeState,
-        ) { navigation, tasks, logs, time ->
+            changingTaskIds,
+        ) { navigation, tasks, logs, time, changing ->
             HistoryScreenUiState(
                 section = navigation.section,
                 tasks = TaskHistoryUiState(
@@ -87,14 +94,16 @@ class HistoryViewModel(
                             tasks = tasks,
                             logs = logs,
                             appDay = time.appDay,
-                            currentTimestampMillis =
-                                time.timestamp,
+                            currentTimestampMillis = time.timestamp,
                             calculator = time.calculator,
+                            changingTaskIds = changing,
                         ),
                     logDays =
                         mapper.logs(
                             logs = logs,
                             tasks = tasks,
+                            changingTaskIds =
+                                changing,
                         ),
                     inspectedTaskId =
                         navigation.inspectedTaskId,
@@ -211,6 +220,13 @@ class HistoryViewModel(
 
     fun onAction(action: HistoryAction) {
         when (action) {
+            is HistoryAction.SetTaskCompletion ->
+                setTaskCompletion(
+                    taskId = action.taskId,
+                    scheduledEpochDay =
+                        action.scheduledEpochDay,
+                    completed = action.completed,
+                )
             is HistoryAction.SelectSection ->
                 nav.update {
                     it.copy(
@@ -288,6 +304,99 @@ class HistoryViewModel(
                         operationError = null
                     )
                 }
+        }
+    }
+
+    private fun setTaskCompletion(
+        taskId: Long,
+        scheduledEpochDay: Long,
+        completed: Boolean,
+    ) {
+        if (taskId in changingTaskIds.value) {
+            return
+        }
+
+        val inspectedLogId =
+            nav.value.inspectedLogId
+
+        nav.update {
+            it.copy(
+                operationError = null
+            )
+        }
+
+        changingTaskIds.value += taskId
+
+        viewModelScope.launch {
+            try {
+                val now = clock.millis()
+
+                currentTimestamp.value = now
+
+                val result =
+                    repository.setCompletion(
+                        taskId = taskId,
+                        scheduledEpochDay =
+                            scheduledEpochDay,
+                        completed = completed,
+                        completionTimestampMillis =
+                            now,
+                        recordedTimestampMillis =
+                            now,
+                    )
+
+                val accepted =
+                    if (completed) {
+                        result ==
+                                TaskCompletionResult.SUCCESS ||
+                                result ==
+                                TaskCompletionResult
+                                    .ALREADY_COMPLETED
+                    } else {
+                        result ==
+                                TaskCompletionResult.SUCCESS ||
+                                result ==
+                                TaskCompletionResult
+                                    .ALREADY_INCOMPLETE
+                    }
+
+                if (!accepted) {
+                    nav.update {
+                        it.copy(
+                            operationError =
+                                "Task completion could not be changed."
+                        )
+                    }
+                } else if (!completed) {
+                    nav.update { current ->
+                        if (
+                            current.inspectedLogId ==
+                            inspectedLogId
+                        ) {
+                            current.copy(
+                                inspectedLogId = null
+                            )
+                        } else {
+                            current
+                        }
+                    }
+                }
+            } catch (error: Exception) {
+                if (
+                    error is CancellationException
+                ) {
+                    throw error
+                }
+
+                nav.update {
+                    it.copy(
+                        operationError =
+                            "Task completion could not be changed."
+                    )
+                }
+            } finally {
+                changingTaskIds.value -= taskId
+            }
         }
     }
 

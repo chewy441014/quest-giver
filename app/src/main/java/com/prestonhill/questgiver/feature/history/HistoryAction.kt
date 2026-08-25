@@ -31,4 +31,10 @@ sealed interface HistoryAction {
     ) : HistoryAction
 
     data object DismissError : HistoryAction
+
+    data class SetTaskCompletion(
+        val taskId: Long,
+        val scheduledEpochDay: Long,
+        val completed: Boolean,
+    ) : HistoryAction
 }

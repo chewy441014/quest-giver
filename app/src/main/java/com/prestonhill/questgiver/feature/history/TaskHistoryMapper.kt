@@ -70,7 +70,7 @@ class TaskHistoryMapper {
     fun logs(
         logs: List<TaskLogEntity>,
         tasks: List<TaskEntity> = emptyList(),
-        changingLogIds: Set<Long> = emptySet(),
+        changingTaskIds: Set<Long> = emptySet(),
     ): List<HistoryTaskDayUiState> {
         val correctedIds =
             logs.asSequence()
@@ -78,40 +78,54 @@ class TaskHistoryMapper {
                 .mapNotNull { it.reversesLogId }
                 .toSet()
 
-        val positiveLogs =
-            logs.filter { it.delta == 1 }
-
-        val activeLogs =
-            positiveLogs.filter {
-                it.id !in correctedIds
-            }
-
         val tasksById =
             tasks.associateBy { it.id }
 
-        return positiveLogs.asSequence()
-            .map { log ->
-                val corrected =
-                    log.id in correctedIds
-
-                val task =
-                    log.taskId?.let { taskId ->
-                        tasksById[taskId]
+        val activeLogs =
+            logs.asSequence()
+                .filter { log ->
+                    log.delta == 1 &&
+                            log.id !in correctedIds
+                }
+                .sortedWith(
+                    compareByDescending<
+                            TaskLogEntity
+                            > {
+                        it.completionTimestampMillis
                     }
+                        .thenByDescending {
+                            it.id
+                        }
+                )
+                .distinctBy { log ->
+                    val task =
+                        log.taskId?.let {
+                            tasksById[it]
+                        }
 
-                val hasActiveReplacement =
-                    corrected &&
-                            log.taskId != null &&
-                            activeLogs.any { active ->
-                                active.taskId == log.taskId &&
-                                        (
-                                                task?.scheduleType ==
-                                                        TaskScheduleTypeDb.ONE_TIME ||
-                                                        active.scheduledEpochDay ==
-                                                        log.scheduledEpochDay
-                                                )
-                            }
+                    when {
+                        log.taskId == null ->
+                            TaskLogSlot(
+                                logId = log.id,
+                            )
 
+                        task?.scheduleType ==
+                                TaskScheduleTypeDb.ONE_TIME ->
+                            TaskLogSlot(
+                                taskId = log.taskId,
+                            )
+
+                        else ->
+                            TaskLogSlot(
+                                taskId = log.taskId,
+                                scheduledEpochDay =
+                                    log.scheduledEpochDay,
+                            )
+                    }
+                }
+
+        return activeLogs
+            .map { log ->
                 HistoryTaskLogUiState(
                     id = log.id,
                     taskId = log.taskId,
@@ -125,12 +139,10 @@ class TaskHistoryMapper {
                         ),
                     completedAtMillis =
                         log.completionTimestampMillis,
-                    isCorrected = corrected,
-                    canChangeCompletion =
+                    isTaskCompletionChanging =
                         log.taskId != null &&
-                                !hasActiveReplacement,
-                    isChanging =
-                        log.id in changingLogIds,
+                                log.taskId in
+                                changingTaskIds,
                 )
             }
             .sortedWith(
@@ -153,6 +165,12 @@ class TaskHistoryMapper {
             }
     }
 }
+
+private data class TaskLogSlot(
+    val taskId: Long? = null,
+    val scheduledEpochDay: Long? = null,
+    val logId: Long? = null,
+)
 
 private fun TaskEntity.scheduleText(): String =
     when (scheduleType) {

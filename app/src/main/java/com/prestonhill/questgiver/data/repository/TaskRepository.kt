@@ -108,7 +108,7 @@ class TaskRepository(
                     task.scheduleType ==
                     TaskScheduleTypeDb.ONE_TIME
                 ) {
-                    dao.getAnyActiveLog(taskId)
+                    dao.getLatestActiveLog(taskId)
                 } else {
                     dao.getActiveLog(
                         taskId = taskId,

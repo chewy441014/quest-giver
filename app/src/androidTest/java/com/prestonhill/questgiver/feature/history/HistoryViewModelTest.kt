@@ -138,7 +138,7 @@ class HistoryViewModelTest {
         }
 
     @Test
-    fun correctionUpdatesLog(): Unit =
+    fun correctionHidesLog(): Unit =
         runBlocking {
             val taskId = addTask()
 
@@ -156,8 +156,7 @@ class HistoryViewModelTest {
                             day.logs
                         }
                         .any { log ->
-                            log.taskId == taskId &&
-                                    !log.isCorrected
+                            log.taskId == taskId
                         }
                 }
                     .tasks
@@ -165,7 +164,9 @@ class HistoryViewModelTest {
                     .flatMap { it.logs }
                     .single()
 
-            assertTrue(active.canCorrect)
+            assertTrue(
+                active.canChangeTaskCompletion
+            )
 
             repository.correctCompletion(
                 logId = active.id,
@@ -173,24 +174,261 @@ class HistoryViewModelTest {
                     COMPLETION_TIME + 1_000L,
             )
 
-            val corrected =
+            val state =
                 awaitState {
                     it.tasks.logDays
                         .flatMap { day ->
                             day.logs
                         }
-                        .any { log ->
-                            log.id == active.id &&
-                                    log.isCorrected
+                        .none { log ->
+                            log.id == active.id
+                        }
+                }
+
+            assertTrue(
+                state.tasks.logDays
+                    .flatMap { it.logs }
+                    .none { it.id == active.id }
+            )
+        }
+
+    @Test
+    fun taskCompletionChanges(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            val initial =
+                awaitState {
+                    it.tasks.allTasks.any { task ->
+                        task.id == taskId &&
+                                task.completionEpochDay !=
+                                null
+                    }
+                }
+
+            val day =
+                requireNotNull(
+                    initial.tasks.allTasks
+                        .single {
+                            it.id == taskId
+                        }
+                        .completionEpochDay
+                )
+
+            viewModel.onAction(
+                HistoryAction.SetTaskCompletion(
+                    taskId = taskId,
+                    scheduledEpochDay = day,
+                    completed = true,
+                )
+            )
+
+            val completed =
+                awaitState {
+                    it.tasks.allTasks
+                        .single { task ->
+                            task.id == taskId
+                        }
+                        .let { task ->
+                            task.isCompleted &&
+                                    !task.isChanging
+                        }
+                }
+
+            assertTrue(
+                completed.tasks.allTasks
+                    .single { it.id == taskId }
+                    .isCompleted
+            )
+
+            val positive =
+                repository.observeLogs()
+                    .first { logs ->
+                        logs.any {
+                            it.taskId == taskId &&
+                                    it.delta == 1
+                        }
+                    }
+                    .single {
+                        it.taskId == taskId &&
+                                it.delta == 1
+                    }
+
+            assertEquals(
+                day,
+                positive.scheduledEpochDay,
+            )
+        }
+
+    @Test
+    fun logUncheckRemovesHistory(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            val task =
+                awaitState {
+                    it.tasks.allTasks.any { row ->
+                        row.id == taskId &&
+                                row.completionEpochDay != null
+                    }
+                }
+                    .tasks
+                    .allTasks
+                    .single { it.id == taskId }
+
+            val day =
+                requireNotNull(
+                    task.completionEpochDay
+                )
+
+            repository.complete(
+                taskId = taskId,
+                scheduledEpochDay = day,
+                completionTimestampMillis =
+                    COMPLETION_TIME,
+            )
+
+            val log =
+                awaitState {
+                    it.tasks.logDays
+                        .flatMap { dayState ->
+                            dayState.logs
+                        }
+                        .any {
+                            it.taskId == taskId
                         }
                 }
                     .tasks
                     .logDays
                     .flatMap { it.logs }
-                    .single()
+                    .single {
+                        it.taskId == taskId
+                    }
 
-            assertTrue(corrected.isCorrected)
-            assertFalse(corrected.canCorrect)
+            viewModel.onAction(
+                HistoryAction.InspectLog(log.id)
+            )
+
+            awaitState {
+                it.tasks.inspectedLogId ==
+                        log.id
+            }
+
+            viewModel.onAction(
+                HistoryAction.SetTaskCompletion(
+                    taskId = taskId,
+                    scheduledEpochDay =
+                        log.date.toEpochDay(),
+                    completed = false,
+                )
+            )
+
+            val state =
+                awaitState {
+                    it.tasks.inspectedLogId == null &&
+                            it.tasks.logDays
+                                .flatMap { dayState ->
+                                    dayState.logs
+                                }
+                                .none {
+                                    it.id == log.id
+                                }
+                }
+
+            assertFalse(
+                state.tasks.allTasks
+                    .single { it.id == taskId }
+                    .isCompleted
+            )
+
+            val storedLogs =
+                repository.observeLogs()
+                    .first { it.size == 2 }
+
+            assertEquals(
+                1,
+                storedLogs.count {
+                    it.delta == -1
+                },
+            )
+        }
+
+    @Test
+    fun repeatedChangeIsIgnored(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            val task =
+                awaitState {
+                    it.tasks.allTasks.any { row ->
+                        row.id == taskId &&
+                                row.completionEpochDay != null
+                    }
+                }
+                    .tasks
+                    .allTasks
+                    .single { it.id == taskId }
+
+            val day =
+                requireNotNull(
+                    task.completionEpochDay
+                )
+
+            viewModel.onAction(
+                HistoryAction.SetTaskCompletion(
+                    taskId = taskId,
+                    scheduledEpochDay = day,
+                    completed = true,
+                )
+            )
+
+            viewModel.onAction(
+                HistoryAction.SetTaskCompletion(
+                    taskId = taskId,
+                    scheduledEpochDay = day,
+                    completed = false,
+                )
+            )
+
+            awaitState {
+                it.tasks.allTasks
+                    .single { row ->
+                        row.id == taskId
+                    }
+                    .let { row ->
+                        row.isCompleted &&
+                                !row.isChanging
+                    }
+            }
+
+            val logs =
+                repository.observeLogs()
+                    .first()
+
+            assertEquals(1, logs.size)
+            assertEquals(1, logs.single().delta)
+        }
+
+    @Test
+    fun missingTaskShowsError(): Unit =
+        runBlocking {
+            viewModel.onAction(
+                HistoryAction.SetTaskCompletion(
+                    taskId = Long.MAX_VALUE,
+                    scheduledEpochDay = DAY,
+                    completed = true,
+                )
+            )
+
+            val state =
+                awaitState {
+                    it.tasks.operationError != null
+                }
+
+            assertEquals(
+                "Task completion could not be changed.",
+                state.tasks.operationError,
+            )
         }
 
     @Test
@@ -241,7 +479,7 @@ class HistoryViewModelTest {
                     .single()
 
             assertFalse(log.canOpenTask)
-            assertFalse(log.canCorrect)
+            assertFalse(log.canChangeTaskCompletion)
             assertTrue(log.canDelete)
         }
 

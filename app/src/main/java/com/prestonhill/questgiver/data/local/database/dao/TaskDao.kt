@@ -175,7 +175,7 @@ interface TaskDao {
     LIMIT 1
     """
     )
-    suspend fun getAnyActiveLog(
+    suspend fun getLatestActiveLog(
         taskId: Long,
     ): TaskLogEntity?
 }

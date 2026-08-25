@@ -274,9 +274,6 @@ private fun LogDetailsDialog(
                 Text(log.date.toString())
 
                 when {
-                    log.isCorrected ->
-                        Text("Corrected")
-
                     log.taskId == null ->
                         Text("Associated task deleted")
                 }
@@ -739,9 +736,6 @@ private fun TaskLogCard(
             )
 
             when {
-                log.isCorrected ->
-                    Text("Corrected")
-
                 log.taskId == null ->
                     Text("Task deleted")
             }

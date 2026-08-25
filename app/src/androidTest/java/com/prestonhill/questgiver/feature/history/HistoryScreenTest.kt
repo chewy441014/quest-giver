@@ -215,10 +215,6 @@ class HistoryScreenTest {
             .assertIsDisplayed()
 
         composeRule
-            .onNodeWithText("Corrected")
-            .assertIsDisplayed()
-
-        composeRule
             .onNodeWithText("Task deleted")
             .assertIsDisplayed()
     }
@@ -644,7 +640,6 @@ class HistoryScreenTest {
             category = "General",
             date = TEST_DATE,
             completedAtMillis = 1_000L,
-            isCorrected = corrected,
         )
 
     private companion object {

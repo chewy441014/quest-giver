@@ -111,16 +111,19 @@ class TaskHistoryMapperTest {
                     log(
                         id = 1L,
                         day = previousDay,
+                        taskId = 1L,
                         completedAt = 100L,
                     ),
                     log(
                         id = 2L,
                         day = DAY,
+                        taskId = 2L,
                         completedAt = 200L,
                     ),
                     log(
                         id = 3L,
                         day = DAY,
+                        taskId = 3L,
                         completedAt = 300L,
                     ),
                 )
@@ -141,7 +144,7 @@ class TaskHistoryMapperTest {
     }
 
     @Test
-    fun reversalMarksCorrected(): Unit {
+    fun correctedLogsAreHidden(): Unit {
         val mapped =
             mapper.logs(
                 listOf(
@@ -158,12 +161,7 @@ class TaskHistoryMapperTest {
                 )
             )
 
-        val logs =
-            mapped.single().logs
-
-        assertEquals(1, logs.size)
-        assertEquals(10L, logs.single().id)
-        assertTrue(logs.single().isCorrected)
+        assertTrue(mapped.isEmpty())
     }
 
     @Test
@@ -183,11 +181,11 @@ class TaskHistoryMapperTest {
                 .single()
 
         assertTrue(row.canOpenTask)
-        assertTrue(row.canCorrect)
+        assertTrue(row.canChangeTaskCompletion)
         assertFalse(row.canDelete)
-        assertTrue(row.isCompleted)
-        assertTrue(row.canChangeCompletion)
-        assertFalse(row.isChanging)
+        assertFalse(
+            row.isTaskCompletionChanging
+        )
     }
 
     @Test
@@ -207,40 +205,10 @@ class TaskHistoryMapperTest {
                 .single()
 
         assertFalse(row.canOpenTask)
-        assertFalse(row.canCorrect)
+        assertFalse(
+            row.canChangeTaskCompletion
+        )
         assertTrue(row.canDelete)
-        assertTrue(row.isCompleted)
-        assertFalse(row.canChangeCompletion)
-    }
-
-    @Test
-    fun correctedLogPermissions(): Unit {
-        val row =
-            mapper.logs(
-                listOf(
-                    log(
-                        id = 1L,
-                        day = DAY,
-                        taskId = 7L,
-                    ),
-                    log(
-                        id = 2L,
-                        day = DAY,
-                        taskId = 7L,
-                        delta = -1,
-                        reversesLogId = 1L,
-                    ),
-                )
-            )
-                .single()
-                .logs
-                .single()
-
-        assertTrue(row.canOpenTask)
-        assertFalse(row.canCorrect)
-        assertFalse(row.canDelete)
-        assertTrue(row.isCorrected)
-        assertTrue(row.canChangeCompletion)
     }
 
     @Test
@@ -349,7 +317,7 @@ class TaskHistoryMapperTest {
     }
 
     @Test
-    fun replacementDisablesRestore(): Unit {
+    fun replacementIsCurrentLog(): Unit {
         val rows =
             mapper.logs(
                 listOf(
@@ -374,56 +342,14 @@ class TaskHistoryMapperTest {
             )
                 .flatMap { it.logs }
 
-        val corrected =
-            rows.single { it.id == 1L }
-
-        val replacement =
-            rows.single { it.id == 3L }
-
-        assertTrue(corrected.isCorrected)
-        assertFalse(replacement.isCorrected)
-        assertFalse(corrected.canChangeCompletion)
-        assertFalse(corrected.isCompleted)
-        assertTrue(replacement.canChangeCompletion)
-        assertTrue(replacement.isCompleted)
-    }
-
-    @Test
-    fun otherDayAllowsRestore(): Unit {
-        val rows =
-            mapper.logs(
-                listOf(
-                    log(
-                        id = 1L,
-                        day = DAY,
-                        taskId = 7L,
-                    ),
-                    log(
-                        id = 2L,
-                        day = DAY,
-                        taskId = 7L,
-                        delta = -1,
-                        reversesLogId = 1L,
-                    ),
-                    log(
-                        id = 3L,
-                        day = DAY + 1L,
-                        taskId = 7L,
-                    ),
-                )
-            )
-                .flatMap { it.logs }
-
-        val corrected =
-            rows.single { it.id == 1L }
-
-        assertTrue(
-            corrected.canChangeCompletion
+        assertEquals(
+            listOf(3L),
+            rows.map { it.id },
         )
     }
 
     @Test
-    fun oneTimeReplacementDisablesRestore(): Unit {
+    fun oneTimeUsesLatestLog(): Unit {
         val oneTime =
             task(
                 id = 7L,
@@ -439,34 +365,68 @@ class TaskHistoryMapperTest {
                         id = 1L,
                         day = DAY,
                         taskId = oneTime.id,
+                        completedAt = 1_000L,
                     ),
                     log(
                         id = 2L,
-                        day = DAY,
-                        taskId = oneTime.id,
-                        delta = -1,
-                        reversesLogId = 1L,
-                    ),
-                    log(
-                        id = 3L,
                         day = DAY + 2L,
                         taskId = oneTime.id,
+                        completedAt = 2_000L,
                     ),
                 ),
-                tasks = listOf(oneTime)
+                tasks = listOf(oneTime),
             )
                 .flatMap { it.logs }
 
-        val corrected =
-            rows.single { it.id == 1L }
-
-        assertFalse(
-            corrected.canChangeCompletion
+        assertEquals(
+            listOf(2L),
+            rows.map { it.id },
         )
     }
 
     @Test
-    fun changingLogIsMarked(): Unit {
+    fun recurringDaysStaySeparate(): Unit {
+        val daily =
+            task(
+                id = 7L,
+                type =
+                    TaskScheduleTypeDb.DAILY,
+            )
+
+        val rows =
+            mapper.logs(
+                logs = listOf(
+                    log(
+                        id = 1L,
+                        day = DAY,
+                        taskId = daily.id,
+                        completedAt = 1_000L,
+                    ),
+                    log(
+                        id = 2L,
+                        day = DAY,
+                        taskId = daily.id,
+                        completedAt = 2_000L,
+                    ),
+                    log(
+                        id = 3L,
+                        day = DAY + 1L,
+                        taskId = daily.id,
+                        completedAt = 1_500L,
+                    ),
+                ),
+                tasks = listOf(daily),
+            )
+                .flatMap { it.logs }
+
+        assertEquals(
+            listOf(3L, 2L),
+            rows.map { it.id },
+        )
+    }
+
+    @Test
+    fun taskChangeMarksLog(): Unit {
         val row =
             mapper.logs(
                 logs = listOf(
@@ -476,13 +436,15 @@ class TaskHistoryMapperTest {
                         taskId = 7L,
                     )
                 ),
-                changingLogIds = setOf(1L)
+                changingTaskIds = setOf(7L),
             )
                 .single()
                 .logs
                 .single()
 
-        assertTrue(row.isChanging)
+        assertTrue(
+            row.isTaskCompletionChanging
+        )
     }
 
     private fun mapTasks(

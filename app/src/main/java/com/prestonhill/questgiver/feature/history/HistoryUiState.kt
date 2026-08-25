@@ -47,20 +47,14 @@ data class HistoryTaskLogUiState(
     val category: String?,
     val date: LocalDate,
     val completedAtMillis: Long,
-    val isCorrected: Boolean,
-    val canChangeCompletion: Boolean =
-        taskId != null,
-    val isChanging: Boolean = false,
+    val isTaskCompletionChanging: Boolean =
+        false,
 ) {
-    val isCompleted: Boolean
-        get() = !isCorrected
     val canOpenTask: Boolean
         get() = taskId != null
 
-    val canCorrect: Boolean
-        get() =
-            canChangeCompletion &&
-                    !isCorrected
+    val canChangeTaskCompletion: Boolean
+        get() = taskId != null
 
     val canDelete: Boolean
         get() = taskId == null
