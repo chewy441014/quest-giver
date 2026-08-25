@@ -4,6 +4,8 @@ import com.prestonhill.questgiver.data.local.database.entity.TaskEntity
 import com.prestonhill.questgiver.data.local.database.entity.TaskIntervalBasisDb
 import com.prestonhill.questgiver.data.local.database.entity.TaskLogEntity
 import com.prestonhill.questgiver.data.local.database.entity.TaskScheduleTypeDb
+import com.prestonhill.questgiver.core.time.AppDay
+import com.prestonhill.questgiver.feature.tasks.TaskScheduleCalculator
 import java.time.LocalDate
 
 class TaskHistoryMapper {
@@ -16,6 +18,52 @@ class TaskHistoryMapper {
                 name = task.name,
                 category = task.category,
                 schedule = task.scheduleText(),
+            )
+        }
+
+    fun tasks(
+        tasks: List<TaskEntity>,
+        logs: List<TaskLogEntity>,
+        appDay: AppDay,
+        currentTimestampMillis: Long,
+        calculator: TaskScheduleCalculator,
+        changingTaskIds: Set<Long> =
+            emptySet(),
+    ): List<HistoryTaskUiState> =
+        tasks.map { task ->
+            val evaluation =
+                calculator.evaluate(
+                    task = task,
+                    logs = logs,
+                    appDay = appDay,
+                    currentTimestampMillis =
+                        currentTimestampMillis,
+                )
+
+            val canChange =
+                evaluation.completionEpochDay != null &&
+                        (
+                                evaluation
+                                    .isScheduledToday ||
+                                        evaluation
+                                            .shouldShowToday ||
+                                        evaluation
+                                            .isCompleted
+                                )
+
+            HistoryTaskUiState(
+                id = task.id,
+                name = task.name,
+                category = task.category,
+                schedule = task.scheduleText(),
+                completionEpochDay =
+                    evaluation.completionEpochDay,
+                isCompleted =
+                    evaluation.isCompleted,
+                canChangeCompletion =
+                    canChange,
+                isChanging =
+                    task.id in changingTaskIds,
             )
         }
 

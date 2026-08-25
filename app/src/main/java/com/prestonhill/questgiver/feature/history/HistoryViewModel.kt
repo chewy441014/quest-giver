@@ -4,6 +4,20 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.prestonhill.questgiver.data.repository.TaskRepository
+import com.prestonhill.questgiver.core.settings.AppSettings
+import com.prestonhill.questgiver.core.time.AppDay
+import com.prestonhill.questgiver.core.time.AppDayCalculator
+import com.prestonhill.questgiver.core.time.BoundaryTimer
+import com.prestonhill.questgiver.core.time.RealBoundaryTimer
+import com.prestonhill.questgiver.feature.tasks.TaskScheduleCalculator
+import java.time.Clock
+import java.time.LocalTime
+import java.time.ZoneId
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -14,24 +28,69 @@ import kotlinx.coroutines.launch
 
 class HistoryViewModel(
     private val repository: TaskRepository,
+    private val settings: Flow<AppSettings> =
+        flowOf(AppSettings()),
+    private val clock: Clock =
+        Clock.systemDefaultZone(),
+    private val timer: BoundaryTimer =
+        RealBoundaryTimer,
     private val mapper: TaskHistoryMapper =
         TaskHistoryMapper(),
 ) : ViewModel() {
     private val nav =
         MutableStateFlow(HistoryNavState())
 
+    private val currentTimestamp =
+        MutableStateFlow(clock.millis())
+
+    private val settingsState =
+        settings.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = AppSettings(),
+        )
+
+    private val timeState =
+        combine(
+            currentTimestamp,
+            settingsState,
+        ) { timestamp, appSettings ->
+            createTimeState(
+                timestamp = timestamp,
+                settings = appSettings,
+            )
+        }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.Eagerly,
+                initialValue =
+                    createTimeState(
+                        timestamp =
+                            currentTimestamp.value,
+                        settings = AppSettings(),
+                    ),
+            )
+
     val uiState =
         combine(
             nav,
             repository.observeTasks(),
             repository.observeLogs(),
-        ) { navigation, tasks, logs ->
+            timeState,
+        ) { navigation, tasks, logs, time ->
             HistoryScreenUiState(
                 section = navigation.section,
                 tasks = TaskHistoryUiState(
                     page = navigation.taskPage,
                     allTasks =
-                        mapper.tasks(tasks),
+                        mapper.tasks(
+                            tasks = tasks,
+                            logs = logs,
+                            appDay = time.appDay,
+                            currentTimestampMillis =
+                                time.timestamp,
+                            calculator = time.calculator,
+                        ),
                     logDays =
                         mapper.logs(logs),
                     inspectedTaskId =
@@ -54,6 +113,98 @@ class HistoryViewModel(
                 initialValue =
                     HistoryScreenUiState(),
             )
+
+    init {
+        startTimer()
+    }
+
+    fun refresh() {
+        currentTimestamp.value = clock.millis()
+    }
+
+    private fun startTimer() {
+        viewModelScope.launch {
+            settings
+                .map { appSettings ->
+                    HistoryBoundarySettings(
+                        dayBoundary =
+                            appSettings.dayBoundary,
+                        daylightSavingEnabled =
+                            appSettings
+                                .daylightSavingEnabled,
+                    )
+                }
+                .distinctUntilChanged()
+                .collectLatest { boundary ->
+                    val calculator =
+                        AppDayCalculator(
+                            dayBoundary =
+                                boundary.dayBoundary,
+                            zoneId =
+                                zoneFor(
+                                    boundary
+                                        .daylightSavingEnabled
+                                ),
+                        )
+
+                    while (true) {
+                        val now = clock.millis()
+
+                        val nextBoundary =
+                            calculator
+                                .containing(now)
+                                .endTimestampMillis
+
+                        timer.pause(
+                            (nextBoundary - now)
+                                .coerceAtLeast(1L)
+                        )
+
+                        currentTimestamp.value =
+                            clock.millis()
+                    }
+                }
+        }
+    }
+
+    private fun createTimeState(
+        timestamp: Long,
+        settings: AppSettings,
+    ): HistoryTimeState {
+        val dayCalculator =
+            AppDayCalculator(
+                dayBoundary =
+                    settings.dayBoundary,
+                zoneId =
+                    zoneFor(
+                        settings
+                            .daylightSavingEnabled
+                    ),
+            )
+
+        return HistoryTimeState(
+            timestamp = timestamp,
+            appDay =
+                dayCalculator.containing(
+                    timestamp
+                ),
+            calculator =
+                TaskScheduleCalculator(
+                    dayCalculator
+                ),
+        )
+    }
+
+    private fun zoneFor(
+        daylightSavingEnabled: Boolean,
+    ): ZoneId =
+        if (daylightSavingEnabled) {
+            clock.zone
+        } else {
+            clock.zone.rules.getStandardOffset(
+                clock.instant()
+            )
+        }
 
     fun onAction(action: HistoryAction) {
         when (action) {
@@ -247,6 +398,17 @@ class HistoryViewModel(
     }
 }
 
+private data class HistoryTimeState(
+    val timestamp: Long,
+    val appDay: AppDay,
+    val calculator: TaskScheduleCalculator,
+)
+
+private data class HistoryBoundarySettings(
+    val dayBoundary: LocalTime,
+    val daylightSavingEnabled: Boolean,
+)
+
 private data class HistoryNavState(
     val section: HistorySection =
         HistorySection.TASKS,
@@ -279,6 +441,12 @@ private fun TaskHistoryUiState.findLog(
 
 class HistoryViewModelFactory(
     private val repository: TaskRepository,
+    private val settings: Flow<AppSettings> =
+        flowOf(AppSettings()),
+    private val clock: Clock =
+        Clock.systemDefaultZone(),
+    private val timer: BoundaryTimer =
+        RealBoundaryTimer,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(
         modelClass: Class<T>,
@@ -290,7 +458,10 @@ class HistoryViewModelFactory(
         ) {
             @Suppress("UNCHECKED_CAST")
             return HistoryViewModel(
-                repository = repository
+                repository = repository,
+                settings = settings,
+                clock = clock,
+                timer = timer,
             ) as T
         }
 

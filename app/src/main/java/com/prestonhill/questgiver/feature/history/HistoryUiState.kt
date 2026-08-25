@@ -34,6 +34,10 @@ data class HistoryTaskUiState(
     val name: String,
     val category: String?,
     val schedule: String,
+    val completionEpochDay: Long? = null,
+    val isCompleted: Boolean = false,
+    val canChangeCompletion: Boolean = false,
+    val isChanging: Boolean = false,
 )
 
 data class HistoryTaskLogUiState(
@@ -44,6 +48,10 @@ data class HistoryTaskLogUiState(
     val date: LocalDate,
     val completedAtMillis: Long,
     val isCorrected: Boolean,
+    val canChangeCompletion: Boolean =
+        taskId != null,
+    val isChanging: Boolean = false,
+    val isCompleted: Boolean = false,
 ) {
     val canOpenTask: Boolean
         get() = taskId != null

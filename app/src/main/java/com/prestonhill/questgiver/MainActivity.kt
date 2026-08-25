@@ -81,7 +81,10 @@ class MainActivity : ComponentActivity() {
 
                 val historyViewModelFactory =
                     HistoryViewModelFactory(
-                        repository = taskRepository
+                        repository = taskRepository,
+                        settings =
+                            settingsRepository.settings,
+                        clock = appClock,
                     )
 
                 val historyViewModel: HistoryViewModel =
@@ -112,6 +115,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     habitViewModel.refreshAppDay()
                     taskViewModel.refresh()
+                    historyViewModel.refresh()
                 }
 
                 var showSettings by rememberSaveable {

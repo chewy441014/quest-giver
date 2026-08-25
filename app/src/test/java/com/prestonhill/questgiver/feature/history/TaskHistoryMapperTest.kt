@@ -4,6 +4,10 @@ import com.prestonhill.questgiver.data.local.database.entity.TaskEntity
 import com.prestonhill.questgiver.data.local.database.entity.TaskIntervalBasisDb
 import com.prestonhill.questgiver.data.local.database.entity.TaskLogEntity
 import com.prestonhill.questgiver.data.local.database.entity.TaskScheduleTypeDb
+import com.prestonhill.questgiver.core.time.AppDayCalculator
+import com.prestonhill.questgiver.feature.tasks.TaskScheduleCalculator
+import java.time.LocalTime
+import java.time.ZoneId
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -12,6 +16,27 @@ import org.junit.Test
 
 class TaskHistoryMapperTest {
     private val mapper = TaskHistoryMapper()
+
+    private val zone =
+        ZoneId.of("America/Chicago")
+
+    private val dayCalculator =
+        AppDayCalculator(
+            dayBoundary = LocalTime.MIDNIGHT,
+            zoneId = zone,
+        )
+
+    private val scheduleCalculator =
+        TaskScheduleCalculator(
+            dayCalculator
+        )
+
+    private val currentTimestamp =
+        LocalDate.ofEpochDay(DAY)
+            .atTime(12, 0)
+            .atZone(zone)
+            .toInstant()
+            .toEpochMilli()
 
     @Test
     fun mapsSchedules(): Unit {
@@ -160,6 +185,9 @@ class TaskHistoryMapperTest {
         assertTrue(row.canOpenTask)
         assertTrue(row.canCorrect)
         assertFalse(row.canDelete)
+        assertTrue(row.isCompleted)
+        assertTrue(row.canChangeCompletion)
+        assertFalse(row.isChanging)
     }
 
     @Test
@@ -181,6 +209,8 @@ class TaskHistoryMapperTest {
         assertFalse(row.canOpenTask)
         assertFalse(row.canCorrect)
         assertTrue(row.canDelete)
+        assertTrue(row.isCompleted)
+        assertFalse(row.canChangeCompletion)
     }
 
     @Test
@@ -209,8 +239,273 @@ class TaskHistoryMapperTest {
         assertTrue(row.canOpenTask)
         assertFalse(row.canCorrect)
         assertFalse(row.canDelete)
+        assertTrue(row.isCorrected)
+        assertTrue(row.canChangeCompletion)
     }
 
+    @Test
+    fun currentTaskCanChange(): Unit {
+        val task =
+            task(
+                id = 1L,
+                type =
+                    TaskScheduleTypeDb.DAILY,
+            )
+
+        val row =
+            mapTasks(listOf(task))
+                .single()
+
+        assertFalse(row.isCompleted)
+        assertTrue(row.canChangeCompletion)
+
+        assertEquals(
+            DAY,
+            row.completionEpochDay,
+        )
+    }
+
+    @Test
+    fun completedTaskCanChange(): Unit {
+        val task =
+            task(
+                id = 1L,
+                type =
+                    TaskScheduleTypeDb.DAILY,
+            )
+
+        val row =
+            mapTasks(
+                tasks = listOf(task),
+                logs = listOf(
+                    log(
+                        id = 1L,
+                        day = DAY,
+                        taskId = task.id,
+                    )
+                ),
+            )
+                .single()
+
+        assertTrue(row.isCompleted)
+        assertTrue(row.canChangeCompletion)
+    }
+
+    @Test
+    fun futureTaskCannotChange(): Unit {
+        val task =
+            task(
+                id = 1L,
+                type =
+                    TaskScheduleTypeDb.ONE_TIME,
+                scheduledDay = DAY + 1L,
+            )
+
+        val row =
+            mapTasks(listOf(task))
+                .single()
+
+        assertFalse(row.isCompleted)
+        assertFalse(row.canChangeCompletion)
+    }
+
+    @Test
+    fun hiddenDueTaskCanChange(): Unit {
+        val task =
+            task(
+                id = 1L,
+                type =
+                    TaskScheduleTypeDb.ONE_TIME,
+                scheduledDay = DAY,
+                dueMinuteOfDay = 9 * 60,
+            )
+
+        val row =
+            mapTasks(listOf(task))
+                .single()
+
+        assertFalse(row.isCompleted)
+        assertTrue(row.canChangeCompletion)
+    }
+
+    @Test
+    fun changingTaskIsMarked(): Unit {
+        val task =
+            task(
+                id = 1L,
+                type =
+                    TaskScheduleTypeDb.DAILY,
+            )
+
+        val row =
+            mapTasks(
+                tasks = listOf(task),
+                changingTaskIds =
+                    setOf(task.id),
+            )
+                .single()
+
+        assertTrue(row.isChanging)
+    }
+
+    @Test
+    fun replacementDisablesRestore(): Unit {
+        val rows =
+            mapper.logs(
+                listOf(
+                    log(
+                        id = 1L,
+                        day = DAY,
+                        taskId = 7L,
+                    ),
+                    log(
+                        id = 2L,
+                        day = DAY,
+                        taskId = 7L,
+                        delta = -1,
+                        reversesLogId = 1L,
+                    ),
+                    log(
+                        id = 3L,
+                        day = DAY,
+                        taskId = 7L,
+                    ),
+                )
+            )
+                .flatMap { it.logs }
+
+        val corrected =
+            rows.single { it.id == 1L }
+
+        val replacement =
+            rows.single { it.id == 3L }
+
+        assertTrue(corrected.isCorrected)
+        assertFalse(replacement.isCorrected)
+        assertFalse(corrected.canChangeCompletion)
+        assertFalse(corrected.isCompleted)
+        assertTrue(replacement.canChangeCompletion)
+        assertTrue(replacement.isCompleted)
+    }
+
+    @Test
+    fun otherDayAllowsRestore(): Unit {
+        val rows =
+            mapper.logs(
+                listOf(
+                    log(
+                        id = 1L,
+                        day = DAY,
+                        taskId = 7L,
+                    ),
+                    log(
+                        id = 2L,
+                        day = DAY,
+                        taskId = 7L,
+                        delta = -1,
+                        reversesLogId = 1L,
+                    ),
+                    log(
+                        id = 3L,
+                        day = DAY + 1L,
+                        taskId = 7L,
+                    ),
+                )
+            )
+                .flatMap { it.logs }
+
+        val corrected =
+            rows.single { it.id == 1L }
+
+        assertTrue(
+            corrected.canChangeCompletion
+        )
+    }
+
+    @Test
+    fun oneTimeReplacementDisablesRestore(): Unit {
+        val oneTime =
+            task(
+                id = 7L,
+                type =
+                    TaskScheduleTypeDb.ONE_TIME,
+                scheduledDay = DAY,
+            )
+
+        val rows =
+            mapper.logs(
+                logs = listOf(
+                    log(
+                        id = 1L,
+                        day = DAY,
+                        taskId = oneTime.id,
+                    ),
+                    log(
+                        id = 2L,
+                        day = DAY,
+                        taskId = oneTime.id,
+                        delta = -1,
+                        reversesLogId = 1L,
+                    ),
+                    log(
+                        id = 3L,
+                        day = DAY + 2L,
+                        taskId = oneTime.id,
+                    ),
+                ),
+                tasks = listOf(oneTime)
+            )
+                .flatMap { it.logs }
+
+        val corrected =
+            rows.single { it.id == 1L }
+
+        assertFalse(
+            corrected.canChangeCompletion
+        )
+    }
+
+    @Test
+    fun changingLogIsMarked(): Unit {
+        val row =
+            mapper.logs(
+                logs = listOf(
+                    log(
+                        id = 1L,
+                        day = DAY,
+                        taskId = 7L,
+                    )
+                ),
+                changingLogIds = setOf(1L)
+            )
+                .single()
+                .logs
+                .single()
+
+        assertTrue(row.isChanging)
+    }
+
+    private fun mapTasks(
+        tasks: List<TaskEntity>,
+        logs: List<TaskLogEntity> =
+            emptyList(),
+        changingTaskIds: Set<Long> =
+            emptySet(),
+    ): List<HistoryTaskUiState> =
+        mapper.tasks(
+            tasks = tasks,
+            logs = logs,
+            appDay =
+                dayCalculator.containing(
+                    currentTimestamp
+                ),
+            currentTimestampMillis =
+                currentTimestamp,
+            calculator =
+                scheduleCalculator,
+            changingTaskIds =
+                changingTaskIds,
+        )
     private fun task(
         id: Long,
         type: TaskScheduleTypeDb,
@@ -218,6 +513,7 @@ class TaskHistoryMapperTest {
         weekdaysMask: Int? = null,
         intervalDays: Int? = null,
         intervalBasis: TaskIntervalBasisDb? = null,
+        dueMinuteOfDay: Int? = null,
     ): TaskEntity =
         TaskEntity(
             id = id,
@@ -226,6 +522,7 @@ class TaskHistoryMapperTest {
             displayOrder = id.toInt(),
             scheduleType = type,
             scheduledEpochDay = scheduledDay,
+            dueMinuteOfDay = dueMinuteOfDay,
             recurrenceStartEpochDay =
                 if (
                     type ==
