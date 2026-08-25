@@ -69,6 +69,8 @@ class TaskHistoryMapper {
 
     fun logs(
         logs: List<TaskLogEntity>,
+        tasks: List<TaskEntity> = emptyList(),
+        changingLogIds: Set<Long> = emptySet(),
     ): List<HistoryTaskDayUiState> {
         val correctedIds =
             logs.asSequence()
@@ -76,9 +78,40 @@ class TaskHistoryMapper {
                 .mapNotNull { it.reversesLogId }
                 .toSet()
 
-        return logs.asSequence()
-            .filter { it.delta == 1 }
+        val positiveLogs =
+            logs.filter { it.delta == 1 }
+
+        val activeLogs =
+            positiveLogs.filter {
+                it.id !in correctedIds
+            }
+
+        val tasksById =
+            tasks.associateBy { it.id }
+
+        return positiveLogs.asSequence()
             .map { log ->
+                val corrected =
+                    log.id in correctedIds
+
+                val task =
+                    log.taskId?.let { taskId ->
+                        tasksById[taskId]
+                    }
+
+                val hasActiveReplacement =
+                    corrected &&
+                            log.taskId != null &&
+                            activeLogs.any { active ->
+                                active.taskId == log.taskId &&
+                                        (
+                                                task?.scheduleType ==
+                                                        TaskScheduleTypeDb.ONE_TIME ||
+                                                        active.scheduledEpochDay ==
+                                                        log.scheduledEpochDay
+                                                )
+                            }
+
                 HistoryTaskLogUiState(
                     id = log.id,
                     taskId = log.taskId,
@@ -92,8 +125,12 @@ class TaskHistoryMapper {
                         ),
                     completedAtMillis =
                         log.completionTimestampMillis,
-                    isCorrected =
-                        log.id in correctedIds,
+                    isCorrected = corrected,
+                    canChangeCompletion =
+                        log.taskId != null &&
+                                !hasActiveReplacement,
+                    isChanging =
+                        log.id in changingLogIds,
                 )
             }
             .sortedWith(

@@ -92,7 +92,10 @@ class HistoryViewModel(
                             calculator = time.calculator,
                         ),
                     logDays =
-                        mapper.logs(logs),
+                        mapper.logs(
+                            logs = logs,
+                            tasks = tasks,
+                        ),
                     inspectedTaskId =
                         navigation.inspectedTaskId,
                     inspectedLogId =
