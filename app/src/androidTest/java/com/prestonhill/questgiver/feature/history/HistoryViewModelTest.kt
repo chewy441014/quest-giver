@@ -115,6 +115,42 @@ class HistoryViewModelTest {
         }
 
     @Test
+    fun archivedTaskAppearsDisabled(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            repository.archiveTask(
+                taskId = taskId,
+                timestampMillis =
+                    COMPLETION_TIME,
+            )
+
+            val state =
+                awaitState {
+                    it.tasks.allTasks.any { task ->
+                        task.id == taskId &&
+                                task.isArchived
+                    }
+                }
+
+            val task =
+                state.tasks.allTasks
+                    .single { it.id == taskId }
+
+            assertTrue(task.isArchived)
+
+            assertFalse(
+                task.canChangeCompletion
+            )
+
+            assertTrue(
+                repository.observeTasks()
+                    .first()
+                    .none { it.id == taskId }
+            )
+        }
+
+    @Test
     fun taskAppears(): Unit =
         runBlocking {
             val taskId = addTask()

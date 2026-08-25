@@ -268,7 +268,7 @@ class TaskViewModelTest {
     }
 
     @Test
-    fun cleanupPreservesLogs() = runBlocking {
+    fun cleanupArchivesTasks() = runBlocking {
         val expiredDate =
             currentDate.minusDays(7)
 
@@ -308,23 +308,34 @@ class TaskViewModelTest {
             }
         }
 
-        assertNull(
+        val expired =
             repository.getTask(expiredId)
+
+        assertNotNull(expired)
+        assertNotNull(
+            expired?.archivedAtEpochMillis
         )
 
         assertNotNull(
             repository.getTask(recentId)
         )
 
-        val logs =
-            repository.observeLogs().first {
-                it.size == 2
-            }
+        assertEquals(
+            listOf(expiredId),
+            repository.observeArchivedTasks()
+                .first()
+                .map { it.id },
+        )
 
-        assertNull(
+        val logs =
+            repository.observeLogs()
+                .first { it.size == 2 }
+
+        assertEquals(
+            expiredId,
             logs.single {
                 it.taskNameSnapshot == "Expired"
-            }.taskId
+            }.taskId,
         )
 
         assertEquals(

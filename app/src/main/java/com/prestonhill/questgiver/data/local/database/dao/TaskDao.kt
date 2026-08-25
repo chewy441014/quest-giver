@@ -13,11 +13,55 @@ import kotlinx.coroutines.flow.Flow
 interface TaskDao {
     @Query(
         """
-        SELECT * FROM tasks
-        ORDER BY displayOrder, createdAtEpochMillis, id
-        """
+    SELECT * FROM tasks
+    WHERE archivedAtEpochMillis IS NULL
+    ORDER BY displayOrder, createdAtEpochMillis, id
+    """
     )
     fun observeTasks(): Flow<List<TaskEntity>>
+
+    @Query(
+        """
+    SELECT * FROM tasks
+    ORDER BY displayOrder, createdAtEpochMillis, id
+    """
+    )
+    fun observeAllTasks(): Flow<List<TaskEntity>>
+
+    @Query(
+        """
+    SELECT * FROM tasks
+    WHERE archivedAtEpochMillis IS NOT NULL
+    ORDER BY archivedAtEpochMillis DESC, id DESC
+    """
+    )
+    fun observeArchivedTasks():
+            Flow<List<TaskEntity>>
+
+    @Query(
+        """
+    UPDATE tasks
+    SET archivedAtEpochMillis = :timestamp
+    WHERE id = :taskId
+      AND archivedAtEpochMillis IS NULL
+    """
+    )
+    suspend fun archiveTask(
+        taskId: Long,
+        timestamp: Long,
+    ): Int
+
+    @Query(
+        """
+    UPDATE tasks
+    SET archivedAtEpochMillis = NULL
+    WHERE id = :taskId
+      AND archivedAtEpochMillis IS NOT NULL
+    """
+    )
+    suspend fun restoreTask(
+        taskId: Long,
+    ): Int
 
     @Query(
         """
@@ -138,26 +182,29 @@ interface TaskDao {
 
     @Query(
         """
-        DELETE FROM tasks
-        WHERE scheduleType = 'ONE_TIME'
-          AND EXISTS (
-              SELECT 1
-              FROM task_logs AS positive
-              WHERE positive.taskId = tasks.id
-                AND positive.delta = 1
-                AND positive.completionTimestampMillis <
-                    :completedBefore
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM task_logs AS reversal
-                    WHERE reversal.reversesLogId =
-                        positive.id
-                )
-          )
-        """
+    UPDATE tasks
+    SET archivedAtEpochMillis = :archivedAt
+    WHERE archivedAtEpochMillis IS NULL
+      AND scheduleType = 'ONE_TIME'
+      AND EXISTS (
+          SELECT 1
+          FROM task_logs AS positive
+          WHERE positive.taskId = tasks.id
+            AND positive.delta = 1
+            AND positive.completionTimestampMillis <
+                :completedBefore
+            AND NOT EXISTS (
+                SELECT 1
+                FROM task_logs AS reversal
+                WHERE reversal.reversesLogId =
+                    positive.id
+            )
+      )
+    """
     )
-    suspend fun deleteExpiredTasks(
+    suspend fun archiveExpiredTasks(
         completedBefore: Long,
+        archivedAt: Long,
     ): Int
 
     @Query(

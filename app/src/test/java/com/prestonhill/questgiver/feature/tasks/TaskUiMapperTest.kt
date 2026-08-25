@@ -297,6 +297,7 @@ class TaskUiMapperTest {
         startDate: LocalDate? = null,
         weekdaysMask: Int? = null,
         displayOrder: Int = 0,
+        archivedAt: Long? = null,
     ): TaskEntity =
         TaskEntity(
             id = id,
@@ -309,6 +310,7 @@ class TaskUiMapperTest {
             recurrenceStartEpochDay =
                 startDate?.toEpochDay(),
             weekdaysMask = weekdaysMask,
+            archivedAtEpochMillis = archivedAt,
             createdAtEpochMillis =
                 timestamp(
                     date =

@@ -165,6 +165,27 @@ class TaskHistoryMapperTest {
     }
 
     @Test
+    fun archivedTaskCannotChange(): Unit {
+        val task =
+            task(
+                id = 1L,
+                type =
+                    TaskScheduleTypeDb.DAILY,
+                archivedAt = 2_000L,
+            )
+
+        val row =
+            mapTasks(listOf(task))
+                .single()
+
+        assertTrue(row.isArchived)
+
+        assertFalse(
+            row.canChangeCompletion
+        )
+    }
+
+    @Test
     fun activeLogPermissions(): Unit {
         val row =
             mapper.logs(
@@ -476,6 +497,7 @@ class TaskHistoryMapperTest {
         intervalDays: Int? = null,
         intervalBasis: TaskIntervalBasisDb? = null,
         dueMinuteOfDay: Int? = null,
+        archivedAt: Long? = null,
     ): TaskEntity =
         TaskEntity(
             id = id,
@@ -497,6 +519,7 @@ class TaskHistoryMapperTest {
             weekdaysMask = weekdaysMask,
             intervalDays = intervalDays,
             intervalBasis = intervalBasis,
+            archivedAtEpochMillis = archivedAt,
             createdAtEpochMillis = 1_000L,
         )
 

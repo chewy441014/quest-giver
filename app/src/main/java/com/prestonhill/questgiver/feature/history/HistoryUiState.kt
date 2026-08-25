@@ -37,6 +37,7 @@ data class HistoryTaskUiState(
     val isCompleted: Boolean = false,
     val canChangeCompletion: Boolean = false,
     val isChanging: Boolean = false,
+    val isArchived: Boolean = false,
 )
 
 data class HistoryTaskLogUiState(

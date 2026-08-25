@@ -15,6 +15,13 @@ class TaskRepository(
     fun observeTasks(): Flow<List<TaskEntity>> =
         dao.observeTasks()
 
+    fun observeAllTasks(): Flow<List<TaskEntity>> =
+        dao.observeAllTasks()
+
+    fun observeArchivedTasks():
+            Flow<List<TaskEntity>> =
+        dao.observeArchivedTasks()
+
     fun observeLogs(): Flow<List<TaskLogEntity>> =
         dao.observeLogs()
 
@@ -35,6 +42,7 @@ class TaskRepository(
             task.copy(
                 id = 0,
                 name = task.name.trim(),
+                archivedAtEpochMillis = null,
                 category =
                     task.category
                         ?.trim()
@@ -58,6 +66,8 @@ class TaskRepository(
                 task.copy(
                     id = existing.id,
                     name = task.name.trim(),
+                    archivedAtEpochMillis =
+                        existing.archivedAtEpochMillis,
                     category =
                         task.category
                             ?.trim()
@@ -102,6 +112,10 @@ class TaskRepository(
                 dao.getTask(taskId)
                     ?: return@withWriteTransaction TaskCompletionResult
                 .TASK_NOT_FOUND
+
+            if (task.archivedAtEpochMillis != null) {
+                return@withWriteTransaction TaskCompletionResult.TASK_ARCHIVED
+            }
 
             val activeLog =
                 if (
@@ -162,14 +176,16 @@ class TaskRepository(
                     ?: return@withWriteTransaction TaskCompletionResult
                 .LOG_NOT_FOUND
 
-            if (original.delta != 1) {
-                return@withWriteTransaction TaskCompletionResult
-                    .ALREADY_CORRECTED
-            }
+            val taskId =
+                original.taskId
+                    ?: return@withWriteTransaction TaskCompletionResult.TASK_DELETED
 
-            if (original.taskId == null) {
-                return@withWriteTransaction TaskCompletionResult
-                    .TASK_DELETED
+            val task =
+                dao.getTask(taskId)
+                    ?: return@withWriteTransaction TaskCompletionResult.TASK_DELETED
+
+            if (task.archivedAtEpochMillis != null) {
+                return@withWriteTransaction TaskCompletionResult.TASK_ARCHIVED
             }
 
             val reversible =
@@ -185,6 +201,31 @@ class TaskRepository(
 
             TaskCompletionResult.SUCCESS
         }
+
+    suspend fun archiveTask(
+        taskId: Long,
+        timestampMillis: Long =
+            System.currentTimeMillis(),
+    ): Boolean =
+        dao.archiveTask(
+            taskId = taskId,
+            timestamp = timestampMillis,
+        ) == 1
+
+    suspend fun restoreTask(
+        taskId: Long,
+    ): Boolean =
+        dao.restoreTask(taskId) == 1
+
+    suspend fun archiveExpiredTasks(
+        completedBefore: Long,
+        archivedAt: Long =
+            System.currentTimeMillis(),
+    ): Int =
+        dao.archiveExpiredTasks(
+            completedBefore = completedBefore,
+            archivedAt = archivedAt,
+        )
 
     suspend fun deleteTask(
         taskId: Long,
@@ -220,11 +261,6 @@ class TaskRepository(
                 positiveLogId
             ) > 0
         }
-
-    suspend fun deleteExpiredTasks(
-        completedBefore: Long,
-    ): Int =
-        dao.deleteExpiredTasks(completedBefore)
 
     private suspend fun insertCompletion(
         task: TaskEntity,
@@ -351,4 +387,5 @@ enum class TaskCompletionResult {
     ALREADY_COMPLETED,
     ALREADY_CORRECTED,
     ALREADY_INCOMPLETE,
+    TASK_ARCHIVED,
 }

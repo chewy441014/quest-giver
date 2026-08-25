@@ -17,7 +17,7 @@ import com.prestonhill.questgiver.data.local.database.dao.TaskDao
         TaskEntity::class,
         TaskLogEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(

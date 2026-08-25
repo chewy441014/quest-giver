@@ -80,7 +80,7 @@ class HistoryViewModel(
     val uiState =
         combine(
             nav,
-            repository.observeTasks(),
+            repository.observeAllTasks(),
             repository.observeLogs(),
             timeState,
             changingTaskIds,

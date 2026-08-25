@@ -292,7 +292,7 @@ class TaskViewModel(
 
             /*
              * At the beginning of app-day D + 7,
-             * delete one-time tasks completed during D.
+             * archive one-time tasks completed during D.
              */
             val completedBefore =
                 calculator
@@ -301,8 +301,9 @@ class TaskViewModel(
                     )
                     .startTimestampMillis
 
-            repository.deleteExpiredTasks(
-                completedBefore = completedBefore
+            repository.archiveExpiredTasks(
+                completedBefore = completedBefore,
+                archivedAt = timestamp,
             )
         } catch (error: Exception) {
             if (error is CancellationException) {

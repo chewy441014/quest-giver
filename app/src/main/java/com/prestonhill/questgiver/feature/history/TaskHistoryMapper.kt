@@ -18,6 +18,8 @@ class TaskHistoryMapper {
                 name = task.name,
                 category = task.category,
                 schedule = task.scheduleText(),
+                isArchived =
+                    task.archivedAtEpochMillis != null,
             )
         }
 
@@ -41,14 +43,12 @@ class TaskHistoryMapper {
                 )
 
             val canChange =
-                evaluation.completionEpochDay != null &&
+                task.archivedAtEpochMillis == null &&
+                        evaluation.completionEpochDay != null &&
                         (
-                                evaluation
-                                    .isScheduledToday ||
-                                        evaluation
-                                            .shouldShowToday ||
-                                        evaluation
-                                            .isCompleted
+                                evaluation.isScheduledToday ||
+                                        evaluation.shouldShowToday ||
+                                        evaluation.isCompleted
                                 )
 
             HistoryTaskUiState(
@@ -64,6 +64,8 @@ class TaskHistoryMapper {
                     canChange,
                 isChanging =
                     task.id in changingTaskIds,
+                isArchived =
+                    task.archivedAtEpochMillis != null,
             )
         }
 

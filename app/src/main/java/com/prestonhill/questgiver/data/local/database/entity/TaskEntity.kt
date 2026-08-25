@@ -35,6 +35,7 @@ data class TaskEntity(
     val remainsVisibleAfterDue: Boolean = false,
 
     val createdAtEpochMillis: Long,
+    val archivedAtEpochMillis: Long? = null,
 )
 
 enum class TaskScheduleTypeDb {

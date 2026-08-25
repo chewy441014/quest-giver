@@ -348,62 +348,6 @@ class TaskRepositoryTest {
     }
 
     @Test
-    fun cleanupDeletesOnlyExpiredOneTimeTasks() =
-        runBlocking {
-            val expiredId =
-                addTask(name = "Expired")
-
-            val recentId =
-                addTask(name = "Recent")
-
-            val dailyId =
-                addTask(
-                    name = "Daily",
-                    scheduleType =
-                        TaskScheduleTypeDb.DAILY,
-                )
-
-            repository.complete(
-                taskId = expiredId,
-                scheduledEpochDay = TEST_DAY,
-                completionTimestampMillis = 1_000L,
-            )
-
-            repository.complete(
-                taskId = recentId,
-                scheduledEpochDay = TEST_DAY,
-                completionTimestampMillis = 3_000L,
-            )
-
-            repository.complete(
-                taskId = dailyId,
-                scheduledEpochDay = TEST_DAY,
-                completionTimestampMillis = 1_000L,
-            )
-
-            val deleted =
-                repository.deleteExpiredTasks(
-                    completedBefore = 2_000L,
-                )
-
-            assertEquals(1, deleted)
-            assertNull(repository.getTask(expiredId))
-            assertNotNull(repository.getTask(recentId))
-            assertNotNull(repository.getTask(dailyId))
-
-            val logs =
-                repository.observeLogs().first()
-
-            assertEquals(3, logs.size)
-
-            assertNull(
-                logs.single {
-                    it.taskNameSnapshot == "Expired"
-                }.taskId
-            )
-        }
-
-    @Test
     fun setIncompleteAddsReversal(): Unit =
         runBlocking {
             val taskId = addTask()
@@ -663,6 +607,220 @@ class TaskRepositoryTest {
             assertEquals(
                 expectedId,
                 active?.id,
+            )
+        }
+
+    @Test
+    fun archiveKeepsHistory(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            repository.complete(
+                taskId = taskId,
+                scheduledEpochDay = TEST_DAY,
+                completionTimestampMillis =
+                    FIRST_COMPLETION,
+            )
+
+            assertTrue(
+                repository.archiveTask(
+                    taskId = taskId,
+                    timestampMillis = SECOND_COMPLETION,
+                )
+            )
+
+            assertTrue(
+                repository.observeTasks()
+                    .first()
+                    .none { it.id == taskId }
+            )
+
+            val archived =
+                repository.observeArchivedTasks()
+                    .first()
+                    .single()
+
+            assertEquals(taskId, archived.id)
+
+            assertEquals(
+                SECOND_COMPLETION,
+                archived.archivedAtEpochMillis,
+            )
+
+            assertTrue(
+                repository.observeAllTasks()
+                    .first()
+                    .any { it.id == taskId }
+            )
+
+            val log =
+                repository.observeLogs()
+                    .first()
+                    .single()
+
+            assertEquals(taskId, log.taskId)
+        }
+
+    @Test
+    fun archivedTaskCannotChange(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            repository.archiveTask(
+                taskId = taskId,
+                timestampMillis =
+                    SECOND_COMPLETION,
+            )
+
+            val result =
+                repository.complete(
+                    taskId = taskId,
+                    scheduledEpochDay = TEST_DAY,
+                    completionTimestampMillis =
+                        SECOND_COMPLETION + 1L,
+                )
+
+            assertEquals(
+                TaskCompletionResult.TASK_ARCHIVED,
+                result,
+            )
+
+            assertTrue(
+                repository.observeLogs()
+                    .first()
+                    .isEmpty()
+            )
+        }
+
+    @Test
+    fun restoreReactivatesTask(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            repository.archiveTask(
+                taskId = taskId,
+                timestampMillis =
+                    SECOND_COMPLETION,
+            )
+
+            assertTrue(
+                repository.restoreTask(taskId)
+            )
+
+            val task =
+                repository.observeTasks()
+                    .first()
+                    .single()
+
+            assertEquals(taskId, task.id)
+
+            assertNull(
+                task.archivedAtEpochMillis
+            )
+
+            assertTrue(
+                repository.observeArchivedTasks()
+                    .first()
+                    .isEmpty()
+            )
+
+            val result =
+                repository.complete(
+                    taskId = taskId,
+                    scheduledEpochDay = TEST_DAY,
+                    completionTimestampMillis =
+                        SECOND_COMPLETION + 1L,
+                )
+
+            assertEquals(
+                TaskCompletionResult.SUCCESS,
+                result,
+            )
+        }
+
+    @Test
+    fun cleanupArchivesExpiredTasks(): Unit =
+        runBlocking {
+            val expiredId =
+                addTask(name = "Expired")
+
+            val recentId =
+                addTask(name = "Recent")
+
+            val dailyId =
+                addTask(
+                    name = "Daily",
+                    scheduleType =
+                        TaskScheduleTypeDb.DAILY,
+                )
+
+            repository.complete(
+                taskId = expiredId,
+                scheduledEpochDay = TEST_DAY,
+                completionTimestampMillis =
+                    1_000L,
+            )
+
+            repository.complete(
+                taskId = recentId,
+                scheduledEpochDay = TEST_DAY,
+                completionTimestampMillis =
+                    3_000L,
+            )
+
+            repository.complete(
+                taskId = dailyId,
+                scheduledEpochDay = TEST_DAY,
+                completionTimestampMillis =
+                    1_000L,
+            )
+
+            val count =
+                repository.archiveExpiredTasks(
+                    completedBefore = 2_000L,
+                    archivedAt = 4_000L,
+                )
+
+            assertEquals(1, count)
+
+            val expired =
+                repository.getTask(expiredId)
+
+            assertNotNull(expired)
+
+            assertEquals(
+                4_000L,
+                expired?.archivedAtEpochMillis,
+            )
+
+            assertNull(
+                repository.getTask(recentId)
+                    ?.archivedAtEpochMillis
+            )
+
+            assertNull(
+                repository.getTask(dailyId)
+                    ?.archivedAtEpochMillis
+            )
+
+            assertTrue(
+                repository.observeTasks()
+                    .first()
+                    .none { it.id == expiredId }
+            )
+
+            assertEquals(
+                listOf(expiredId),
+                repository
+                    .observeArchivedTasks()
+                    .first()
+                    .map { it.id },
+            )
+
+            assertTrue(
+                repository.observeLogs()
+                    .first()
+                    .all { it.taskId != null }
             )
         }
     private fun testLog(

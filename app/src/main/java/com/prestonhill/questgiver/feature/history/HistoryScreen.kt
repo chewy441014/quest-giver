@@ -215,6 +215,9 @@ private fun HistoryTaskDialog(
 
                             Text("Task completed")
                         }
+                        if (task.isArchived) {
+                            Text("Archived")
+                        }
                     }
 
                 OutlinedButton(
