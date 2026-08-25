@@ -493,6 +493,156 @@ class HistoryViewModelTest {
             }
         }
 
+    @Test
+    fun archivedToggleChanges(): Unit =
+        runBlocking {
+            viewModel.onAction(
+                HistoryAction.ShowArchivedTasks(
+                    true
+                )
+            )
+
+            val archived =
+                awaitState {
+                    it.tasks.showArchivedTasks
+                }
+
+            assertTrue(
+                archived.tasks.showArchivedTasks
+            )
+
+            viewModel.onAction(
+                HistoryAction.ShowArchivedTasks(
+                    false
+                )
+            )
+
+            val active =
+                awaitState {
+                    !it.tasks.showArchivedTasks
+                }
+
+            assertFalse(
+                active.tasks.showArchivedTasks
+            )
+        }
+
+    @Test
+    fun archiveMovesTask(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            awaitState {
+                it.tasks.visibleTasks.any {
+                        task -> task.id == taskId
+                }
+            }
+
+            viewModel.onAction(
+                HistoryAction.InspectTask(taskId)
+            )
+
+            awaitState {
+                it.tasks.inspectedTaskId ==
+                        taskId
+            }
+
+            viewModel.onAction(
+                HistoryAction.ArchiveTask(
+                    taskId
+                )
+            )
+
+            awaitState {
+                it.tasks.inspectedTaskId == null &&
+                        it.tasks.allTasks.any { task ->
+                            task.id == taskId &&
+                                    task.isArchived
+                        } &&
+                        it.tasks.visibleTasks.none {
+                                task -> task.id == taskId
+                        }
+            }
+
+            viewModel.onAction(
+                HistoryAction.ShowArchivedTasks(
+                    true
+                )
+            )
+
+            val archived =
+                awaitState {
+                    it.tasks.visibleTasks.any {
+                            task -> task.id == taskId
+                    }
+                }
+
+            assertTrue(
+                archived.tasks.visibleTasks
+                    .single()
+                    .isArchived
+            )
+        }
+
+    @Test
+    fun restoreMovesTask(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            repository.archiveTask(
+                taskId = taskId,
+                timestampMillis =
+                    COMPLETION_TIME,
+            )
+
+            viewModel.onAction(
+                HistoryAction.ShowArchivedTasks(
+                    true
+                )
+            )
+
+            awaitState {
+                it.tasks.visibleTasks.any {
+                        task -> task.id == taskId
+                }
+            }
+
+            viewModel.onAction(
+                HistoryAction.RestoreTask(
+                    taskId
+                )
+            )
+
+            awaitState {
+                it.tasks.allTasks.any { task ->
+                    task.id == taskId &&
+                            !task.isArchived
+                } &&
+                        it.tasks.visibleTasks.none {
+                                task -> task.id == taskId
+                        }
+            }
+
+            viewModel.onAction(
+                HistoryAction.ShowArchivedTasks(
+                    false
+                )
+            )
+
+            val active =
+                awaitState {
+                    it.tasks.visibleTasks.any {
+                            task -> task.id == taskId
+                    }
+                }
+
+            assertFalse(
+                active.tasks.visibleTasks
+                    .single()
+                    .isArchived
+            )
+        }
+
     private suspend fun addTask(): Long =
         repository.createTask(
             TaskEntity(

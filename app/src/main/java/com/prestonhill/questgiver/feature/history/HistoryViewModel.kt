@@ -109,6 +109,8 @@ class HistoryViewModel(
                         navigation.inspectedTaskId,
                     operationError =
                         navigation.operationError,
+                    showArchivedTasks =
+                        navigation.showArchivedTasks,
                 ),
             )
         }
@@ -216,6 +218,13 @@ class HistoryViewModel(
 
     fun onAction(action: HistoryAction) {
         when (action) {
+            is HistoryAction.OpenTaskPage ->
+                nav.update {
+                    it.copy(
+                        taskPage = action.page,
+                        showArchivedTasks = false,
+                    ).clearOverlays()
+                }
             is HistoryAction.SetTaskCompletion ->
                 setTaskCompletion(
                     taskId = action.taskId,
@@ -233,21 +242,35 @@ class HistoryViewModel(
                     ).clearOverlays()
                 }
 
-            is HistoryAction.OpenTaskPage ->
-                nav.update {
-                    it.copy(
-                        taskPage = action.page
-                    ).clearOverlays()
-                }
-
             HistoryAction.BackToDashboard ->
                 nav.update {
                     it.copy(
-                        taskPage =
-                            TaskHistoryPage
-                                .DASHBOARD
+                        taskPage = TaskHistoryPage.DASHBOARD,
+                        showArchivedTasks = false
                     ).clearOverlays()
                 }
+
+            is HistoryAction.ShowArchivedTasks ->
+                nav.update {
+                    it.copy(
+                        showArchivedTasks =
+                            action.show,
+                        inspectedTaskId = null,
+                        operationError = null,
+                    )
+                }
+
+            is HistoryAction.ArchiveTask ->
+                setArchived(
+                    taskId = action.taskId,
+                    archived = true,
+                )
+
+            is HistoryAction.RestoreTask ->
+                setArchived(
+                    taskId = action.taskId,
+                    archived = false,
+                )
 
             is HistoryAction.InspectTask ->
                 nav.update {
@@ -270,6 +293,88 @@ class HistoryViewModel(
                         operationError = null
                     )
                 }
+        }
+    }
+
+    private fun setArchived(
+        taskId: Long,
+        archived: Boolean,
+    ) {
+        if (taskId in changingTaskIds.value) {
+            return
+        }
+
+        val inspectedTaskId =
+            nav.value.inspectedTaskId
+
+        nav.update {
+            it.copy(
+                operationError = null
+            )
+        }
+
+        changingTaskIds.value += taskId
+
+        viewModelScope.launch {
+            try {
+                val changed =
+                    if (archived) {
+                        repository.archiveTask(
+                            taskId = taskId,
+                            timestampMillis =
+                                clock.millis(),
+                        )
+                    } else {
+                        repository.restoreTask(
+                            taskId
+                        )
+                    }
+
+                if (!changed) {
+                    nav.update {
+                        it.copy(
+                            operationError =
+                                if (archived) {
+                                    "Task could not be archived."
+                                } else {
+                                    "Task could not be restored."
+                                }
+                        )
+                    }
+                } else {
+                    nav.update { current ->
+                        if (
+                            current.inspectedTaskId ==
+                            inspectedTaskId
+                        ) {
+                            current.copy(
+                                inspectedTaskId = null
+                            )
+                        } else {
+                            current
+                        }
+                    }
+                }
+            } catch (error: Exception) {
+                if (
+                    error is CancellationException
+                ) {
+                    throw error
+                }
+
+                nav.update {
+                    it.copy(
+                        operationError =
+                            if (archived) {
+                                "Task could not be archived."
+                            } else {
+                                "Task could not be restored."
+                            }
+                    )
+                }
+            } finally {
+                changingTaskIds.value -= taskId
+            }
         }
     }
 
@@ -370,6 +475,7 @@ private data class HistoryNavState(
         TaskHistoryPage.DASHBOARD,
     val inspectedTaskId: Long? = null,
     val operationError: String? = null,
+    val showArchivedTasks: Boolean = false,
 )
 
 private fun HistoryNavState.clearOverlays() =

@@ -24,4 +24,16 @@ sealed interface HistoryAction {
         val scheduledEpochDay: Long,
         val completed: Boolean,
     ) : HistoryAction
+
+    data class ShowArchivedTasks(
+        val show: Boolean,
+    ) : HistoryAction
+
+    data class ArchiveTask(
+        val taskId: Long,
+    ) : HistoryAction
+
+    data class RestoreTask(
+        val taskId: Long,
+    ) : HistoryAction
 }

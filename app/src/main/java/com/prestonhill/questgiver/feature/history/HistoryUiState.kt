@@ -90,7 +90,15 @@ data class TaskHistoryUiState(
             )
         ),
     val operationError: String? = null,
-)
+    val showArchivedTasks: Boolean = false,
+) {
+    val visibleTasks: List<HistoryTaskUiState>
+        get() =
+            allTasks.filter { task ->
+                task.isArchived ==
+                        showArchivedTasks
+            }
+}
 
 data class HistoryScreenUiState(
     val section: HistorySection =

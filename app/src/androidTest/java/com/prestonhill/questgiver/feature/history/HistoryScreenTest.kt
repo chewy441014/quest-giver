@@ -192,7 +192,7 @@ class HistoryScreenTest {
 
         composeRule
             .onNodeWithText(
-                "No tasks to show yet."
+                "No active tasks."
             )
             .assertIsDisplayed()
     }
@@ -399,12 +399,123 @@ class HistoryScreenTest {
             .assertIsNotEnabled()
     }
 
+    @Test
+    fun archivedToggleSendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = taskState(
+                inspectedTaskId = null
+            ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.ARCHIVED_TOGGLE
+            )
+            .assertIsOff()
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.ShowArchivedTasks(
+                    true
+                )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun activeTaskCanArchive(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = taskState(
+                inspectedTaskId = TASK_ID,
+            ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.archiveTask(
+                    TASK_ID
+                )
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.ArchiveTask(
+                    TASK_ID
+                )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun archivedTaskCanRestore(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = taskState(
+                inspectedTaskId = TASK_ID,
+                isArchived = true,
+                canChangeCompletion = false,
+            ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.restoreTask(
+                    TASK_ID
+                )
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.RestoreTask(
+                    TASK_ID
+                )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun archivedTaskHasNoCheckbox(): Unit {
+        showScreen(
+            state = taskState(
+                inspectedTaskId = TASK_ID,
+                isArchived = true,
+                canChangeCompletion = false,
+            )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.taskCompletion(
+                    TASK_ID
+                )
+            )
+            .assertDoesNotExist()
+    }
+
     private fun taskState(
         inspectedTaskId: Long?,
         completionEpochDay: Long? =
             TASK_DAY,
         isCompleted: Boolean = false,
-        canChangeCompletion: Boolean = true,
+        isArchived: Boolean = false,
+        canChangeCompletion: Boolean = !isArchived,
         isChanging: Boolean = false,
     ): HistoryScreenUiState =
         HistoryScreenUiState(
@@ -422,6 +533,7 @@ class HistoryScreenTest {
                         canChangeCompletion =
                             canChangeCompletion,
                         isChanging = isChanging,
+                        isArchived = isArchived,
                     )
                 ),
                 inspectedTaskId =

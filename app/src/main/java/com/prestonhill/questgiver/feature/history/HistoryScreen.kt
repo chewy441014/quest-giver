@@ -24,7 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.AlertDialog
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Checkbox
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -41,6 +42,15 @@ object HistoryTags {
 
     const val TASK_HISTORY_PLACEHOLDER =
         "history_task_history_placeholder"
+
+    const val ARCHIVED_TOGGLE =
+        "history_archived_toggle"
+
+    fun archiveTask(taskId: Long) =
+        "history_archive_task_$taskId"
+
+    fun restoreTask(taskId: Long) =
+        "history_restore_task_$taskId"
 
     fun taskCompletion(taskId: Long) =
         "history_task_completion_$taskId"
@@ -173,52 +183,51 @@ private fun HistoryTaskDialog(
 
                 Text(task.schedule)
 
-                task.completionEpochDay
-                    ?.let { completionDay ->
-                        Row(
-                            verticalAlignment =
-                                Alignment.CenterVertically,
-                        ) {
-                            Checkbox(
-                                modifier =
-                                    Modifier
-                                        .testTag(
-                                            HistoryTags
-                                                .taskCompletion(
-                                                    task.id
+                if (!task.isArchived) {
+                    task.completionEpochDay
+                        ?.let { completionDay ->
+                            Row(
+                                verticalAlignment =
+                                    Alignment.CenterVertically,
+                            ) {
+                                Checkbox(
+                                    modifier =
+                                        Modifier
+                                            .testTag(
+                                                HistoryTags
+                                                    .taskCompletion(
+                                                        task.id
+                                                    )
+                                            )
+                                            .semantics {
+                                                contentDescription =
+                                                    "Task completed"
+                                            },
+                                    checked =
+                                        task.isCompleted,
+                                    enabled =
+                                        task.canChangeCompletion &&
+                                                !task.isChanging,
+                                    onCheckedChange = {
+                                            completed ->
+                                        onAction(
+                                            HistoryAction
+                                                .SetTaskCompletion(
+                                                    taskId =
+                                                        task.id,
+                                                    scheduledEpochDay =
+                                                        completionDay,
+                                                    completed =
+                                                        completed,
                                                 )
                                         )
-                                        .semantics {
-                                            contentDescription =
-                                                "Task completed"
-                                        },
-                                checked =
-                                    task.isCompleted,
-                                enabled =
-                                    task.canChangeCompletion &&
-                                            !task.isChanging,
-                                onCheckedChange = {
-                                        completed ->
-                                    onAction(
-                                        HistoryAction
-                                            .SetTaskCompletion(
-                                                taskId =
-                                                    task.id,
-                                                scheduledEpochDay =
-                                                    completionDay,
-                                                completed =
-                                                    completed,
-                                            )
-                                    )
-                                },
-                            )
+                                    },
+                                )
 
-                            Text("Task completed")
+                                Text("Task completed")
+                            }
                         }
-                        if (task.isArchived) {
-                            Text("Archived")
-                        }
-                    }
+                }
 
                 OutlinedButton(
                     modifier =
@@ -230,6 +239,58 @@ private fun HistoryTaskDialog(
                     onClick = {},
                 ) {
                     Text("View task history")
+                }
+
+                if (task.isArchived) {
+                    OutlinedButton(
+                        modifier =
+                            Modifier.testTag(
+                                HistoryTags.restoreTask(
+                                    task.id
+                                )
+                            ),
+                        enabled = !task.isChanging,
+                        onClick = {
+                            onAction(
+                                HistoryAction.RestoreTask(
+                                    task.id
+                                )
+                            )
+                        },
+                    ) {
+                        Text(
+                            if (task.isChanging) {
+                                "Restoring..."
+                            } else {
+                                "Restore task"
+                            }
+                        )
+                    }
+                } else {
+                    OutlinedButton(
+                        modifier =
+                            Modifier.testTag(
+                                HistoryTags.archiveTask(
+                                    task.id
+                                )
+                            ),
+                        enabled = !task.isChanging,
+                        onClick = {
+                            onAction(
+                                HistoryAction.ArchiveTask(
+                                    task.id
+                                )
+                            )
+                        },
+                    ) {
+                        Text(
+                            if (task.isChanging) {
+                                "Archiving..."
+                            } else {
+                                "Archive task"
+                            }
+                        )
+                    }
                 }
             }
         },
@@ -268,7 +329,7 @@ private fun TaskHistory(
 
         TaskHistoryPage.ALL_TASKS ->
             AllTasksPage(
-                tasks = state.allTasks,
+                state = state,
                 onAction = onAction,
                 onBack = {
                     onAction(
@@ -397,7 +458,7 @@ private fun GraphPlaceholder(
 
 @Composable
 private fun AllTasksPage(
-    tasks: List<HistoryTaskUiState>,
+    state: TaskHistoryUiState,
     onBack: () -> Unit,
     onAction: (HistoryAction) -> Unit,
 ) {
@@ -407,12 +468,49 @@ private fun AllTasksPage(
             .testTag(HistoryTags.ALL_TASKS),
     ) {
         HistoryHeader(
-            title = "All tasks",
+            title =
+                if (state.showArchivedTasks) {
+                    "Archived tasks"
+                } else {
+                    "All tasks"
+                },
             onBack = onBack,
+            trailingContent = {
+                Switch(
+                    modifier =
+                        Modifier
+                            .testTag(
+                                HistoryTags
+                                    .ARCHIVED_TOGGLE
+                            )
+                            .semantics {
+                                contentDescription =
+                                    "Show archived tasks"
+                            },
+                    checked =
+                        state.showArchivedTasks,
+                    onCheckedChange = { show ->
+                        onAction(
+                            HistoryAction
+                                .ShowArchivedTasks(
+                                    show
+                                )
+                        )
+                    },
+                )
+            },
         )
 
+        val tasks = state.visibleTasks
+
         if (tasks.isEmpty()) {
-            EmptyList("No tasks to show yet.")
+            EmptyList(
+                if (state.showArchivedTasks) {
+                    "No archived tasks."
+                } else {
+                    "No active tasks."
+                }
+            )
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -474,6 +572,8 @@ private fun AllTasksPage(
 private fun HistoryHeader(
     title: String,
     onBack: () -> Unit,
+    trailingContent:
+    (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -495,6 +595,12 @@ private fun HistoryHeader(
                 MaterialTheme
                     .typography.headlineSmall,
         )
+
+        Spacer(
+            modifier = Modifier.weight(1f)
+        )
+
+        trailingContent?.invoke()
     }
 }
 
