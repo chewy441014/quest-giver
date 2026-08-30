@@ -814,7 +814,7 @@ class TaskRepositoryTest {
             assertTrue(
                 repository.observeLogs()
                     .first()
-                    .all { it.taskId != null }
+                    .any { it.taskId == expiredId }
             )
         }
     private fun testLog(

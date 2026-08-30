@@ -101,28 +101,21 @@ class TaskHistoryMapper {
                 )
                 .distinctBy { log ->
                     val task =
-                        log.taskId?.let {
-                            tasksById[it]
-                        }
+                        tasksById[log.taskId]
 
-                    when {
-                        log.taskId == null ->
-                            TaskLogSlot(
-                                logId = log.id,
-                            )
-
+                    if (
                         task?.scheduleType ==
-                                TaskScheduleTypeDb.ONE_TIME ->
-                            TaskLogSlot(
-                                taskId = log.taskId,
-                            )
-
-                        else ->
-                            TaskLogSlot(
-                                taskId = log.taskId,
-                                scheduledEpochDay =
-                                    log.scheduledEpochDay,
-                            )
+                        TaskScheduleTypeDb.ONE_TIME
+                    ) {
+                        TaskLogSlot(
+                            taskId = log.taskId,
+                        )
+                    } else {
+                        TaskLogSlot(
+                            taskId = log.taskId,
+                            scheduledEpochDay =
+                                log.scheduledEpochDay,
+                        )
                     }
                 }
 
@@ -142,9 +135,7 @@ class TaskHistoryMapper {
                     completedAtMillis =
                         log.completionTimestampMillis,
                     isTaskCompletionChanging =
-                        log.taskId != null &&
-                                log.taskId in
-                                changingTaskIds,
+                        log.taskId in changingTaskIds,
                 )
             }
             .sortedWith(
@@ -169,9 +160,8 @@ class TaskHistoryMapper {
 }
 
 private data class TaskLogSlot(
-    val taskId: Long? = null,
+    val taskId: Long,
     val scheduledEpochDay: Long? = null,
-    val logId: Long? = null,
 )
 
 private fun TaskEntity.scheduleText(): String =

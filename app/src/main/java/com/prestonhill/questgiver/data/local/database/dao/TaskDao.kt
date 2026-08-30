@@ -133,7 +133,6 @@ interface TaskDao {
         """
         SELECT positive.* FROM task_logs AS positive
         WHERE positive.id = :logId
-          AND positive.taskId IS NOT NULL
           AND positive.delta = 1
           AND NOT EXISTS (
               SELECT 1 FROM task_logs AS reversal

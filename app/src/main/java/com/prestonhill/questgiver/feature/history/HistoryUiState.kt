@@ -42,23 +42,14 @@ data class HistoryTaskUiState(
 
 data class HistoryTaskLogUiState(
     val id: Long,
-    val taskId: Long?,
+    val taskId: Long,
     val taskName: String,
     val category: String?,
     val date: LocalDate,
     val completedAtMillis: Long,
     val isTaskCompletionChanging: Boolean =
         false,
-) {
-    val canOpenTask: Boolean
-        get() = taskId != null
-
-    val canChangeTaskCompletion: Boolean
-        get() = taskId != null
-
-    val canDelete: Boolean
-        get() = taskId == null
-}
+)
 
 data class HistoryTaskDayUiState(
     val date: LocalDate,

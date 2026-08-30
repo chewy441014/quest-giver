@@ -413,10 +413,6 @@ class HistoryViewModelTest {
                     .flatMap { it.logs }
                     .single()
 
-            assertTrue(
-                active.canChangeTaskCompletion
-            )
-
             repository.correctCompletion(
                 logId = active.id,
                 recordedTimestampMillis =

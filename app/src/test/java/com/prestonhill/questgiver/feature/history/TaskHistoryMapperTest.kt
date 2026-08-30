@@ -186,7 +186,7 @@ class TaskHistoryMapperTest {
     }
 
     @Test
-    fun activeLogPermissions(): Unit {
+    fun activeLogMapsTaskIdentity(): Unit {
         val row =
             mapper.logs(
                 listOf(
@@ -201,9 +201,8 @@ class TaskHistoryMapperTest {
                 .logs
                 .single()
 
-        assertTrue(row.canOpenTask)
-        assertTrue(row.canChangeTaskCompletion)
-        assertFalse(row.canDelete)
+        assertEquals(7L, row.taskId)
+
         assertFalse(
             row.isTaskCompletionChanging
         )

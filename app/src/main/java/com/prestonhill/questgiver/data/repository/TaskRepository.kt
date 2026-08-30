@@ -30,11 +30,6 @@ class TaskRepository(
     ): TaskEntity? =
         dao.getTask(taskId)
 
-    suspend fun getLog(
-        logId: Long,
-    ): TaskLogEntity? =
-        dao.getLog(logId)
-
     suspend fun createTask(
         task: TaskEntity,
     ): Long {
@@ -176,13 +171,9 @@ class TaskRepository(
                     ?: return@withWriteTransaction TaskCompletionResult
                 .LOG_NOT_FOUND
 
-            val taskId =
-                original.taskId
-                    ?: return@withWriteTransaction TaskCompletionResult.TASK_DELETED
-
             val task =
-                dao.getTask(taskId)
-                    ?: return@withWriteTransaction TaskCompletionResult.TASK_DELETED
+                dao.getTask(original.taskId)
+                    ?: return@withWriteTransaction TaskCompletionResult.TASK_NOT_FOUND
 
             if (task.archivedAtEpochMillis != null) {
                 return@withWriteTransaction TaskCompletionResult.TASK_ARCHIVED
@@ -353,7 +344,6 @@ enum class TaskCompletionResult {
     SUCCESS,
     TASK_NOT_FOUND,
     LOG_NOT_FOUND,
-    TASK_DELETED,
     ALREADY_COMPLETED,
     ALREADY_CORRECTED,
     ALREADY_INCOMPLETE,
