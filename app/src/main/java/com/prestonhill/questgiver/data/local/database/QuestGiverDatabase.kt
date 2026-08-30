@@ -9,6 +9,10 @@ import com.prestonhill.questgiver.data.local.database.entity.HabitLogEntity
 import com.prestonhill.questgiver.data.local.database.entity.TaskEntity
 import com.prestonhill.questgiver.data.local.database.entity.TaskLogEntity
 import com.prestonhill.questgiver.data.local.database.dao.TaskDao
+import com.prestonhill.questgiver.data.local.database.dao.NutritionDao
+import com.prestonhill.questgiver.data.local.database.entity.FoodLogEntity
+import com.prestonhill.questgiver.data.local.database.entity.NutritionComponentEntity
+import com.prestonhill.questgiver.data.local.database.entity.NutritionItemEntity
 
 @Database(
     entities = [
@@ -16,17 +20,21 @@ import com.prestonhill.questgiver.data.local.database.dao.TaskDao
         HabitLogEntity::class,
         TaskEntity::class,
         TaskLogEntity::class,
+        NutritionItemEntity::class,
+        NutritionComponentEntity::class,
+        FoodLogEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(
-            from = 1,
-            to = 2,
+            from = 4,
+            to = 5,
         ),
     ],
 )
 abstract class QuestGiverDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
     abstract fun taskDao(): TaskDao
+    abstract fun nutritionDao(): NutritionDao
 }
