@@ -199,22 +199,427 @@ class NutritionRepository(
             val cleaned =
                 cleanDraft(draft)
 
-            dao.updateItem(
-                existing.copy(
-                    name = cleaned.name,
-                    nameKey =
-                        cleaned.nameKey,
+            val updated =
+                dao.updateItem(
+                    existing.copy(
+                        name = cleaned.name,
+                        nameKey =
+                            cleaned.nameKey,
+                        versionLabel =
+                            cleaned.versionLabel,
+                        caloriesPer100g =
+                            cleaned.caloriesPer100g,
+                        proteinPer100g =
+                            cleaned.proteinPer100g,
+                        updatedAtEpochMillis =
+                            timestampMillis,
+                    )
+                )
+
+            if (updated != 1) {
+                return@withWriteTransaction false
+            }
+
+            // Saving manual nutrition removes any
+            // previous component structure.
+            dao.deleteComponents(itemId)
+
+            recalculateAncestors(
+                changedItemId = itemId,
+                timestampMillis =
+                    timestampMillis,
+            )
+
+            true
+        }
+
+    suspend fun updateComposedItem(
+        itemId: Long,
+        draft: ComposedNutritionItemDraft,
+        timestampMillis: Long =
+            System.currentTimeMillis(),
+    ): Boolean =
+        database.withWriteTransaction {
+            val existing =
+                dao.getItem(itemId)
+                    ?: return@withWriteTransaction false
+
+            val identity =
+                cleanIdentity(
+                    name = draft.name,
                     versionLabel =
-                        cleaned.versionLabel,
+                        draft.versionLabel,
+                )
+
+            val existingComponentIds =
+                dao.getComponents(itemId)
+                    .map { it.componentItemId }
+                    .toSet()
+
+            val prepared =
+                prepareComponents(
+                    components =
+                        draft.components,
+                    allowedArchivedIds =
+                        existingComponentIds,
+                )
+
+            requireNoCycle(
+                parentItemId = itemId,
+                componentIds =
+                    prepared.components
+                        .map { it.itemId },
+            )
+
+            val updated =
+                dao.updateItem(
+                    existing.copy(
+                        name = identity.name,
+                        nameKey =
+                            identity.nameKey,
+                        versionLabel =
+                            identity.versionLabel,
+                        caloriesPer100g =
+                            prepared
+                                .caloriesPer100g,
+                        proteinPer100g =
+                            prepared
+                                .proteinPer100g,
+                        updatedAtEpochMillis =
+                            timestampMillis,
+                    )
+                )
+
+            if (updated != 1) {
+                return@withWriteTransaction false
+            }
+
+            replaceComponents(
+                parentItemId = itemId,
+                components =
+                    prepared.components,
+            )
+
+            recalculateAncestors(
+                changedItemId = itemId,
+                timestampMillis =
+                    timestampMillis,
+            )
+
+            true
+        }
+
+    suspend fun saveComposedAsVersion(
+        itemId: Long,
+        draft: ComposedNutritionItemDraft,
+        timestampMillis: Long =
+            System.currentTimeMillis(),
+    ): Long? =
+        database.withWriteTransaction {
+            dao.getItem(itemId)
+                ?: return@withWriteTransaction null
+
+            val identity =
+                cleanIdentity(
+                    name = draft.name,
+                    versionLabel =
+                        draft.versionLabel,
+                )
+
+            // Archived components already used by
+            // the source version may be retained.
+            val existingComponentIds =
+                dao.getComponents(itemId)
+                    .map { it.componentItemId }
+                    .toSet()
+
+            val prepared =
+                prepareComponents(
+                    components =
+                        draft.components,
+                    allowedArchivedIds =
+                        existingComponentIds,
+                )
+
+            val version =
+                dao.getMaxVersion(
+                    identity.nameKey
+                ) + 1
+
+            val newItemId =
+                dao.insertItem(
+                    NutritionItemEntity(
+                        name = identity.name,
+                        nameKey =
+                            identity.nameKey,
+                        version = version,
+                        versionLabel =
+                            identity.versionLabel,
+                        caloriesPer100g =
+                            prepared
+                                .caloriesPer100g,
+                        proteinPer100g =
+                            prepared
+                                .proteinPer100g,
+                        createdAtEpochMillis =
+                            timestampMillis,
+                        updatedAtEpochMillis =
+                            timestampMillis,
+                    )
+                )
+
+            insertComponents(
+                parentItemId = newItemId,
+                components =
+                    prepared.components,
+            )
+
+            newItemId
+        }
+
+    private suspend fun prepareComponents(
+        components:
+        List<NutritionComponentDraft>,
+        allowedArchivedIds: Set<Long>,
+    ): PreparedComponents {
+        val cleaned =
+            cleanComponents(components)
+
+        val itemsById =
+            dao.getItemsByIds(
+                cleaned.map {
+                    it.itemId
+                }
+            )
+                .associateBy { it.id }
+
+        require(
+            itemsById.size ==
+                    cleaned.size
+        )
+
+        require(
+            itemsById.values.all { item ->
+                item.archivedAtEpochMillis ==
+                        null ||
+                        item.id in allowedArchivedIds
+            }
+        )
+
+        val caloriesPer100g =
+            cleaned.sumOf { component ->
+                requireNotNull(
+                    itemsById[component.itemId]
+                ).caloriesPer100g *
+                        component.gramsPer100g /
+                        100.0
+            }
+
+        val proteinPer100g =
+            cleaned.sumOf { component ->
+                requireNotNull(
+                    itemsById[component.itemId]
+                ).proteinPer100g *
+                        component.gramsPer100g /
+                        100.0
+            }
+
+        validateNutrition(
+            calories = caloriesPer100g,
+            proteinGrams =
+                proteinPer100g,
+        )
+
+        return PreparedComponents(
+            components = cleaned,
+            caloriesPer100g =
+                caloriesPer100g,
+            proteinPer100g =
+                proteinPer100g,
+        )
+    }
+
+    private suspend fun replaceComponents(
+        parentItemId: Long,
+        components:
+        List<NutritionComponentDraft>,
+    ) {
+        dao.deleteComponents(parentItemId)
+
+        insertComponents(
+            parentItemId = parentItemId,
+            components = components,
+        )
+    }
+
+    private suspend fun insertComponents(
+        parentItemId: Long,
+        components:
+        List<NutritionComponentDraft>,
+    ) {
+        dao.insertComponents(
+            components.mapIndexed {
+                    index,
+                    component,
+                ->
+                NutritionComponentEntity(
+                    parentItemId =
+                        parentItemId,
+                    componentItemId =
+                        component.itemId,
+                    gramsPer100g =
+                        component.gramsPer100g,
+                    displayOrder = index,
+                )
+            }
+        )
+    }
+
+    private suspend fun requireNoCycle(
+        parentItemId: Long,
+        componentIds: List<Long>,
+    ) {
+        val relationships =
+            dao.getAllComponents()
+
+        val childrenByParent =
+            relationships.groupBy(
+                keySelector = {
+                    it.parentItemId
+                },
+                valueTransform = {
+                    it.componentItemId
+                },
+            )
+
+        componentIds.forEach { componentId ->
+            require(
+                !reachesItem(
+                    currentItemId =
+                        componentId,
+                    targetItemId =
+                        parentItemId,
+                    childrenByParent =
+                        childrenByParent,
+                    visited = mutableSetOf(),
+                )
+            )
+        }
+    }
+
+    private fun reachesItem(
+        currentItemId: Long,
+        targetItemId: Long,
+        childrenByParent:
+        Map<Long, List<Long>>,
+        visited: MutableSet<Long>,
+    ): Boolean {
+        if (currentItemId == targetItemId) {
+            return true
+        }
+
+        if (!visited.add(currentItemId)) {
+            return false
+        }
+
+        return childrenByParent[
+            currentItemId
+        ]
+            .orEmpty()
+            .any { childId ->
+                reachesItem(
+                    currentItemId = childId,
+                    targetItemId =
+                        targetItemId,
+                    childrenByParent =
+                        childrenByParent,
+                    visited = visited,
+                )
+            }
+    }
+
+    private suspend fun recalculateAncestors(
+        changedItemId: Long,
+        timestampMillis: Long,
+        path: Set<Long> = emptySet(),
+    ) {
+        require(changedItemId !in path)
+
+        val nextPath =
+            path + changedItemId
+
+        dao.getParentIds(changedItemId)
+            .forEach { parentItemId ->
+                require(parentItemId !in nextPath)
+
+                recalculateComposedItem(
+                    itemId = parentItemId,
+                    timestampMillis =
+                        timestampMillis,
+                )
+
+                recalculateAncestors(
+                    changedItemId =
+                        parentItemId,
+                    timestampMillis =
+                        timestampMillis,
+                    path = nextPath,
+                )
+            }
+    }
+
+    private suspend fun recalculateComposedItem(
+        itemId: Long,
+        timestampMillis: Long,
+    ) {
+        val item =
+            dao.getItem(itemId)
+                ?: return
+
+        val existingComponents =
+            dao.getComponents(itemId)
+
+        if (existingComponents.isEmpty()) {
+            return
+        }
+
+        val componentDrafts =
+            existingComponents.map {
+                NutritionComponentDraft(
+                    itemId =
+                        it.componentItemId,
+                    gramsPer100g =
+                        it.gramsPer100g,
+                )
+            }
+
+        val prepared =
+            prepareComponents(
+                components =
+                    componentDrafts,
+                // Existing references remain valid
+                // even if components are archived.
+                allowedArchivedIds =
+                    componentDrafts
+                        .map { it.itemId }
+                        .toSet(),
+            )
+
+        require(
+            dao.updateItem(
+                item.copy(
                     caloriesPer100g =
-                        cleaned.caloriesPer100g,
+                        prepared
+                            .caloriesPer100g,
                     proteinPer100g =
-                        cleaned.proteinPer100g,
+                        prepared
+                            .proteinPer100g,
                     updatedAtEpochMillis =
                         timestampMillis,
                 )
             ) == 1
-        }
+        )
+    }
 
     suspend fun saveAsVersion(
         itemId: Long,
@@ -424,6 +829,13 @@ class NutritionRepository(
                     proteinGrams >= 0.0
         )
     }
+
+    private data class PreparedComponents(
+        val components:
+        List<NutritionComponentDraft>,
+        val caloriesPer100g: Double,
+        val proteinPer100g: Double,
+    )
 
     private data class CleanNutritionIdentity(
         val name: String,

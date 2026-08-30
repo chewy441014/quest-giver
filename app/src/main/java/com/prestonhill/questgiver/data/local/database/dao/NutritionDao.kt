@@ -258,4 +258,13 @@ interface NutritionDao {
     suspend fun getItemsByIds(
         itemIds: List<Long>,
     ): List<NutritionItemEntity>
+
+    @Query(
+        """
+    SELECT * FROM nutrition_components
+    ORDER BY parentItemId, displayOrder
+    """
+    )
+    suspend fun getAllComponents():
+            List<NutritionComponentEntity>
 }
