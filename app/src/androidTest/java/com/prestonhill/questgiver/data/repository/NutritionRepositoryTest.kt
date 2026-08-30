@@ -443,6 +443,487 @@ class NutritionRepositoryTest {
         }
 
     @Test
+    fun foodLogCanBeCreatedUpdatedAndDeleted(): Unit =
+        runBlocking {
+            val firstItemId =
+                repository.createItem(
+                    itemDraft(
+                        name = "Oats"
+                    )
+                )
+
+            val secondItemId =
+                repository.createItem(
+                    itemDraft(
+                        name = "Yogurt"
+                    )
+                )
+
+            val logId =
+                requireNotNull(
+                    repository.createLog(
+                        draft =
+                            FoodLogDraft(
+                                itemId = firstItemId,
+                                consumedAtEpochMillis =
+                                    FIRST_TIME,
+                                weightGrams = 50.0,
+                            ),
+                        timestampMillis =
+                            FIRST_TIME,
+                    )
+                )
+
+            val created =
+                requireNotNull(
+                    repository.getLog(logId)
+                )
+
+            assertEquals(firstItemId, created.itemId)
+            assertEquals(
+                50.0,
+                created.weightGrams,
+                TOLERANCE,
+            )
+            assertEquals(
+                FIRST_TIME,
+                created.createdAtEpochMillis,
+            )
+
+            assertTrue(
+                repository.updateLog(
+                    logId = logId,
+                    draft =
+                        FoodLogDraft(
+                            itemId = secondItemId,
+                            consumedAtEpochMillis =
+                                SECOND_TIME,
+                            weightGrams = 75.0,
+                        ),
+                    timestampMillis =
+                        THIRD_TIME,
+                )
+            )
+
+            val updated =
+                requireNotNull(
+                    repository.getLog(logId)
+                )
+
+            assertEquals(secondItemId, updated.itemId)
+            assertEquals(
+                SECOND_TIME,
+                updated.consumedAtEpochMillis,
+            )
+            assertEquals(
+                75.0,
+                updated.weightGrams,
+                TOLERANCE,
+            )
+            assertEquals(
+                FIRST_TIME,
+                updated.createdAtEpochMillis,
+            )
+            assertEquals(
+                THIRD_TIME,
+                updated.updatedAtEpochMillis,
+            )
+
+            assertTrue(
+                repository.deleteLog(logId)
+            )
+
+            assertNull(
+                repository.getLog(logId)
+            )
+
+            assertFalse(
+                repository.deleteLog(logId)
+            )
+        }
+
+    @Test
+    fun newLogRejectsMissingOrArchivedItem(): Unit =
+        runBlocking {
+            assertNull(
+                repository.createLog(
+                    FoodLogDraft(
+                        itemId = Long.MAX_VALUE,
+                        consumedAtEpochMillis =
+                            FIRST_TIME,
+                        weightGrams = 100.0,
+                    )
+                )
+            )
+
+            val componentId =
+                repository.createItem(
+                    itemDraft(
+                        name = "Chicken"
+                    )
+                )
+
+            repository.createComposedItem(
+                composedDraft(
+                    "Chicken bowl",
+                    componentId to 100.0,
+                )
+            )
+
+            assertEquals(
+                NutritionItemRemovalResult.ARCHIVED,
+                repository.removeItem(
+                    itemId = componentId,
+                    timestampMillis =
+                        SECOND_TIME,
+                ),
+            )
+
+            assertNull(
+                repository.createLog(
+                    FoodLogDraft(
+                        itemId = componentId,
+                        consumedAtEpochMillis =
+                            THIRD_TIME,
+                        weightGrams = 100.0,
+                    )
+                )
+            )
+        }
+
+    @Test
+    fun existingArchivedItemLogCanBeEdited(): Unit =
+        runBlocking {
+            val firstItemId =
+                repository.createItem(
+                    itemDraft(
+                        name = "First item"
+                    )
+                )
+
+            repository.createComposedItem(
+                composedDraft(
+                    "First parent",
+                    firstItemId to 100.0,
+                )
+            )
+
+            val logId =
+                requireNotNull(
+                    repository.createLog(
+                        FoodLogDraft(
+                            itemId = firstItemId,
+                            consumedAtEpochMillis =
+                                FIRST_TIME,
+                            weightGrams = 100.0,
+                        )
+                    )
+                )
+
+            assertEquals(
+                NutritionItemRemovalResult.ARCHIVED,
+                repository.removeItem(
+                    itemId = firstItemId,
+                    timestampMillis =
+                        SECOND_TIME,
+                ),
+            )
+
+            assertTrue(
+                repository.updateLog(
+                    logId = logId,
+                    draft =
+                        FoodLogDraft(
+                            itemId = firstItemId,
+                            consumedAtEpochMillis =
+                                SECOND_TIME,
+                            weightGrams = 125.0,
+                        ),
+                    timestampMillis =
+                        THIRD_TIME,
+                )
+            )
+
+            val updated =
+                requireNotNull(
+                    repository.getLog(logId)
+                )
+
+            assertEquals(firstItemId, updated.itemId)
+            assertEquals(
+                125.0,
+                updated.weightGrams,
+                TOLERANCE,
+            )
+        }
+
+    @Test
+    fun logCannotSwitchToDifferentArchivedItem(): Unit =
+        runBlocking {
+            val activeItemId =
+                repository.createItem(
+                    itemDraft(
+                        name = "Active item"
+                    )
+                )
+
+            val archivedItemId =
+                repository.createItem(
+                    itemDraft(
+                        name = "Archived item"
+                    )
+                )
+
+            repository.createComposedItem(
+                composedDraft(
+                    "Archived parent",
+                    archivedItemId to 100.0,
+                )
+            )
+
+            val logId =
+                requireNotNull(
+                    repository.createLog(
+                        FoodLogDraft(
+                            itemId = activeItemId,
+                            consumedAtEpochMillis =
+                                FIRST_TIME,
+                            weightGrams = 100.0,
+                        )
+                    )
+                )
+
+            repository.removeItem(
+                itemId = archivedItemId,
+                timestampMillis =
+                    SECOND_TIME,
+            )
+
+            assertFalse(
+                repository.updateLog(
+                    logId = logId,
+                    draft =
+                        FoodLogDraft(
+                            itemId = archivedItemId,
+                            consumedAtEpochMillis =
+                                SECOND_TIME,
+                            weightGrams = 50.0,
+                        ),
+                    timestampMillis =
+                        THIRD_TIME,
+                )
+            )
+
+            val unchanged =
+                requireNotNull(
+                    repository.getLog(logId)
+                )
+
+            assertEquals(
+                activeItemId,
+                unchanged.itemId,
+            )
+            assertEquals(
+                100.0,
+                unchanged.weightGrams,
+                TOLERANCE,
+            )
+        }
+
+    @Test
+    fun nutritionSummaryFiltersOrdersAndCalculates(): Unit =
+        runBlocking {
+            val oatsId =
+                repository.createItem(
+                    itemDraft(
+                        name = "Oats",
+                        calories = 400.0,
+                        protein = 10.0,
+                    )
+                )
+
+            val chickenId =
+                repository.createItem(
+                    itemDraft(
+                        name = "Chicken",
+                        calories = 200.0,
+                        protein = 30.0,
+                    )
+                )
+
+            repository.createLog(
+                FoodLogDraft(
+                    itemId = chickenId,
+                    consumedAtEpochMillis =
+                        1_600L,
+                    weightGrams = 150.0,
+                )
+            )
+
+            repository.createLog(
+                FoodLogDraft(
+                    itemId = oatsId,
+                    consumedAtEpochMillis =
+                        1_200L,
+                    weightGrams = 50.0,
+                )
+            )
+
+            repository.createLog(
+                FoodLogDraft(
+                    itemId = oatsId,
+                    consumedAtEpochMillis =
+                        999L,
+                    weightGrams = 100.0,
+                )
+            )
+
+            repository.createLog(
+                FoodLogDraft(
+                    itemId = oatsId,
+                    consumedAtEpochMillis =
+                        2_000L,
+                    weightGrams = 100.0,
+                )
+            )
+
+            val summary =
+                repository.observeNutritionBetween(
+                    startTimestampMillis =
+                        1_000L,
+                    endTimestampMillis =
+                        2_000L,
+                )
+                    .first()
+
+            assertEquals(
+                listOf(1_200L, 1_600L),
+                summary.entries.map {
+                    it.log.consumedAtEpochMillis
+                },
+            )
+
+            assertEquals(
+                500.0,
+                summary.totalCalories,
+                TOLERANCE,
+            )
+
+            assertEquals(
+                50.0,
+                summary.totalProteinGrams,
+                TOLERANCE,
+            )
+        }
+
+    @Test
+    fun itemUpdateRecalculatesExistingLogNutrition(): Unit =
+        runBlocking {
+            val itemId =
+                repository.createItem(
+                    itemDraft(
+                        name = "Milk",
+                        calories = 100.0,
+                        protein = 10.0,
+                    )
+                )
+
+            repository.createLog(
+                FoodLogDraft(
+                    itemId = itemId,
+                    consumedAtEpochMillis =
+                        FIRST_TIME,
+                    weightGrams = 250.0,
+                )
+            )
+
+            val summaries =
+                repository.observeNutritionBetween(
+                    startTimestampMillis = 0L,
+                    endTimestampMillis =
+                        SECOND_TIME,
+                )
+
+            val original = summaries.first()
+
+            assertEquals(
+                250.0,
+                original.totalCalories,
+                TOLERANCE,
+            )
+            assertEquals(
+                25.0,
+                original.totalProteinGrams,
+                TOLERANCE,
+            )
+
+            assertTrue(
+                repository.updateItem(
+                    itemId = itemId,
+                    draft =
+                        itemDraft(
+                            name = "Milk",
+                            calories = 200.0,
+                            protein = 20.0,
+                        ),
+                    timestampMillis =
+                        THIRD_TIME,
+                )
+            )
+
+            val updated = summaries.first()
+
+            assertEquals(
+                500.0,
+                updated.totalCalories,
+                TOLERANCE,
+            )
+            assertEquals(
+                50.0,
+                updated.totalProteinGrams,
+                TOLERANCE,
+            )
+        }
+
+    @Test
+    fun invalidFoodLogInputIsRejected(): Unit =
+        runBlocking {
+            val itemId =
+                repository.createItem(
+                    itemDraft()
+                )
+
+            listOf(
+                0.0,
+                -1.0,
+                Double.NaN,
+                Double.POSITIVE_INFINITY,
+            ).forEach { weight ->
+                val failure =
+                    runCatching {
+                        repository.createLog(
+                            FoodLogDraft(
+                                itemId = itemId,
+                                consumedAtEpochMillis =
+                                    FIRST_TIME,
+                                weightGrams = weight,
+                            )
+                        )
+                    }
+
+                assertNotNull(
+                    failure.exceptionOrNull()
+                )
+            }
+
+            assertTrue(
+                dao.observeAllLogs()
+                    .first()
+                    .isEmpty()
+            )
+        }
+
+    @Test
     fun missingItemLifecycleDoesNothing(): Unit =
         runBlocking {
             assertNull(

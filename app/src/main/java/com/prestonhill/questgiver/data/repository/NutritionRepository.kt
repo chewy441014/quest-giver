@@ -4,6 +4,8 @@ import androidx.room3.withWriteTransaction
 import com.prestonhill.questgiver.data.local.database.QuestGiverDatabase
 import com.prestonhill.questgiver.data.local.database.entity.NutritionItemEntity
 import com.prestonhill.questgiver.data.local.database.entity.NutritionComponentEntity
+import com.prestonhill.questgiver.data.local.database.entity.FoodLogEntity
+import kotlinx.coroutines.flow.combine
 import kotlin.math.abs
 import java.util.Locale
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +27,67 @@ class NutritionRepository(
     fun observeArchivedItems():
             Flow<List<NutritionItemEntity>> =
         dao.observeArchivedItems()
+
+    fun observeNutritionBetween(
+        startTimestampMillis: Long,
+        endTimestampMillis: Long,
+    ): Flow<NutritionDaySummary> {
+        require(
+            startTimestampMillis <
+                    endTimestampMillis
+        )
+
+        return combine(
+            dao.observeLogsBetween(
+                startTimestampMillis =
+                    startTimestampMillis,
+                endTimestampMillis =
+                    endTimestampMillis,
+            ),
+            dao.observeAllItems(),
+        ) { logs, items ->
+            val itemsById =
+                items.associateBy { it.id }
+
+            val entries =
+                logs.mapNotNull { log ->
+                    val item =
+                        itemsById[log.itemId]
+                            ?: return@mapNotNull null
+
+                    val multiplier =
+                        log.weightGrams / 100.0
+
+                    NutritionLogEntry(
+                        log = log,
+                        item = item,
+                        calories =
+                            item.caloriesPer100g *
+                                    multiplier,
+                        proteinGrams =
+                            item.proteinPer100g *
+                                    multiplier,
+                    )
+                }
+
+            NutritionDaySummary(
+                entries = entries,
+                totalCalories =
+                    entries.sumOf {
+                        it.calories
+                    },
+                totalProteinGrams =
+                    entries.sumOf {
+                        it.proteinGrams
+                    },
+            )
+        }
+    }
+
+    suspend fun getLog(
+        logId: Long,
+    ): FoodLogEntity? =
+        dao.getLog(logId)
 
     suspend fun getItem(
         itemId: Long,
@@ -447,6 +510,98 @@ class NutritionRepository(
 
             newItemId
         }
+
+    suspend fun createLog(
+        draft: FoodLogDraft,
+        timestampMillis: Long =
+            System.currentTimeMillis(),
+    ): Long? {
+        validateLogDraft(draft)
+
+        return database.withWriteTransaction {
+            val item =
+                dao.getItem(draft.itemId)
+                    ?: return@withWriteTransaction null
+
+            if (
+                item.archivedAtEpochMillis !=
+                null
+            ) {
+                return@withWriteTransaction null
+            }
+
+            dao.insertLog(
+                FoodLogEntity(
+                    itemId = draft.itemId,
+                    consumedAtEpochMillis =
+                        draft.consumedAtEpochMillis,
+                    weightGrams =
+                        draft.weightGrams,
+                    createdAtEpochMillis =
+                        timestampMillis,
+                    updatedAtEpochMillis =
+                        timestampMillis,
+                )
+            )
+        }
+    }
+
+    suspend fun updateLog(
+        logId: Long,
+        draft: FoodLogDraft,
+        timestampMillis: Long =
+            System.currentTimeMillis(),
+    ): Boolean {
+        validateLogDraft(draft)
+
+        return database.withWriteTransaction {
+            val existing =
+                dao.getLog(logId)
+                    ?: return@withWriteTransaction false
+
+            val selectedItem =
+                dao.getItem(draft.itemId)
+                    ?: return@withWriteTransaction false
+
+            val canUseSelectedItem =
+                selectedItem
+                    .archivedAtEpochMillis == null ||
+                        selectedItem.id ==
+                        existing.itemId
+
+            if (!canUseSelectedItem) {
+                return@withWriteTransaction false
+            }
+
+            dao.updateLog(
+                existing.copy(
+                    itemId = draft.itemId,
+                    consumedAtEpochMillis =
+                        draft.consumedAtEpochMillis,
+                    weightGrams =
+                        draft.weightGrams,
+                    updatedAtEpochMillis =
+                        timestampMillis,
+                )
+            ) == 1
+        }
+    }
+
+    suspend fun deleteLog(
+        logId: Long,
+    ): Boolean =
+        dao.deleteLog(logId) == 1
+
+    private fun validateLogDraft(
+        draft: FoodLogDraft,
+    ) {
+        require(draft.itemId > 0L)
+
+        require(
+            draft.weightGrams.isFinite() &&
+                    draft.weightGrams > 0.0
+        )
+    }
 
     private suspend fun prepareComponents(
         components:
