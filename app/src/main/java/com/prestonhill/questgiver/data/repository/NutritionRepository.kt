@@ -41,6 +41,77 @@ class NutritionRepository(
         )
     }
 
+    suspend fun getRemovalMode(
+        itemId: Long,
+    ): NutritionItemRemovalMode? =
+        database.withWriteTransaction {
+            dao.getItem(itemId)
+                ?: return@withWriteTransaction null
+
+            if (
+                dao.countIncomingReferences(
+                    itemId
+                ) > 0
+            ) {
+                NutritionItemRemovalMode.ARCHIVE
+            } else {
+                NutritionItemRemovalMode.DELETE
+            }
+        }
+
+    suspend fun removeItem(
+        itemId: Long,
+        timestampMillis: Long =
+            System.currentTimeMillis(),
+    ): NutritionItemRemovalResult =
+        database.withWriteTransaction {
+            val item =
+                dao.getItem(itemId) ?: return@withWriteTransaction NutritionItemRemovalResult.ITEM_NOT_FOUND
+
+            val isReferenced =
+                dao.countIncomingReferences(
+                    itemId
+                ) > 0
+
+            if (isReferenced) {
+                if (
+                    item.archivedAtEpochMillis !=
+                    null
+                ) {
+                    return@withWriteTransaction NutritionItemRemovalResult .ALREADY_ARCHIVED
+                }
+
+                check(
+                    dao.archiveReferencedItem(
+                        itemId = itemId,
+                        timestampMillis =
+                            timestampMillis,
+                    ) == 1
+                )
+
+                NutritionItemRemovalResult.ARCHIVED
+            } else {
+                check(
+                    dao.deleteUnreferencedItem(
+                        itemId
+                    ) == 1
+                )
+
+                NutritionItemRemovalResult.DELETED
+            }
+        }
+
+    suspend fun restoreItem(
+        itemId: Long,
+        timestampMillis: Long =
+            System.currentTimeMillis(),
+    ): Boolean =
+        dao.restoreItem(
+            itemId = itemId,
+            timestampMillis =
+                timestampMillis,
+        ) == 1
+
     suspend fun createItem(
         draft: NutritionItemDraft,
         timestampMillis: Long =
@@ -861,4 +932,16 @@ class NutritionRepository(
         const val COMPONENT_WEIGHT_TOLERANCE =
             0.001
     }
+}
+
+enum class NutritionItemRemovalMode {
+    ARCHIVE,
+    DELETE,
+}
+
+enum class NutritionItemRemovalResult {
+    ARCHIVED,
+    DELETED,
+    ITEM_NOT_FOUND,
+    ALREADY_ARCHIVED,
 }

@@ -7,6 +7,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.prestonhill.questgiver.data.local.database.QuestGiverDatabase
 import com.prestonhill.questgiver.data.local.database.dao.NutritionDao
+import com.prestonhill.questgiver.data.local.database.entity.FoodLogEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -128,6 +129,340 @@ class NutritionRepositoryTest {
                 components.map {
                     it.displayOrder
                 },
+            )
+        }
+
+    @Test
+    fun unreferencedItemAndLogsAreDeleted(): Unit =
+        runBlocking {
+            val itemId =
+                repository.createItem(
+                    draft =
+                        itemDraft(
+                            name = "Oats"
+                        ),
+                    timestampMillis =
+                        FIRST_TIME,
+                )
+
+            dao.insertLog(
+                FoodLogEntity(
+                    itemId = itemId,
+                    consumedAtEpochMillis =
+                        FIRST_TIME,
+                    weightGrams = 100.0,
+                    createdAtEpochMillis =
+                        FIRST_TIME,
+                    updatedAtEpochMillis =
+                        FIRST_TIME,
+                )
+            )
+
+            assertEquals(
+                NutritionItemRemovalMode.DELETE,
+                repository.getRemovalMode(
+                    itemId
+                ),
+            )
+
+            assertEquals(
+                NutritionItemRemovalResult.DELETED,
+                repository.removeItem(
+                    itemId = itemId,
+                    timestampMillis =
+                        SECOND_TIME,
+                ),
+            )
+
+            assertNull(
+                repository.getItem(itemId)
+            )
+
+            assertTrue(
+                dao.observeAllLogs()
+                    .first()
+                    .isEmpty()
+            )
+        }
+
+    @Test
+    fun referencedItemIsArchivedAndKeepsLogs(): Unit =
+        runBlocking {
+            val componentId =
+                repository.createItem(
+                    itemDraft(
+                        name = "Chicken"
+                    )
+                )
+
+            repository.createComposedItem(
+                composedDraft(
+                    "Chicken bowl",
+                    componentId to 100.0,
+                )
+            )
+
+            dao.insertLog(
+                FoodLogEntity(
+                    itemId = componentId,
+                    consumedAtEpochMillis =
+                        FIRST_TIME,
+                    weightGrams = 100.0,
+                    createdAtEpochMillis =
+                        FIRST_TIME,
+                    updatedAtEpochMillis =
+                        FIRST_TIME,
+                )
+            )
+
+            assertEquals(
+                NutritionItemRemovalMode.ARCHIVE,
+                repository.getRemovalMode(
+                    componentId
+                ),
+            )
+
+            assertEquals(
+                NutritionItemRemovalResult.ARCHIVED,
+                repository.removeItem(
+                    itemId = componentId,
+                    timestampMillis =
+                        SECOND_TIME,
+                ),
+            )
+
+            val archived =
+                requireNotNull(
+                    repository.getItem(
+                        componentId
+                    )
+                )
+
+            assertEquals(
+                SECOND_TIME,
+                archived.archivedAtEpochMillis,
+            )
+
+            assertEquals(
+                componentId,
+                dao.observeAllLogs()
+                    .first()
+                    .single()
+                    .itemId,
+            )
+
+            assertEquals(
+                NutritionItemRemovalResult
+                    .ALREADY_ARCHIVED,
+                repository.removeItem(
+                    itemId = componentId,
+                    timestampMillis =
+                        THIRD_TIME,
+                ),
+            )
+
+            assertEquals(
+                SECOND_TIME,
+                repository.getItem(componentId)
+                    ?.archivedAtEpochMillis,
+            )
+        }
+
+    @Test
+    fun archivedItemCanBeRestored(): Unit =
+        runBlocking {
+            val componentId =
+                repository.createItem(
+                    itemDraft(
+                        name = "Rice"
+                    )
+                )
+
+            repository.createComposedItem(
+                composedDraft(
+                    "Rice bowl",
+                    componentId to 100.0,
+                )
+            )
+
+            assertEquals(
+                NutritionItemRemovalResult.ARCHIVED,
+                repository.removeItem(
+                    itemId = componentId,
+                    timestampMillis =
+                        SECOND_TIME,
+                ),
+            )
+
+            assertTrue(
+                repository.restoreItem(
+                    itemId = componentId,
+                    timestampMillis =
+                        THIRD_TIME,
+                )
+            )
+
+            val restored =
+                requireNotNull(
+                    repository.getItem(
+                        componentId
+                    )
+                )
+
+            assertNull(
+                restored.archivedAtEpochMillis
+            )
+
+            assertEquals(
+                THIRD_TIME,
+                restored.updatedAtEpochMillis,
+            )
+
+            assertEquals(
+                NutritionItemRemovalMode.ARCHIVE,
+                repository.getRemovalMode(
+                    componentId
+                ),
+            )
+
+            assertFalse(
+                repository.restoreItem(
+                    itemId = componentId,
+                    timestampMillis =
+                        THIRD_TIME,
+                )
+            )
+        }
+
+    @Test
+    fun archivedItemBecomesDeletableAfterReferenceRemoval(): Unit =
+        runBlocking {
+            val componentId =
+                repository.createItem(
+                    itemDraft(
+                        name = "Sauce"
+                    )
+                )
+
+            val parentId =
+                repository.createComposedItem(
+                    composedDraft(
+                        "Sauce bowl",
+                        componentId to 100.0,
+                    )
+                )
+
+            assertEquals(
+                NutritionItemRemovalResult.ARCHIVED,
+                repository.removeItem(
+                    itemId = componentId,
+                    timestampMillis =
+                        FIRST_TIME,
+                ),
+            )
+
+            assertEquals(
+                NutritionItemRemovalResult.DELETED,
+                repository.removeItem(
+                    itemId = parentId,
+                    timestampMillis =
+                        SECOND_TIME,
+                ),
+            )
+
+            assertEquals(
+                NutritionItemRemovalMode.DELETE,
+                repository.getRemovalMode(
+                    componentId
+                ),
+            )
+
+            assertEquals(
+                NutritionItemRemovalResult.DELETED,
+                repository.removeItem(
+                    itemId = componentId,
+                    timestampMillis =
+                        THIRD_TIME,
+                ),
+            )
+
+            assertNull(
+                repository.getItem(componentId)
+            )
+        }
+
+    @Test
+    fun archivedParentsStillReferenceComponents(): Unit =
+        runBlocking {
+            val componentId =
+                repository.createItem(
+                    itemDraft(
+                        name = "Beans"
+                    )
+                )
+
+            val parentId =
+                repository.createComposedItem(
+                    composedDraft(
+                        "Bean filling",
+                        componentId to 100.0,
+                    )
+                )
+
+            repository.createComposedItem(
+                composedDraft(
+                    "Bean meal",
+                    parentId to 100.0,
+                )
+            )
+
+            assertEquals(
+                NutritionItemRemovalResult.ARCHIVED,
+                repository.removeItem(
+                    itemId = parentId,
+                    timestampMillis =
+                        SECOND_TIME,
+                ),
+            )
+
+            assertEquals(
+                NutritionItemRemovalMode.ARCHIVE,
+                repository.getRemovalMode(
+                    componentId
+                ),
+            )
+
+            assertEquals(
+                NutritionItemRemovalResult.ARCHIVED,
+                repository.removeItem(
+                    itemId = componentId,
+                    timestampMillis =
+                        THIRD_TIME,
+                ),
+            )
+        }
+
+    @Test
+    fun missingItemLifecycleDoesNothing(): Unit =
+        runBlocking {
+            assertNull(
+                repository.getRemovalMode(
+                    Long.MAX_VALUE
+                )
+            )
+
+            assertEquals(
+                NutritionItemRemovalResult
+                    .ITEM_NOT_FOUND,
+                repository.removeItem(
+                    Long.MAX_VALUE
+                ),
+            )
+
+            assertFalse(
+                repository.restoreItem(
+                    Long.MAX_VALUE
+                )
             )
         }
 
