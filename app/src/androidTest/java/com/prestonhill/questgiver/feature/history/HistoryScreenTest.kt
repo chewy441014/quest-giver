@@ -197,6 +197,185 @@ class HistoryScreenTest {
             .assertIsDisplayed()
     }
 
+    @Test
+    fun archivedTaskCanRequestDelete(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = taskState(
+                inspectedTaskId = TASK_ID,
+                isArchived = true,
+                canChangeCompletion = false,
+            ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.deleteTask(
+                    TASK_ID
+                )
+            )
+            .assertIsEnabled()
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.RequestDeleteTask(
+                    TASK_ID
+                )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun activeTaskHasNoDelete(): Unit {
+        showScreen(
+            state = taskState(
+                inspectedTaskId = TASK_ID,
+                isArchived = false,
+            )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.deleteTask(
+                    TASK_ID
+                )
+            )
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun deleteConfirmationSendsConfirm(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = taskState(
+                inspectedTaskId = TASK_ID,
+                isArchived = true,
+                deleteConfirmation =
+                    HistoryDeleteUiState(
+                        taskId = TASK_ID,
+                        taskName = "Test task",
+                    ),
+            ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithText(
+                "Permanently delete " +
+                        "\"Test task\" and all of " +
+                        "its history? This cannot " +
+                        "be undone."
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.CONFIRM_DELETE
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.ConfirmDelete
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun deleteConfirmationSendsDismiss(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = taskState(
+                inspectedTaskId = TASK_ID,
+                isArchived = true,
+                deleteConfirmation =
+                    HistoryDeleteUiState(
+                        taskId = TASK_ID,
+                        taskName = "Test task",
+                    ),
+            ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.CANCEL_DELETE
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.DismissDelete
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun deletingDisablesConfirmation(): Unit {
+        showScreen(
+            state = taskState(
+                inspectedTaskId = TASK_ID,
+                isArchived = true,
+                isChanging = true,
+                deleteConfirmation =
+                    HistoryDeleteUiState(
+                        taskId = TASK_ID,
+                        taskName = "Test task",
+                        isDeleting = true,
+                    ),
+            )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.CONFIRM_DELETE
+            )
+            .assertIsNotEnabled()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.CANCEL_DELETE
+            )
+            .assertIsNotEnabled()
+
+        composeRule
+            .onNodeWithText("Deleting...")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun deleteErrorIsVisible(): Unit {
+        showScreen(
+            state = taskState(
+                inspectedTaskId = TASK_ID,
+                isArchived = true,
+                deleteConfirmation =
+                    HistoryDeleteUiState(
+                        taskId = TASK_ID,
+                        taskName = "Test task",
+                        errorMessage =
+                            "Task could not be deleted.",
+                    ),
+            )
+        )
+
+        composeRule
+            .onNodeWithText(
+                "Task could not be deleted."
+            )
+            .assertIsDisplayed()
+    }
 
     @Test
     fun habitTemplateIsVisible(): Unit {
@@ -517,6 +696,7 @@ class HistoryScreenTest {
         isArchived: Boolean = false,
         canChangeCompletion: Boolean = !isArchived,
         isChanging: Boolean = false,
+        deleteConfirmation: HistoryDeleteUiState? = null,
     ): HistoryScreenUiState =
         HistoryScreenUiState(
             tasks = TaskHistoryUiState(
@@ -538,6 +718,8 @@ class HistoryScreenTest {
                 ),
                 inspectedTaskId =
                     inspectedTaskId,
+                deleteConfirmation =
+                    deleteConfirmation,
             )
         )
 

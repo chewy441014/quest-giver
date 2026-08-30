@@ -24,6 +24,8 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import kotlin.time.Duration.Companion.milliseconds
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 
 @RunWith(AndroidJUnit4::class)
 class HistoryViewModelTest {
@@ -111,6 +113,217 @@ class HistoryViewModelTest {
             assertEquals(
                 TaskHistoryPage.DASHBOARD,
                 habitsState.tasks.page,
+            )
+        }
+
+    @Test
+    fun deleteRequestCanBeDismissed(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            assertTrue(
+                repository.archiveTask(
+                    taskId = taskId,
+                    timestampMillis =
+                        COMPLETION_TIME,
+                )
+            )
+
+            awaitState {
+                it.tasks.allTasks.any { task ->
+                    task.id == taskId &&
+                            task.isArchived
+                }
+            }
+
+            viewModel.onAction(
+                HistoryAction.RequestDeleteTask(
+                    taskId
+                )
+            )
+
+            val requested =
+                awaitState {
+                    it.tasks
+                        .deleteConfirmation
+                        ?.taskId == taskId
+                }
+
+            assertEquals(
+                "Test task",
+                requested.tasks
+                    .deleteConfirmation
+                    ?.taskName,
+            )
+
+            viewModel.onAction(
+                HistoryAction.DismissDelete
+            )
+
+            awaitState {
+                it.tasks.deleteConfirmation == null
+            }
+
+            assertNotNull(
+                repository.getTask(taskId)
+            )
+        }
+
+    @Test
+    fun activeTaskCannotRequestDeletion(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            awaitState {
+                it.tasks.allTasks.any { task ->
+                    task.id == taskId
+                }
+            }
+
+            viewModel.onAction(
+                HistoryAction.RequestDeleteTask(
+                    taskId
+                )
+            )
+
+            assertNull(
+                viewModel.uiState.value
+                    .tasks.deleteConfirmation
+            )
+
+            assertNotNull(
+                repository.getTask(taskId)
+            )
+        }
+
+    @Test
+    fun deleteRemovesArchivedTaskAndHistory(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            repository.complete(
+                taskId = taskId,
+                scheduledEpochDay = DAY,
+                completionTimestampMillis =
+                    COMPLETION_TIME,
+            )
+
+            assertTrue(
+                repository.archiveTask(
+                    taskId = taskId,
+                    timestampMillis =
+                        COMPLETION_TIME + 1L,
+                )
+            )
+
+            awaitState {
+                it.tasks.allTasks.any { task ->
+                    task.id == taskId &&
+                            task.isArchived
+                }
+            }
+
+            viewModel.onAction(
+                HistoryAction.InspectTask(taskId)
+            )
+
+            viewModel.onAction(
+                HistoryAction.RequestDeleteTask(
+                    taskId
+                )
+            )
+
+            awaitState {
+                it.tasks.deleteConfirmation != null
+            }
+
+            viewModel.onAction(
+                HistoryAction.ConfirmDelete
+            )
+
+            val deleted =
+                awaitState {
+                    it.tasks.allTasks.none { task ->
+                        task.id == taskId
+                    } &&
+                            it.tasks
+                                .deleteConfirmation == null &&
+                            it.tasks
+                                .inspectedTaskId == null
+                }
+
+            assertNull(
+                deleted.tasks.operationError
+            )
+
+            assertNull(
+                repository.getTask(taskId)
+            )
+
+            assertTrue(
+                repository.observeLogs()
+                    .first()
+                    .none { it.taskId == taskId }
+            )
+        }
+
+    @Test
+    fun failedDeleteKeepsConfirmationOpen(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            assertTrue(
+                repository.archiveTask(
+                    taskId = taskId,
+                    timestampMillis =
+                        COMPLETION_TIME,
+                )
+            )
+
+            awaitState {
+                it.tasks.allTasks.any { task ->
+                    task.id == taskId &&
+                            task.isArchived
+                }
+            }
+
+            viewModel.onAction(
+                HistoryAction.RequestDeleteTask(
+                    taskId
+                )
+            )
+
+            awaitState {
+                it.tasks.deleteConfirmation != null
+            }
+
+            // Makes the repository archive guard reject
+            // the pending permanent deletion.
+            assertTrue(
+                repository.restoreTask(taskId)
+            )
+
+            viewModel.onAction(
+                HistoryAction.ConfirmDelete
+            )
+
+            val failed =
+                awaitState {
+                    it.tasks
+                        .deleteConfirmation
+                        ?.errorMessage ==
+                            "Task could not be deleted."
+                }
+
+            assertEquals(
+                taskId,
+                failed.tasks
+                    .deleteConfirmation
+                    ?.taskId,
+            )
+
+            assertNotNull(
+                repository.getTask(taskId)
             )
         }
 

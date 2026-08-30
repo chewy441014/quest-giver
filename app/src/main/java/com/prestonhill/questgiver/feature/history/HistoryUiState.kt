@@ -16,7 +16,7 @@ enum class TaskHistoryPage {
 }
 
 data class HistoryDeleteUiState(
-    val logId: Long,
+    val taskId: Long,
     val taskName: String,
     val isDeleting: Boolean = false,
     val errorMessage: String? = null,
@@ -73,6 +73,8 @@ data class TaskHistoryUiState(
         emptyList(),
     val logDays: List<HistoryTaskDayUiState> =
         emptyList(),
+    val deleteConfirmation:
+    HistoryDeleteUiState? = null,
     val categoryGraph: HistoryGraphUiState =
         HistoryGraphUiState(
             id = "task_categories",

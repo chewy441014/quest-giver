@@ -85,19 +85,37 @@ class HistoryViewModel(
             timeState,
             changingTaskIds,
         ) { navigation, tasks, logs, time, changing ->
+            val mappedTasks =
+                mapper.tasks(
+                    tasks = tasks,
+                    logs = logs,
+                    appDay = time.appDay,
+                    currentTimestampMillis =
+                        time.timestamp,
+                    calculator = time.calculator,
+                    changingTaskIds = changing,
+                )
+
+            val deleteConfirmation =
+                navigation.deleteTaskId
+                    ?.let { taskId ->
+                        HistoryDeleteUiState(
+                            taskId = taskId,
+                            taskName =
+                                navigation.deleteTaskName
+                                    ?: "Task",
+                            isDeleting =
+                                taskId in changing,
+                            errorMessage =
+                                navigation.operationError,
+                        )
+                    }
+
             HistoryScreenUiState(
                 section = navigation.section,
                 tasks = TaskHistoryUiState(
                     page = navigation.taskPage,
-                    allTasks =
-                        mapper.tasks(
-                            tasks = tasks,
-                            logs = logs,
-                            appDay = time.appDay,
-                            currentTimestampMillis = time.timestamp,
-                            calculator = time.calculator,
-                            changingTaskIds = changing,
-                        ),
+                    allTasks = mappedTasks,
                     logDays =
                         mapper.logs(
                             logs = logs,
@@ -108,9 +126,15 @@ class HistoryViewModel(
                     inspectedTaskId =
                         navigation.inspectedTaskId,
                     operationError =
-                        navigation.operationError,
+                        navigation.operationError
+                            .takeIf {
+                                navigation.deleteTaskId ==
+                                        null
+                            },
                     showArchivedTasks =
                         navigation.showArchivedTasks,
+                    deleteConfirmation =
+                        deleteConfirmation,
                 ),
             )
         }
@@ -242,6 +266,17 @@ class HistoryViewModel(
                     ).clearOverlays()
                 }
 
+            is HistoryAction.RequestDeleteTask ->
+                requestDeleteTask(
+                    action.taskId
+                )
+
+            HistoryAction.ConfirmDelete ->
+                confirmDelete()
+
+            HistoryAction.DismissDelete ->
+                dismissDelete()
+
             HistoryAction.BackToDashboard ->
                 nav.update {
                     it.copy(
@@ -255,9 +290,7 @@ class HistoryViewModel(
                     it.copy(
                         showArchivedTasks =
                             action.show,
-                        inspectedTaskId = null,
-                        operationError = null,
-                    )
+                    ).clearOverlays()
                 }
 
             is HistoryAction.ArchiveTask ->
@@ -293,6 +326,111 @@ class HistoryViewModel(
                         operationError = null
                     )
                 }
+        }
+    }
+
+    private fun requestDeleteTask(
+        taskId: Long,
+    ) {
+        if (taskId in changingTaskIds.value) {
+            return
+        }
+
+        val task =
+            uiState.value.tasks.allTasks
+                .firstOrNull {
+                    it.id == taskId
+                }
+                ?: return
+
+        if (!task.isArchived) {
+            return
+        }
+
+        nav.update {
+            it.copy(
+                deleteTaskId = task.id,
+                deleteTaskName = task.name,
+                operationError = null,
+            )
+        }
+    }
+
+    private fun dismissDelete() {
+        val taskId =
+            nav.value.deleteTaskId
+                ?: return
+
+        if (taskId in changingTaskIds.value) {
+            return
+        }
+
+        nav.update {
+            it.copy(
+                deleteTaskId = null,
+                operationError = null,
+                deleteTaskName = null,
+            )
+        }
+    }
+
+    private fun confirmDelete() {
+        val taskId =
+            nav.value.deleteTaskId
+                ?: return
+
+        if (taskId in changingTaskIds.value) {
+            return
+        }
+
+        nav.update {
+            it.copy(operationError = null)
+        }
+
+        changingTaskIds.value += taskId
+
+        viewModelScope.launch {
+            try {
+                val deleted =
+                    repository.deleteArchivedTask(
+                        taskId
+                    )
+
+                if (deleted) {
+                    nav.update { current ->
+                        current.copy(
+                            inspectedTaskId =
+                                current
+                                    .inspectedTaskId
+                                    .takeUnless {
+                                        it == taskId
+                                    },
+                            deleteTaskId = null,
+                            operationError = null,
+                        )
+                    }
+                } else {
+                    nav.update {
+                        it.copy(
+                            operationError =
+                                "Task could not be deleted."
+                        )
+                    }
+                }
+            } catch (error: Exception) {
+                if (error is CancellationException) {
+                    throw error
+                }
+
+                nav.update {
+                    it.copy(
+                        operationError =
+                            "Task could not be deleted."
+                    )
+                }
+            } finally {
+                changingTaskIds.value -= taskId
+            }
         }
     }
 
@@ -476,11 +614,15 @@ private data class HistoryNavState(
     val inspectedTaskId: Long? = null,
     val operationError: String? = null,
     val showArchivedTasks: Boolean = false,
+    val deleteTaskId: Long? = null,
+    val deleteTaskName: String? = null,
 )
 
 private fun HistoryNavState.clearOverlays() =
     copy(
         inspectedTaskId = null,
+        deleteTaskId = null,
+        deleteTaskName = null,
         operationError = null,
     )
 

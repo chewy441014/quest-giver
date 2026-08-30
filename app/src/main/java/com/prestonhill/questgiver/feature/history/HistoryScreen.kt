@@ -29,6 +29,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Checkbox
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.material3.Button
 
 object HistoryTags {
     const val TASK_DASHBOARD =
@@ -45,6 +46,15 @@ object HistoryTags {
 
     const val ARCHIVED_TOGGLE =
         "history_archived_toggle"
+
+    const val CONFIRM_DELETE =
+        "history_confirm_delete"
+
+    const val CANCEL_DELETE =
+        "history_cancel_delete"
+
+    fun deleteTask(taskId: Long) =
+        "history_delete_task_$taskId"
 
     fun archiveTask(taskId: Long) =
         "history_archive_task_$taskId"
@@ -127,6 +137,23 @@ fun HistoryScreen(
             )
         }
 
+    state.tasks.deleteConfirmation
+        ?.let { confirmation ->
+            HistoryDeleteTaskDialog(
+                confirmation = confirmation,
+                onConfirm = {
+                    onAction(
+                        HistoryAction.ConfirmDelete
+                    )
+                },
+                onDismiss = {
+                    onAction(
+                        HistoryAction.DismissDelete
+                    )
+                },
+            )
+        }
+
     state.tasks.operationError?.let {
             message ->
         AlertDialog(
@@ -155,6 +182,81 @@ fun HistoryScreen(
             },
         )
     }
+}
+
+@Composable
+private fun HistoryDeleteTaskDialog(
+    confirmation: HistoryDeleteUiState,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {
+            if (!confirmation.isDeleting) {
+                onDismiss()
+            }
+        },
+        title = {
+            Text("Delete task?")
+        },
+        text = {
+            Column(
+                verticalArrangement =
+                    Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    "Permanently delete " +
+                            "\"${confirmation.taskName}\" " +
+                            "and all of its history? " +
+                            "This cannot be undone."
+                )
+
+                confirmation.errorMessage
+                    ?.let { message ->
+                        Text(
+                            text = message,
+                            color =
+                                MaterialTheme
+                                    .colorScheme.error,
+                        )
+                    }
+            }
+        },
+        confirmButton = {
+            Button(
+                modifier =
+                    Modifier.testTag(
+                        HistoryTags.CONFIRM_DELETE
+                    ),
+                enabled =
+                    !confirmation.isDeleting,
+                onClick = onConfirm,
+            ) {
+                Text(
+                    if (
+                        confirmation.isDeleting
+                    ) {
+                        "Deleting..."
+                    } else {
+                        "Delete"
+                    }
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                modifier =
+                    Modifier.testTag(
+                        HistoryTags.CANCEL_DELETE
+                    ),
+                enabled =
+                    !confirmation.isDeleting,
+                onClick = onDismiss,
+            ) {
+                Text("Cancel")
+            }
+        },
+    )
 }
 
 @Composable
@@ -213,8 +315,7 @@ private fun HistoryTaskDialog(
                                         onAction(
                                             HistoryAction
                                                 .SetTaskCompletion(
-                                                    taskId =
-                                                        task.id,
+                                                    taskId = task.id,
                                                     scheduledEpochDay =
                                                         completionDay,
                                                     completed =
@@ -229,42 +330,61 @@ private fun HistoryTaskDialog(
                         }
                 }
 
-                OutlinedButton(
-                    modifier =
-                        Modifier.testTag(
-                            HistoryTags
-                                .TASK_HISTORY_PLACEHOLDER
-                        ),
-                    enabled = false,
-                    onClick = {},
-                ) {
-                    Text("View task history")
-                }
-
                 if (task.isArchived) {
-                    OutlinedButton(
+                    Row(
                         modifier =
-                            Modifier.testTag(
-                                HistoryTags.restoreTask(
-                                    task.id
-                                )
-                            ),
-                        enabled = !task.isChanging,
-                        onClick = {
-                            onAction(
-                                HistoryAction.RestoreTask(
-                                    task.id
-                                )
-                            )
-                        },
+                            Modifier.fillMaxWidth(),
+                        horizontalArrangement =
+                            Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(
-                            if (task.isChanging) {
-                                "Restoring..."
-                            } else {
-                                "Restore task"
-                            }
-                        )
+                        OutlinedButton(
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .testTag(
+                                        HistoryTags.restoreTask(
+                                            task.id
+                                        )
+                                    ),
+                            enabled = !task.isChanging,
+                            onClick = {
+                                onAction(
+                                    HistoryAction.RestoreTask(
+                                        task.id
+                                    )
+                                )
+                            },
+                        ) {
+                            Text(
+                                if (task.isChanging) {
+                                    "Restoring..."
+                                } else {
+                                    "Restore task"
+                                }
+                            )
+                        }
+
+                        TextButton(
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .testTag(
+                                        HistoryTags.deleteTask(
+                                            task.id
+                                        )
+                                    ),
+                            enabled = !task.isChanging,
+                            onClick = {
+                                onAction(
+                                    HistoryAction
+                                        .RequestDeleteTask(
+                                            task.id
+                                        )
+                                )
+                            },
+                        ) {
+                            Text("Delete")
+                        }
                     }
                 } else {
                     OutlinedButton(
@@ -291,6 +411,18 @@ private fun HistoryTaskDialog(
                             }
                         )
                     }
+                }
+
+                OutlinedButton(
+                    modifier =
+                        Modifier.testTag(
+                            HistoryTags
+                                .TASK_HISTORY_PLACEHOLDER
+                        ),
+                    enabled = false,
+                    onClick = {},
+                ) {
+                    Text("View task history")
                 }
             }
         },

@@ -36,4 +36,12 @@ sealed interface HistoryAction {
     data class RestoreTask(
         val taskId: Long,
     ) : HistoryAction
+
+    data class RequestDeleteTask(
+        val taskId: Long,
+    ) : HistoryAction
+
+    data object ConfirmDelete : HistoryAction
+
+    data object DismissDelete : HistoryAction
 }
