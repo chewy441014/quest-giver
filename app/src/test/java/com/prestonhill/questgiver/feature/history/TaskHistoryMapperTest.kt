@@ -210,29 +210,6 @@ class TaskHistoryMapperTest {
     }
 
     @Test
-    fun orphanLogPermissions(): Unit {
-        val row =
-            mapper.logs(
-                listOf(
-                    log(
-                        id = 1L,
-                        day = DAY,
-                        taskId = null,
-                    )
-                )
-            )
-                .single()
-                .logs
-                .single()
-
-        assertFalse(row.canOpenTask)
-        assertFalse(
-            row.canChangeTaskCompletion
-        )
-        assertTrue(row.canDelete)
-    }
-
-    @Test
     fun currentTaskCanChange(): Unit {
         val task =
             task(
@@ -526,7 +503,7 @@ class TaskHistoryMapperTest {
     private fun log(
         id: Long,
         day: Long,
-        taskId: Long? = 1L,
+        taskId: Long = 1L,
         completedAt: Long = 1_000L,
         delta: Int = 1,
         reversesLogId: Long? = null,

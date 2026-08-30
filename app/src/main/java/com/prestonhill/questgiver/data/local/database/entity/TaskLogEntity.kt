@@ -12,7 +12,7 @@ import androidx.room3.PrimaryKey
             entity = TaskEntity::class,
             parentColumns = ["id"],
             childColumns = ["taskId"],
-            onDelete = ForeignKey.SET_NULL,
+            onDelete = ForeignKey.CASCADE,
         ),
     ],
     indices = [
@@ -35,10 +35,10 @@ data class TaskLogEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
 
-    // Becomes null when the associated task is deleted.
-    val taskId: Long?,
+    // Deleted when associated task is deleted
+    val taskId: Long,
 
-    // These snapshots keep History useful after deletion.
+    // These snapshots keep History useful after archival of associated task.
     val taskNameSnapshot: String,
     val categorySnapshot: String? = null,
 

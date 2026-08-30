@@ -148,36 +148,13 @@ interface TaskDao {
 
     @Query(
         """
-        DELETE FROM tasks
-        WHERE id = :taskId
-        """
+    DELETE FROM tasks
+    WHERE id = :taskId
+      AND archivedAtEpochMillis IS NOT NULL
+    """
     )
-    suspend fun deleteTask(
+    suspend fun deleteArchivedTask(
         taskId: Long,
-    ): Int
-
-    @Query(
-        """
-        DELETE FROM task_logs
-        WHERE taskId = :taskId
-        """
-    )
-    suspend fun deleteTaskLogs(
-        taskId: Long,
-    ): Int
-
-    @Query(
-        """
-        DELETE FROM task_logs
-        WHERE taskId IS NULL
-          AND (
-              id = :positiveLogId
-              OR reversesLogId = :positiveLogId
-          )
-        """
-    )
-    suspend fun deleteOrphanHistory(
-        positiveLogId: Long,
     ): Int
 
     @Query(

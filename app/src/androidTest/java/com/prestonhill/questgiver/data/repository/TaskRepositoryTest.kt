@@ -243,7 +243,7 @@ class TaskRepositoryTest {
     }
 
     @Test
-    fun deletionKeepsHistory() = runBlocking {
+    fun activeTaskCannotBeDeleted() = runBlocking {
         val taskId = addTask()
 
         repository.complete(
@@ -252,100 +252,94 @@ class TaskRepositoryTest {
             completionTimestampMillis =
                 FIRST_COMPLETION,
         )
-
-        assertTrue(
-            repository.deleteTask(
-                taskId = taskId,
-                deleteHistory = false,
-            )
-        )
-
-        assertNull(
-            repository.getTask(taskId)
-        )
-
-        val log =
-            repository.observeLogs()
-                .first()
-                .single()
-
-        assertNull(log.taskId)
-        assertEquals(
-            "Test task",
-            log.taskNameSnapshot,
-        )
-    }
-
-    @Test
-    fun deletionCanRemoveHistory() = runBlocking {
-        val taskId = addTask()
-
-        repository.complete(
-            taskId = taskId,
-            scheduledEpochDay = TEST_DAY,
-            completionTimestampMillis =
-                FIRST_COMPLETION,
-        )
-
-        assertTrue(
-            repository.deleteTask(
-                taskId = taskId,
-                deleteHistory = true,
-            )
-        )
-
-        assertNull(
-            repository.getTask(taskId)
-        )
-
-        assertTrue(
-            repository.observeLogs()
-                .first()
-                .isEmpty()
-        )
-    }
-
-    @Test
-    fun orphanHistoryCanBeDeleted() = runBlocking {
-        val taskId = addTask()
-
-        repository.complete(
-            taskId = taskId,
-            scheduledEpochDay = TEST_DAY,
-            completionTimestampMillis =
-                FIRST_COMPLETION,
-        )
-
-        val positive =
-            repository.observeLogs()
-                .first()
-                .single()
 
         assertFalse(
-            repository.deleteHistory(positive.id)
+            repository.deleteArchivedTask(taskId)
         )
 
-        repository.correctCompletion(
-            logId = positive.id,
-            recordedTimestampMillis =
-                SECOND_COMPLETION,
+        assertNotNull(
+            repository.getTask(taskId)
         )
 
-        repository.deleteTask(
-            taskId = taskId,
-            deleteHistory = false,
-        )
-
-        assertTrue(
-            repository.deleteHistory(positive.id)
-        )
-
-        assertTrue(
-            repository.observeLogs()
+        assertEquals(
+            taskId,
+            repository
+                .observeLogs()
                 .first()
-                .isEmpty()
+                .single()
+                .taskId,
         )
     }
+
+    @Test
+    fun archivedDeletionRemovesTaskAndLogs() =
+        runBlocking {
+            val taskId = addTask()
+
+            repository.complete(
+                taskId = taskId,
+                scheduledEpochDay = TEST_DAY,
+                completionTimestampMillis =
+                    FIRST_COMPLETION,
+            )
+
+            val positive =
+                repository
+                    .observeLogs()
+                    .first()
+                    .single()
+
+            repository.correctCompletion(
+                logId = positive.id,
+                recordedTimestampMillis =
+                    SECOND_COMPLETION,
+            )
+
+            assertEquals(
+                2,
+                repository.observeLogs()
+                    .first()
+                    .size,
+            )
+
+            assertTrue(
+                repository.archiveTask(
+                    taskId = taskId,
+                    timestampMillis =
+                        SECOND_COMPLETION,
+                )
+            )
+
+            assertTrue(
+                repository.deleteArchivedTask(taskId)
+            )
+
+            assertNull(
+                repository.getTask(taskId)
+            )
+
+            assertTrue(
+                repository.observeLogs()
+                    .first()
+                    .isEmpty()
+            )
+
+            assertTrue(
+                repository.observeArchivedTasks()
+                    .first()
+                    .isEmpty()
+            )
+        }
+
+    @Test
+    fun missingArchivedTaskCannotBeDeleted() =
+        runBlocking {
+            assertFalse(
+                repository.deleteArchivedTask(
+                    Long.MAX_VALUE
+                )
+            )
+        }
 
     @Test
     fun setIncompleteAddsReversal(): Unit =

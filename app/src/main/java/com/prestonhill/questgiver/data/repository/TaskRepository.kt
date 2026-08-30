@@ -227,40 +227,10 @@ class TaskRepository(
             archivedAt = archivedAt,
         )
 
-    suspend fun deleteTask(
+    suspend fun deleteArchivedTask(
         taskId: Long,
-        deleteHistory: Boolean,
     ): Boolean =
-        database.withWriteTransaction {
-            dao.getTask(taskId)
-                ?: return@withWriteTransaction false
-
-            if (deleteHistory) {
-                dao.deleteTaskLogs(taskId)
-            }
-
-            dao.deleteTask(taskId) == 1
-        }
-
-    suspend fun deleteHistory(
-        positiveLogId: Long,
-    ): Boolean =
-        database.withWriteTransaction {
-            val log =
-                dao.getLog(positiveLogId)
-                    ?: return@withWriteTransaction false
-
-            if (
-                log.taskId != null ||
-                log.delta != 1
-            ) {
-                return@withWriteTransaction false
-            }
-
-            dao.deleteOrphanHistory(
-                positiveLogId
-            ) > 0
-        }
+        dao.deleteArchivedTask(taskId) == 1
 
     private suspend fun insertCompletion(
         task: TaskEntity,

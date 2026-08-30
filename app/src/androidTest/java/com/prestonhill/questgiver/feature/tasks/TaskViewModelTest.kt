@@ -847,9 +847,15 @@ class TaskViewModelTest {
                 }.editor
             )
 
-        repository.deleteTask(
-            taskId = taskId,
-            deleteHistory = false,
+        assertTrue(
+            repository.archiveTask(
+                taskId = taskId,
+                timestampMillis = clock.millis(),
+            )
+        )
+
+        assertTrue(
+            repository.deleteArchivedTask(taskId)
         )
 
         viewModel.onAction(
