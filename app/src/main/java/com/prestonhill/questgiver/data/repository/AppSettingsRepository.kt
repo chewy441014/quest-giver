@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
 import com.prestonhill.questgiver.core.settings.AppSettings
 import java.io.IOException
 import java.time.DayOfWeek
@@ -43,6 +44,16 @@ class AppSettingsRepository(
                         }
                         ?: DEFAULT_WEEK_START.value
 
+                val calorieGoal =
+                    preferences[CALORIE_GOAL]
+                        ?.takeIf(::isValidGoal)
+                        ?: DEFAULT_CALORIE_GOAL
+
+                val proteinGoalGrams =
+                    preferences[PROTEIN_GOAL_GRAMS]
+                        ?.takeIf(::isValidGoal)
+                        ?: DEFAULT_PROTEIN_GOAL_GRAMS
+
                 AppSettings(
                     dayBoundary =
                         LocalTime.ofSecondOfDay(
@@ -51,10 +62,37 @@ class AppSettingsRepository(
                     weekStart =
                         DayOfWeek.of(weekStartValue),
                     daylightSavingEnabled =
-                        preferences[DAYLIGHT_SAVING_ENABLED]
-                            ?: DEFAULT_DAYLIGHT_SAVING_ENABLED,
+                        preferences[
+                            DAYLIGHT_SAVING_ENABLED
+                        ] ?: DEFAULT_DAYLIGHT_SAVING_ENABLED,
+                    calorieGoal = calorieGoal,
+                    proteinGoalGrams =
+                        proteinGoalGrams,
                 )
             }
+
+    private fun isValidGoal(
+        value: Double,
+    ): Boolean =
+        value.isFinite() &&
+                value > 0.0 &&
+                value % 1.0 == 0.0
+
+    suspend fun setNutritionGoals(
+        calorieGoal: Double,
+        proteinGoalGrams: Double,
+    ) {
+        require(isValidGoal(calorieGoal))
+        require(isValidGoal(proteinGoalGrams))
+
+        dataStore.edit { preferences ->
+            preferences[CALORIE_GOAL] =
+                calorieGoal
+
+            preferences[PROTEIN_GOAL_GRAMS] =
+                proteinGoalGrams
+        }
+    }
     suspend fun setDaylightSaving(
         enabled: Boolean,
     ) {
@@ -109,5 +147,20 @@ class AppSettingsRepository(
             )
 
         const val DEFAULT_DAYLIGHT_SAVING_ENABLED = true
+        val CALORIE_GOAL =
+            doublePreferencesKey(
+                "calorie_goal"
+            )
+
+        val PROTEIN_GOAL_GRAMS =
+            doublePreferencesKey(
+                "protein_goal_grams"
+            )
+
+        const val DEFAULT_CALORIE_GOAL =
+            1_500.0
+
+        const val DEFAULT_PROTEIN_GOAL_GRAMS =
+            40.0
     }
 }

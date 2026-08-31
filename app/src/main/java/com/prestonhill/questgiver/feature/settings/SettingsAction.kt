@@ -17,4 +17,21 @@ sealed interface SettingsAction {
     data class SetDaylightSaving(
         val enabled: Boolean,
     ) : SettingsAction
+
+    data object EditNutritionGoals :
+        SettingsAction
+
+    data class ChangeCalorieGoal(
+        val value: String,
+    ) : SettingsAction
+
+    data class ChangeProteinGoal(
+        val value: String,
+    ) : SettingsAction
+
+    data object SaveNutritionGoals :
+        SettingsAction
+
+    data object DismissNutritionGoals :
+        SettingsAction
 }

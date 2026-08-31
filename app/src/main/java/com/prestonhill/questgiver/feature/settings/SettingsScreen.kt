@@ -36,6 +36,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Switch
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.KeyboardType
 import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -48,6 +51,15 @@ object SettingsTags {
     const val WEEK_START = "settings_week_start"
     const val CONFIRM_TIME = "settings_confirm_time"
     const val DAYLIGHT_SAVING = "settings_daylight_saving"
+    const val NUTRITION_GOALS = "settings_nutrition_goals"
+
+    const val CALORIE_GOAL = "settings_calorie_goal"
+
+    const val PROTEIN_GOAL = "settings_protein_goal"
+
+    const val SAVE_NUTRITION_GOALS = "settings_save_nutrition_goals"
+
+    const val CANCEL_NUTRITION_GOALS = "settings_cancel_nutrition_goals"
 
     fun weekDay(day: DayOfWeek) =
         "settings_week_${day.name}"
@@ -96,6 +108,15 @@ fun SettingsScreen(
         }
     }
 
+    state.nutritionGoalsEditor
+        ?.let { editor ->
+            NutritionGoalsDialog(
+                editor = editor,
+                isSaving = state.isSaving,
+                onAction = onAction,
+            )
+        }
+
     state.errorMessage?.let { message ->
         AlertDialog(
             onDismissRequest = {
@@ -120,6 +141,179 @@ fun SettingsScreen(
             },
         )
     }
+}
+
+@Composable
+private fun NutritionGoalsSetting(
+    calorieGoal: Double,
+    proteinGoalGrams: Double,
+    enabled: Boolean,
+    onEdit: () -> Unit,
+) {
+    Column(
+        verticalArrangement =
+            Arrangement.spacedBy(8.dp),
+    ) {
+        Text("Nutrition goals")
+
+        OutlinedButton(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .testTag(
+                        SettingsTags
+                            .NUTRITION_GOALS
+                    ),
+            enabled = enabled,
+            onClick = onEdit,
+        ) {
+            Text(
+                "${goalText(calorieGoal)} kcal minimum" +
+                        " • " +
+                        "${goalText(proteinGoalGrams)} g protein minimum"
+            )
+        }
+    }
+}
+
+@Composable
+private fun NutritionGoalsDialog(
+    editor:
+    NutritionGoalsEditorUiState,
+    isSaving: Boolean,
+    onAction: (SettingsAction) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {
+            if (!isSaving) {
+                onAction(
+                    SettingsAction
+                        .DismissNutritionGoals
+                )
+            }
+        },
+        title = {
+            Text("Nutrition goals")
+        },
+        text = {
+            Column(
+                verticalArrangement =
+                    Arrangement.spacedBy(16.dp),
+            ) {
+                OutlinedTextField(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag(
+                                SettingsTags
+                                    .CALORIE_GOAL
+                            ),
+                    value =
+                        editor.calorieGoalText,
+                    enabled = !isSaving,
+                    singleLine = true,
+                    label = {
+                        Text(
+                            "Minimum calories (kcal)"
+                        )
+                    },
+                    keyboardOptions =
+                        KeyboardOptions(
+                            keyboardType =
+                                KeyboardType.Number
+                        ),
+                    onValueChange = { value ->
+                        if (value.all(Char::isDigit)) {
+                            onAction(
+                                SettingsAction
+                                    .ChangeCalorieGoal(
+                                        value
+                                    )
+                            )
+                        }
+                    },
+                )
+
+                OutlinedTextField(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag(
+                                SettingsTags
+                                    .PROTEIN_GOAL
+                            ),
+                    value =
+                        editor.proteinGoalText,
+                    enabled = !isSaving,
+                    singleLine = true,
+                    label = {
+                        Text(
+                            "Minimum protein (g)"
+                        )
+                    },
+                    keyboardOptions =
+                        KeyboardOptions(
+                            keyboardType =
+                                KeyboardType.Number
+                        ),
+                    onValueChange = { value ->
+                        if (value.all(Char::isDigit)) {
+                            onAction(
+                                SettingsAction
+                                    .ChangeProteinGoal(
+                                        value
+                                    )
+                            )
+                        }
+                    },
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                modifier =
+                    Modifier.testTag(
+                        SettingsTags
+                            .SAVE_NUTRITION_GOALS
+                    ),
+                enabled =
+                    editor.canSave &&
+                            !isSaving,
+                onClick = {
+                    onAction(
+                        SettingsAction
+                            .SaveNutritionGoals
+                    )
+                },
+            ) {
+                Text(
+                    if (isSaving) {
+                        "Saving..."
+                    } else {
+                        "Save"
+                    }
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                modifier =
+                    Modifier.testTag(
+                        SettingsTags
+                            .CANCEL_NUTRITION_GOALS
+                    ),
+                enabled = !isSaving,
+                onClick = {
+                    onAction(
+                        SettingsAction
+                            .DismissNutritionGoals
+                    )
+                },
+            ) {
+                Text("Cancel")
+            }
+        },
+    )
 }
 
 @Composable
@@ -170,6 +364,21 @@ private fun SettingsContent(
                     SettingsAction.SetDaylightSaving(
                         checked
                     )
+                )
+            },
+        )
+
+        NutritionGoalsSetting(
+            calorieGoal =
+                state.settings.calorieGoal,
+            proteinGoalGrams =
+                state.settings
+                    .proteinGoalGrams,
+            enabled = !state.isSaving,
+            onEdit = {
+                onAction(
+                    SettingsAction
+                        .EditNutritionGoals
                 )
             },
         )
@@ -351,6 +560,12 @@ private fun WeekStartSetting(
         }
     }
 }
+
+private fun goalText(
+    value: Double,
+): String =
+    value.toString()
+        .removeSuffix(".0")
 
 private fun DayOfWeek.displayName(): String =
     getDisplayName(

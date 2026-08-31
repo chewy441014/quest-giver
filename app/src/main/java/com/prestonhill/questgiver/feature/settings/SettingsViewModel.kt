@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.prestonhill.questgiver.data.repository.AppSettingsRepository
 import java.util.concurrent.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -20,21 +21,33 @@ class SettingsViewModel(
     private val errorMessage =
         MutableStateFlow<String?>(null)
 
+    private val nutritionGoalsEditor = MutableStateFlow<NutritionGoalsEditorUiState?>(null)
+
     val uiState =
         combine(
             repository.settings,
             isSaving,
             errorMessage,
-        ) { settings, saving, error ->
+            nutritionGoalsEditor,
+        ) {
+                settings,
+                saving,
+                error,
+                goalsEditor,
+            ->
             SettingsUiState(
                 settings = settings,
                 isLoading = false,
                 isSaving = saving,
                 errorMessage = error,
+                nutritionGoalsEditor =
+                    goalsEditor,
             )
         }.stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            started =
+                SharingStarted
+                    .WhileSubscribed(5_000),
             initialValue = SettingsUiState(),
         )
 
@@ -62,11 +75,99 @@ class SettingsViewModel(
                 }
             }
 
+            is SettingsAction.EditNutritionGoals -> {
+                if (!isSaving.value) {
+                    val settings =
+                        uiState.value.settings
+
+                    nutritionGoalsEditor.value =
+                        NutritionGoalsEditorUiState(
+                            originalCalorieGoal =
+                                settings.calorieGoal,
+                            originalProteinGoalGrams =
+                                settings
+                                    .proteinGoalGrams,
+                            calorieGoalText =
+                                goalText(
+                                    settings.calorieGoal
+                                ),
+                            proteinGoalText =
+                                goalText(
+                                    settings
+                                        .proteinGoalGrams
+                                ),
+                        )
+                }
+            }
+
+            is SettingsAction.ChangeCalorieGoal -> {
+                nutritionGoalsEditor.update {
+                    it?.copy(
+                        calorieGoalText =
+                            action.value
+                    )
+                }
+            }
+
+            is SettingsAction.ChangeProteinGoal -> {
+                nutritionGoalsEditor.update {
+                    it?.copy(
+                        proteinGoalText =
+                            action.value
+                    )
+                }
+            }
+
+            SettingsAction.SaveNutritionGoals -> {
+                saveNutritionGoals()
+            }
+
+            SettingsAction.DismissNutritionGoals -> {
+                if (!isSaving.value) {
+                    nutritionGoalsEditor.value = null
+                }
+            }
+
             SettingsAction.DismissError -> {
                 errorMessage.value = null
             }
         }
     }
+
+    private fun saveNutritionGoals() {
+        val editor =
+            nutritionGoalsEditor.value
+                ?: return
+
+        if (!editor.canSave) {
+            return
+        }
+
+        val calorieGoal =
+            editor.calorieGoal ?: return
+
+        val proteinGoalGrams =
+            editor.proteinGoalGrams
+                ?: return
+
+        save(
+            "Nutrition goals could not be saved."
+        ) {
+            repository.setNutritionGoals(
+                calorieGoal = calorieGoal,
+                proteinGoalGrams =
+                    proteinGoalGrams,
+            )
+
+            nutritionGoalsEditor.value = null
+        }
+    }
+
+    private fun goalText(
+        value: Double,
+    ): String =
+        value.toString()
+            .removeSuffix(".0")
 
     private fun save(
         failureMessage: String,
