@@ -34,7 +34,86 @@ data class NutritionScreenUiState(
     val isLoading: Boolean = true,
     val operationError: String? = null,
     val destination: NutritionDestination? = null,
+    val logEditor: NutritionLogEditorUiState? = null,
 )
+
+data class NutritionItemOptionUiState(
+    val id: Long,
+    val name: String,
+    val version: Int,
+    val versionLabel: String?,
+    val isArchived: Boolean,
+) {
+    val displayName: String
+        get() =
+            "$name · " +
+                    (
+                            versionLabel
+                                ?: "v$version"
+                            )
+}
+
+data class NutritionLogEditorUiState(
+    val logId: Long? = null,
+    val date: LocalDate,
+    val itemOptions:
+    List<NutritionItemOptionUiState>,
+    val selectedItemId: Long? = null,
+    val itemSearch: String = "",
+    val weightText: String = "",
+    val time: LocalTime,
+    val isSaving: Boolean = false,
+    val isDeleting: Boolean = false,
+    val showDeleteConfirmation:
+    Boolean = false,
+    val errorMessage: String? = null,
+) {
+    val isEditing: Boolean
+        get() = logId != null
+
+    val isBusy: Boolean
+        get() =
+            isSaving || isDeleting
+
+    val weightGrams: Double?
+        get() =
+            weightText
+                .trim()
+                .toDoubleOrNull()
+
+    val filteredItemOptions:
+            List<NutritionItemOptionUiState>
+        get() {
+            val query =
+                itemSearch.trim()
+
+            if (query.isEmpty()) {
+                return itemOptions
+            }
+
+            return itemOptions.filter {
+                it.displayName.contains(
+                    query,
+                    ignoreCase = true,
+                )
+            }
+        }
+
+    val canSave: Boolean
+        get() {
+            val weight =
+                weightGrams
+                    ?: return false
+
+            return !isBusy &&
+                    selectedItemId != null &&
+                    itemOptions.any {
+                        it.id == selectedItemId
+                    } &&
+                    weight.isFinite() &&
+                    weight > 0.0
+        }
+}
 
 sealed interface NutritionDestination {
     data object AddLog :

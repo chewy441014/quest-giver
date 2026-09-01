@@ -9,6 +9,13 @@ import com.prestonhill.questgiver.core.time.AppDayCalculator
 import com.prestonhill.questgiver.core.time.BoundaryTimer
 import com.prestonhill.questgiver.core.time.RealBoundaryTimer
 import com.prestonhill.questgiver.data.repository.NutritionRepository
+import com.prestonhill.questgiver.data.local.database.entity.NutritionItemEntity
+import com.prestonhill.questgiver.data.repository.FoodLogDraft
+import java.time.Instant
+import java.time.LocalTime
+import java.util.concurrent.CancellationException
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import java.time.Clock
 import java.time.LocalDate
@@ -56,6 +63,8 @@ class NutritionViewModel(
         MutableStateFlow<
                 NutritionDestination?
                 >(null)
+
+    private val logEditor = MutableStateFlow<NutritionLogEditorUiState?>(null)
 
     private val settingsState =
         settings.stateIn(
@@ -114,16 +123,19 @@ class NutritionViewModel(
             showDatePicker,
             operationError,
             destination,
+            logEditor,
         ) {
                 picker,
                 error,
                 requestedDestination,
+                editor,
             ->
             NutritionOverlayState(
                 showDatePicker = picker,
                 operationError = error,
                 destination =
                     requestedDestination,
+                logEditor = editor,
             )
         }
 
@@ -167,6 +179,7 @@ class NutritionViewModel(
                     overlay.operationError,
                 destination =
                     overlay.destination,
+                logEditor = overlay.logEditor,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -200,21 +213,117 @@ class NutritionViewModel(
             }
 
             NutritionAction.OpenAddLog -> {
-                showDatePicker.value = false
-                destination.value =
-                    NutritionDestination.AddLog
+                openNewLogEditor()
             }
 
             is NutritionAction.InspectLog -> {
-                showDatePicker.value = false
-                destination.value =
-                    NutritionDestination.EditLog(
-                        action.logId
-                    )
+                openLogEditor(action.logId)
+            }
+
+            is NutritionAction
+            .ChangeLogItemSearch -> {
+                logEditor.update {
+                    it?.takeUnless {
+                            editor -> editor.isBusy
+                    }?.copy(
+                        itemSearch = action.value
+                    ) ?: it
+                }
+            }
+
+            is NutritionAction.SelectLogItem -> {
+                logEditor.update { editor ->
+                    if (
+                        editor == null ||
+                        editor.isBusy ||
+                        editor.itemOptions.none {
+                            it.id == action.itemId
+                        }
+                    ) {
+                        editor
+                    } else {
+                        editor.copy(
+                            selectedItemId =
+                                action.itemId,
+                            itemSearch = "",
+                            errorMessage = null,
+                        )
+                    }
+                }
+            }
+
+            is NutritionAction.ChangeLogWeight -> {
+                logEditor.update {
+                    it?.takeUnless {
+                            editor -> editor.isBusy
+                    }?.copy(
+                        weightText = action.value,
+                        errorMessage = null,
+                    ) ?: it
+                }
+            }
+
+            is NutritionAction.ChangeLogTime -> {
+                logEditor.update {
+                    it?.takeUnless {
+                            editor -> editor.isBusy
+                    }?.copy(
+                        time = action.time,
+                        errorMessage = null,
+                    ) ?: it
+                }
+            }
+
+            NutritionAction.SaveLog -> {
+                saveLog()
+            }
+
+            NutritionAction.DismissLogEditor -> {
+                dismissLogEditor()
+            }
+
+            NutritionAction.RequestDeleteLog -> {
+                logEditor.update { editor ->
+                    if (
+                        editor?.isEditing == true &&
+                        !editor.isBusy
+                    ) {
+                        editor.copy(
+                            showDeleteConfirmation =
+                                true
+                        )
+                    } else {
+                        editor
+                    }
+                }
+            }
+
+            NutritionAction.DismissDeleteLog -> {
+                logEditor.update { editor ->
+                    if (editor?.isBusy == false) {
+                        editor.copy(
+                            showDeleteConfirmation =
+                                false
+                        )
+                    } else {
+                        editor
+                    }
+                }
+            }
+
+            NutritionAction.DeleteLog -> {
+                deleteLog()
             }
 
             NutritionAction.OpenManage -> {
+                if (
+                    logEditor.value?.isBusy == true
+                ) {
+                    return
+                }
+
                 showDatePicker.value = false
+                logEditor.value = null
                 destination.value =
                     NutritionDestination.Manage
             }
@@ -257,7 +366,350 @@ class NutritionViewModel(
         showDatePicker.value = false
         operationError.value = null
         destination.value = null
+        logEditor.value = null
     }
+
+    private fun openNewLogEditor() {
+        if (logEditor.value?.isBusy == true) {
+            return
+        }
+
+        showDatePicker.value = false
+        operationError.value = null
+
+        val requestedDestination =
+            NutritionDestination.AddLog
+
+        destination.value =
+            requestedDestination
+
+        viewModelScope.launch {
+            try {
+                val items =
+                    repository
+                        .observeActiveItems()
+                        .first()
+
+                if (
+                    destination.value !=
+                    requestedDestination
+                ) {
+                    return@launch
+                }
+
+                val time =
+                    timeState.value
+
+                val defaultTime =
+                    clock.instant()
+                        .atZone(time.zoneId)
+                        .toLocalTime()
+                        .withSecond(0)
+                        .withNano(0)
+
+                logEditor.value =
+                    NutritionLogEditorUiState(
+                        date =
+                            selectedDay.value.date,
+                        itemOptions =
+                            itemOptions(items),
+                        time = defaultTime,
+                    )
+            } catch (error: Exception) {
+                if (
+                    error is CancellationException
+                ) {
+                    throw error
+                }
+
+                destination.value = null
+                operationError.value =
+                    "Food log editor could not be opened."
+            }
+        }
+    }
+
+    private fun openLogEditor(
+        logId: Long,
+    ) {
+        if (logEditor.value?.isBusy == true) {
+            return
+        }
+
+        showDatePicker.value = false
+        operationError.value = null
+
+        val requestedDestination =
+            NutritionDestination.EditLog(
+                logId
+            )
+
+        destination.value =
+            requestedDestination
+
+        viewModelScope.launch {
+            try {
+                val log =
+                    repository.getLog(logId)
+
+                if (log == null) {
+                    destination.value = null
+                    operationError.value =
+                        "Food log could not be found."
+                    return@launch
+                }
+
+                val selectedItem =
+                    repository.getItem(
+                        log.itemId
+                    )
+
+                if (selectedItem == null) {
+                    destination.value = null
+                    operationError.value =
+                        "Food log item could not be found."
+                    return@launch
+                }
+
+                val activeItems =
+                    repository
+                        .observeActiveItems()
+                        .first()
+
+                if (
+                    destination.value !=
+                    requestedDestination
+                ) {
+                    return@launch
+                }
+
+                val time =
+                    timeState.value
+
+                val date =
+                    time.dayCalculator
+                        .containing(
+                            log.consumedAtEpochMillis
+                        )
+                        .date
+
+                val consumedTime =
+                    Instant
+                        .ofEpochMilli(
+                            log.consumedAtEpochMillis
+                        )
+                        .atZone(time.zoneId)
+                        .toLocalTime()
+
+                logEditor.value =
+                    NutritionLogEditorUiState(
+                        logId = log.id,
+                        date = date,
+                        itemOptions =
+                            itemOptions(
+                                (
+                                        activeItems +
+                                                selectedItem
+                                        ).distinctBy {
+                                        it.id
+                                    }
+                            ),
+                        selectedItemId =
+                            selectedItem.id,
+                        weightText =
+                            amountText(
+                                log.weightGrams
+                            ),
+                        time = consumedTime,
+                    )
+            } catch (error: Exception) {
+                if (
+                    error is CancellationException
+                ) {
+                    throw error
+                }
+
+                destination.value = null
+                operationError.value =
+                    "Food log editor could not be opened."
+            }
+        }
+    }
+
+    private fun saveLog() {
+        val editor =
+            logEditor.value ?: return
+
+        if (!editor.canSave) {
+            return
+        }
+
+        val weight =
+            editor.weightGrams ?: return
+
+        logEditor.value =
+            editor.copy(
+                isSaving = true,
+                errorMessage = null,
+            )
+
+        viewModelScope.launch {
+            try {
+                val timestamp =
+                    timeState.value
+                        .dayCalculator
+                        .timestampFor(
+                            appDate = editor.date,
+                            time = editor.time,
+                        )
+
+                val draft =
+                    FoodLogDraft(
+                        itemId =
+                            requireNotNull(
+                                editor.selectedItemId
+                            ),
+                        consumedAtEpochMillis =
+                            timestamp,
+                        weightGrams = weight,
+                    )
+
+                val saved =
+                    if (editor.logId == null) {
+                        repository.createLog(
+                            draft = draft,
+                            timestampMillis =
+                                clock.millis(),
+                        ) != null
+                    } else {
+                        repository.updateLog(
+                            logId = editor.logId,
+                            draft = draft,
+                            timestampMillis =
+                                clock.millis(),
+                        )
+                    }
+
+                if (saved) {
+                    logEditor.value = null
+                    destination.value = null
+                } else {
+                    logEditor.update {
+                        it?.copy(
+                            isSaving = false,
+                            errorMessage =
+                                "Food log could not be saved.",
+                        )
+                    }
+                }
+            } catch (error: Exception) {
+                if (
+                    error is CancellationException
+                ) {
+                    throw error
+                }
+
+                logEditor.update {
+                    it?.copy(
+                        isSaving = false,
+                        errorMessage =
+                            "Food log could not be saved.",
+                    )
+                }
+            }
+        }
+    }
+
+    private fun deleteLog() {
+        val editor =
+            logEditor.value ?: return
+
+        val logId =
+            editor.logId ?: return
+
+        if (editor.isBusy) {
+            return
+        }
+
+        logEditor.value =
+            editor.copy(
+                isDeleting = true,
+                showDeleteConfirmation =
+                    false,
+                errorMessage = null,
+            )
+
+        viewModelScope.launch {
+            try {
+                if (
+                    repository.deleteLog(logId)
+                ) {
+                    logEditor.value = null
+                    destination.value = null
+                } else {
+                    logEditor.update {
+                        it?.copy(
+                            isDeleting = false,
+                            errorMessage =
+                                "Food log could not be deleted.",
+                        )
+                    }
+                }
+            } catch (error: Exception) {
+                if (
+                    error is CancellationException
+                ) {
+                    throw error
+                }
+
+                logEditor.update {
+                    it?.copy(
+                        isDeleting = false,
+                        errorMessage =
+                            "Food log could not be deleted.",
+                    )
+                }
+            }
+        }
+    }
+
+    private fun dismissLogEditor() {
+        if (logEditor.value?.isBusy == true) {
+            return
+        }
+
+        logEditor.value = null
+        destination.value = null
+    }
+
+    private fun itemOptions(
+        items: List<NutritionItemEntity>,
+    ): List<NutritionItemOptionUiState> =
+        items
+            .sortedWith(
+                compareBy(
+                    NutritionItemEntity::nameKey,
+                    NutritionItemEntity::version,
+                )
+            )
+            .map { item ->
+                NutritionItemOptionUiState(
+                    id = item.id,
+                    name = item.name,
+                    version = item.version,
+                    versionLabel =
+                        item.versionLabel,
+                    isArchived =
+                        item.archivedAtEpochMillis !=
+                                null,
+                )
+            }
+
+    private fun amountText(
+        value: Double,
+    ): String =
+        value.toString()
+            .removeSuffix(".0")
 
     private fun startBoundaryTimer() {
         viewModelScope.launch {
@@ -366,8 +818,8 @@ class NutritionViewModel(
     private data class NutritionOverlayState(
         val showDatePicker: Boolean,
         val operationError: String?,
-        val destination:
-        NutritionDestination?,
+        val destination: NutritionDestination?,
+        val logEditor: NutritionLogEditorUiState?,
     )
 
     private data class NutritionBoundarySettings(

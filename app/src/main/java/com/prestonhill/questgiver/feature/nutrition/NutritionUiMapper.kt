@@ -16,6 +16,7 @@ class NutritionUiMapper {
         showDatePicker: Boolean = false,
         operationError: String? = null,
         destination: NutritionDestination? = null,
+        logEditor: NutritionLogEditorUiState? = null,
     ): NutritionScreenUiState {
         val logs =
             summary.entries
@@ -74,6 +75,7 @@ class NutritionUiMapper {
             showDatePicker =
                 showDatePicker,
             logs = logs,
+            logEditor = logEditor,
             totalCalories =
                 summary.totalCalories,
             totalProteinGrams =

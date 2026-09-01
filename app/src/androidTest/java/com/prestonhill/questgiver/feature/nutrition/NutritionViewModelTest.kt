@@ -15,6 +15,10 @@ import com.prestonhill.questgiver.data.repository.FoodLogDraft
 import com.prestonhill.questgiver.data.repository.NutritionItemDraft
 import com.prestonhill.questgiver.data.repository.NutritionRepository
 import com.prestonhill.questgiver.data.repository.NutritionValuesInput
+import com.prestonhill.questgiver.data.repository.ComposedNutritionItemDraft
+import com.prestonhill.questgiver.data.repository.NutritionComponentDraft
+import com.prestonhill.questgiver.data.repository.NutritionItemRemovalResult
+import org.junit.Assert.assertNull
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -193,6 +197,484 @@ class NutritionViewModelTest {
         }
 
     @Test
+    fun addEditorUsesSelectedDateAndActiveItems(): Unit =
+        runBlocking {
+            val activeId = addItem()
+            val archivedId = addItem()
+
+            repository.createComposedItem(
+                ComposedNutritionItemDraft(
+                    name = "Archived parent",
+                    components =
+                        listOf(
+                            NutritionComponentDraft(
+                                itemId = archivedId,
+                                gramsPer100g =
+                                    100.0,
+                            )
+                        ),
+                )
+            )
+
+            assertEquals(
+                NutritionItemRemovalResult.ARCHIVED,
+                repository.removeItem(
+                    itemId = archivedId,
+                    timestampMillis =
+                        clock.millis(),
+                ),
+            )
+
+            viewModel.onAction(
+                NutritionAction.SelectDate(
+                    PAST_DATE
+                )
+            )
+
+            awaitState {
+                it.selectedDate == PAST_DATE
+            }
+
+            viewModel.onAction(
+                NutritionAction.OpenAddLog
+            )
+
+            val editor =
+                requireNotNull(
+                    awaitState {
+                        it.logEditor != null
+                    }.logEditor
+                )
+
+            assertEquals(
+                PAST_DATE,
+                editor.date,
+            )
+
+            assertTrue(
+                editor.itemOptions.any {
+                    it.id == activeId
+                }
+            )
+
+            assertTrue(
+                editor.itemOptions.none {
+                    it.id == archivedId
+                }
+            )
+
+            assertEquals(
+                LocalTime.of(12, 0),
+                editor.time,
+            )
+
+            assertFalse(editor.isEditing)
+            assertFalse(editor.canSave)
+        }
+
+    @Test
+    fun addEditorSavesLogForSelectedDay(): Unit =
+        runBlocking {
+            val itemId = addItem()
+
+            viewModel.onAction(
+                NutritionAction.SelectDate(
+                    PAST_DATE
+                )
+            )
+
+            awaitState {
+                it.selectedDate == PAST_DATE
+            }
+
+            viewModel.onAction(
+                NutritionAction.OpenAddLog
+            )
+
+            awaitState {
+                it.logEditor?.itemOptions
+                    ?.any { option ->
+                        option.id == itemId
+                    } == true
+            }
+
+            viewModel.onAction(
+                NutritionAction.SelectLogItem(
+                    itemId
+                )
+            )
+
+            viewModel.onAction(
+                NutritionAction.ChangeLogWeight(
+                    "125.5"
+                )
+            )
+
+            viewModel.onAction(
+                NutritionAction.ChangeLogTime(
+                    LocalTime.of(8, 30)
+                )
+            )
+
+            viewModel.onAction(
+                NutritionAction.SaveLog
+            )
+
+            val state =
+                awaitState {
+                    it.logEditor == null &&
+                            it.logs.any { row ->
+                                row.itemId == itemId
+                            }
+                }
+
+            val row =
+                state.logs.single {
+                    it.itemId == itemId
+                }
+
+            assertEquals(
+                PAST_DATE,
+                state.selectedDate,
+            )
+
+            assertEquals(
+                125.5,
+                row.weightGrams,
+                TOLERANCE,
+            )
+
+            assertEquals(
+                LocalTime.of(8, 30),
+                row.consumedTime,
+            )
+
+            assertNull(state.destination)
+        }
+
+    @Test
+    fun editLogCanChangeItemWeightAndTime(): Unit =
+        runBlocking {
+            val firstItemId = addItem()
+            val secondItemId = addItem()
+
+            val logId =
+                addLog(
+                    itemId = firstItemId,
+                    date = CURRENT_DATE,
+                    hour = 10,
+                )
+
+            awaitState {
+                it.logs.any { row ->
+                    row.logId == logId
+                }
+            }
+
+            viewModel.onAction(
+                NutritionAction.InspectLog(
+                    logId
+                )
+            )
+
+            val opened =
+                requireNotNull(
+                    awaitState {
+                        it.logEditor?.logId ==
+                                logId
+                    }.logEditor
+                )
+
+            assertTrue(opened.isEditing)
+
+            assertEquals(
+                firstItemId,
+                opened.selectedItemId,
+            )
+
+            assertEquals(
+                "100",
+                opened.weightText,
+            )
+
+            assertEquals(
+                LocalTime.of(10, 0),
+                opened.time,
+            )
+
+            viewModel.onAction(
+                NutritionAction.SelectLogItem(
+                    secondItemId
+                )
+            )
+
+            viewModel.onAction(
+                NutritionAction.ChangeLogWeight(
+                    "75"
+                )
+            )
+
+            viewModel.onAction(
+                NutritionAction.ChangeLogTime(
+                    LocalTime.of(11, 30)
+                )
+            )
+
+            viewModel.onAction(
+                NutritionAction.SaveLog
+            )
+
+            val state =
+                awaitState {
+                    it.logEditor == null &&
+                            it.logs.any { row ->
+                                row.logId == logId &&
+                                        row.itemId ==
+                                        secondItemId
+                            }
+                }
+
+            val row =
+                state.logs.single {
+                    it.logId == logId
+                }
+
+            assertEquals(
+                75.0,
+                row.weightGrams,
+                TOLERANCE,
+            )
+
+            assertEquals(
+                LocalTime.of(11, 30),
+                row.consumedTime,
+            )
+        }
+
+    @Test
+    fun archivedLogItemIsRetainedForEditing(): Unit =
+        runBlocking {
+            val itemId = addItem()
+
+            val logId =
+                addLog(
+                    itemId = itemId,
+                    date = CURRENT_DATE,
+                    hour = 12,
+                )
+
+            repository.createComposedItem(
+                ComposedNutritionItemDraft(
+                    name = "Parent item",
+                    components =
+                        listOf(
+                            NutritionComponentDraft(
+                                itemId = itemId,
+                                gramsPer100g =
+                                    100.0,
+                            )
+                        ),
+                )
+            )
+
+            assertEquals(
+                NutritionItemRemovalResult.ARCHIVED,
+                repository.removeItem(
+                    itemId = itemId,
+                    timestampMillis =
+                        clock.millis(),
+                ),
+            )
+
+            viewModel.onAction(
+                NutritionAction.InspectLog(
+                    logId
+                )
+            )
+
+            val editor =
+                requireNotNull(
+                    awaitState {
+                        it.logEditor?.logId ==
+                                logId
+                    }.logEditor
+                )
+
+            val selectedOption =
+                editor.itemOptions.single {
+                    it.id == itemId
+                }
+
+            assertTrue(
+                selectedOption.isArchived
+            )
+
+            assertEquals(
+                itemId,
+                editor.selectedItemId,
+            )
+
+            viewModel.onAction(
+                NutritionAction.ChangeLogWeight(
+                    "150"
+                )
+            )
+
+            viewModel.onAction(
+                NutritionAction.SaveLog
+            )
+
+            val state =
+                awaitState {
+                    it.logEditor == null &&
+                            it.logs.any { row ->
+                                row.logId == logId &&
+                                        row.weightGrams ==
+                                        150.0
+                            }
+                }
+
+            assertTrue(
+                state.logs.single {
+                    it.logId == logId
+                }.isItemArchived
+            )
+        }
+
+    @Test
+    fun editLogCanBeDeleted(): Unit =
+        runBlocking {
+            val itemId = addItem()
+
+            val logId =
+                addLog(
+                    itemId = itemId,
+                    date = CURRENT_DATE,
+                    hour = 12,
+                )
+
+            awaitState {
+                it.logs.any { row ->
+                    row.logId == logId
+                }
+            }
+
+            viewModel.onAction(
+                NutritionAction.InspectLog(
+                    logId
+                )
+            )
+
+            awaitState {
+                it.logEditor?.logId == logId
+            }
+
+            viewModel.onAction(
+                NutritionAction
+                    .RequestDeleteLog
+            )
+
+            awaitState {
+                it.logEditor
+                    ?.showDeleteConfirmation ==
+                        true
+            }
+
+            viewModel.onAction(
+                NutritionAction
+                    .DismissDeleteLog
+            )
+
+            awaitState {
+                it.logEditor
+                    ?.showDeleteConfirmation ==
+                        false
+            }
+
+            viewModel.onAction(
+                NutritionAction
+                    .RequestDeleteLog
+            )
+
+            awaitState {
+                it.logEditor
+                    ?.showDeleteConfirmation ==
+                        true
+            }
+
+            viewModel.onAction(
+                NutritionAction.DeleteLog
+            )
+
+            val state =
+                awaitState {
+                    it.logEditor == null &&
+                            it.logs.none { row ->
+                                row.logId == logId
+                            }
+                }
+
+            assertNull(
+                repository.getLog(logId)
+            )
+
+            assertNull(state.destination)
+        }
+
+    @Test
+    fun missingLogCannotOpenEditor(): Unit =
+        runBlocking {
+            awaitState {
+                !it.isLoading
+            }
+
+            viewModel.onAction(
+                NutritionAction.InspectLog(
+                    Long.MAX_VALUE
+                )
+            )
+
+            val state =
+                awaitState {
+                    it.operationError ==
+                            "Food log could not be found."
+                }
+
+            assertNull(state.logEditor)
+            assertNull(state.destination)
+        }
+
+    @Test
+    fun manageDestinationCanBeDismissed(): Unit =
+        runBlocking {
+            awaitState {
+                !it.isLoading
+            }
+
+            viewModel.onAction(
+                NutritionAction.OpenManage
+            )
+
+            awaitState {
+                it.destination ==
+                        NutritionDestination.Manage
+            }
+
+            viewModel.onAction(
+                NutritionAction
+                    .DismissDestination
+            )
+
+            val state =
+                awaitState {
+                    it.destination == null
+                }
+
+            assertNull(state.destination)
+            assertNull(state.logEditor)
+        }
+
+    @Test
     fun selectingPastDateChangesLogRange(): Unit =
         runBlocking {
             val itemId = addItem()
@@ -338,78 +820,6 @@ class NutritionViewModelTest {
                 0.5f,
                 state.proteinProgress,
                 FLOAT_TOLERANCE,
-            )
-        }
-
-    @Test
-    fun destinationsCanBeOpenedAndDismissed(): Unit =
-        runBlocking {
-            awaitState {
-                !it.isLoading
-            }
-
-            viewModel.onAction(
-                NutritionAction.OpenDatePicker
-            )
-
-            awaitState {
-                it.showDatePicker
-            }
-
-            viewModel.onAction(
-                NutritionAction.OpenAddLog
-            )
-
-            val add =
-                awaitState {
-                    it.destination ==
-                            NutritionDestination
-                                .AddLog
-                }
-
-            assertFalse(add.showDatePicker)
-
-            viewModel.onAction(
-                NutritionAction.InspectLog(
-                    42L
-                )
-            )
-
-            val edit =
-                awaitState {
-                    it.destination ==
-                            NutritionDestination
-                                .EditLog(42L)
-                }
-
-            assertEquals(
-                NutritionDestination
-                    .EditLog(42L),
-                edit.destination,
-            )
-
-            viewModel.onAction(
-                NutritionAction.OpenManage
-            )
-
-            awaitState {
-                it.destination ==
-                        NutritionDestination.Manage
-            }
-
-            viewModel.onAction(
-                NutritionAction
-                    .DismissDestination
-            )
-
-            val dismissed =
-                awaitState {
-                    it.destination == null
-                }
-
-            assertEquals(
-                null,
-                dismissed.destination,
             )
         }
 

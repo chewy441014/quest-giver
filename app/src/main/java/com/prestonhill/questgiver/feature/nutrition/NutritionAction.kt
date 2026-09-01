@@ -1,6 +1,7 @@
 package com.prestonhill.questgiver.feature.nutrition
 
 import java.time.LocalDate
+import java.time.LocalTime
 
 sealed interface NutritionAction {
     data object OpenDatePicker :
@@ -27,5 +28,36 @@ sealed interface NutritionAction {
         NutritionAction
 
     data object DismissDestination :
+        NutritionAction
+
+    data class ChangeLogItemSearch(
+        val value: String,
+    ) : NutritionAction
+
+    data class SelectLogItem(
+        val itemId: Long,
+    ) : NutritionAction
+
+    data class ChangeLogWeight(
+        val value: String,
+    ) : NutritionAction
+
+    data class ChangeLogTime(
+        val time: LocalTime,
+    ) : NutritionAction
+
+    data object SaveLog :
+        NutritionAction
+
+    data object DismissLogEditor :
+        NutritionAction
+
+    data object RequestDeleteLog :
+        NutritionAction
+
+    data object DismissDeleteLog :
+        NutritionAction
+
+    data object DeleteLog :
         NutritionAction
 }
