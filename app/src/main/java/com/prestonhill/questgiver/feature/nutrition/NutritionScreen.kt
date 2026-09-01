@@ -211,6 +211,13 @@ fun NutritionScreen(
         )
     }
 
+    state.logEditor?.let { editor ->
+        NutritionLogEditorDialog(
+            editor = editor,
+            onAction = onAction,
+        )
+    }
+
     state.operationError
         ?.let { message ->
             AlertDialog(
