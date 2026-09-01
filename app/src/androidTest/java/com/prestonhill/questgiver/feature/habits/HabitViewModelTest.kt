@@ -580,7 +580,7 @@ class HabitViewModelTest {
     companion object {
         const val MISSING_HABIT_ID = 999L
     }
-    private class TestClock(
+    class TestClock(
         initialInstant: Instant,
         private val zone: ZoneId,
     ) : Clock() {
@@ -603,7 +603,7 @@ class HabitViewModelTest {
         }
     }
 
-    private class TestTimer : BoundaryTimer {
+    class TestTimer : BoundaryTimer {
         private val waits =
             Channel<TimerWait>(Channel.UNLIMITED)
 
@@ -622,7 +622,7 @@ class HabitViewModelTest {
             waits.receive()
     }
 
-    private data class TimerWait(
+    data class TimerWait(
         val milliseconds: Long,
         val resume: CompletableDeferred<Unit>,
     )

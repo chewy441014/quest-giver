@@ -26,6 +26,9 @@ import com.prestonhill.questgiver.feature.tasks.TaskScreenUiState
 import com.prestonhill.questgiver.feature.history.HistoryAction
 import com.prestonhill.questgiver.feature.history.HistoryScreen
 import com.prestonhill.questgiver.feature.history.HistoryScreenUiState
+import com.prestonhill.questgiver.feature.nutrition.NutritionAction
+import com.prestonhill.questgiver.feature.nutrition.NutritionScreen
+import com.prestonhill.questgiver.feature.nutrition.NutritionScreenUiState
 
 enum class AppPage(
     val title: String,
@@ -59,6 +62,8 @@ fun AppShell(
     onOpenSettings: () -> Unit,
     historyState: HistoryScreenUiState,
     onHistoryAction: (HistoryAction) -> Unit,
+    nutritionState: NutritionScreenUiState,
+    onNutritionAction: (NutritionAction) -> Unit,
 ) {
     val pages = AppPage.entries
 
@@ -132,8 +137,10 @@ fun AppShell(
                 }
 
                 AppPage.NUTRITION -> {
-                    PlaceholderPage(
-                        "Nutrition coming soon"
+                    NutritionScreen(
+                        state = nutritionState,
+                        onAction =
+                            onNutritionAction,
                     )
                 }
 

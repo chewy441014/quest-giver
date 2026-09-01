@@ -29,6 +29,9 @@ import com.prestonhill.questgiver.feature.tasks.TaskViewModel
 import com.prestonhill.questgiver.feature.tasks.TaskViewModelFactory
 import com.prestonhill.questgiver.feature.history.HistoryViewModel
 import com.prestonhill.questgiver.feature.history.HistoryViewModelFactory
+import com.prestonhill.questgiver.data.repository.NutritionRepository
+import com.prestonhill.questgiver.feature.nutrition.NutritionViewModel
+import com.prestonhill.questgiver.feature.nutrition.NutritionViewModelFactory
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,6 +45,9 @@ class MainActivity : ComponentActivity() {
 
         val taskRepository =
             TaskRepository(database)
+
+        val nutritionRepository =
+            NutritionRepository(database)
 
         val appClock =
             Clock.systemDefaultZone()
@@ -62,6 +68,15 @@ class MainActivity : ComponentActivity() {
             TaskViewModelFactory(
                 repository = taskRepository,
                 settings = settingsRepository.settings,
+                clock = appClock,
+            )
+
+        val nutritionViewModelFactory =
+            NutritionViewModelFactory(
+                repository =
+                    nutritionRepository,
+                settings =
+                    settingsRepository.settings,
                 clock = appClock,
             )
 
@@ -110,12 +125,24 @@ class MainActivity : ComponentActivity() {
                 habitViewModel.uiState
                     .collectAsStateWithLifecycle()
 
+                val nutritionViewModel:
+                        NutritionViewModel =
+                    viewModel(
+                        factory =
+                            nutritionViewModelFactory
+                    )
+
+                val nutritionState by
+                nutritionViewModel.uiState
+                    .collectAsStateWithLifecycle()
+
                 LifecycleEventEffect(
                     event = Lifecycle.Event.ON_RESUME
                 ) {
                     habitViewModel.refreshAppDay()
                     taskViewModel.refresh()
                     historyViewModel.refresh()
+                    nutritionViewModel.refresh()
                 }
 
                 var showSettings by rememberSaveable {
@@ -147,6 +174,10 @@ class MainActivity : ComponentActivity() {
                         historyState = historyState,
                         onHistoryAction =
                             historyViewModel::onAction,
+                        nutritionState =
+                            nutritionState,
+                        onNutritionAction =
+                            nutritionViewModel::onAction,
                     )
                 }
             }
