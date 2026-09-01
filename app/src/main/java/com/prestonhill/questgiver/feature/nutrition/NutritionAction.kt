@@ -82,4 +82,41 @@ sealed interface NutritionAction {
 
     data object ResetLogItemFilters :
         NutritionAction
+
+    data class ChangeManageSearch(
+        val value: String,
+    ) : NutritionAction
+
+    data class ChangeManageSort(
+        val sort: NutritionItemSort,
+    ) : NutritionAction
+
+    data class ChangeManageMinimumProtein(
+        val value: String,
+    ) : NutritionAction
+
+    data class ChangeManageMinimumProteinRatio(
+        val value: String,
+    ) : NutritionAction
+
+    data class ChangeManageArchiveFilter(
+        val filter: NutritionArchiveFilter,
+    ) : NutritionAction
+
+    data object ResetManageFilters :
+        NutritionAction
+
+    data object OpenAddItem :
+        NutritionAction
+
+    data class InspectItem(
+        val itemId: Long,
+    ) : NutritionAction
+
+    data object DismissItemEditor :
+        NutritionAction
+
+    data class SelectItemEditorVersion(
+        val itemId: Long,
+    ) : NutritionAction
 }

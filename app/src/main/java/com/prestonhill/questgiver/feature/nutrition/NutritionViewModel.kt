@@ -12,6 +12,8 @@ import com.prestonhill.questgiver.data.repository.NutritionRepository
 import com.prestonhill.questgiver.data.local.database.entity.NutritionItemEntity
 import com.prestonhill.questgiver.data.repository.FoodLogDraft
 import com.prestonhill.questgiver.data.repository.NutritionItemUsage
+import com.prestonhill.questgiver.data.repository.NutritionItemDetails
+import com.prestonhill.questgiver.data.repository.NutritionItemRemovalMode
 import java.time.Instant
 import java.time.LocalTime
 import java.util.concurrent.CancellationException
@@ -67,6 +69,13 @@ class NutritionViewModel(
 
     private val logEditor = MutableStateFlow<NutritionLogEditorUiState?>(null)
 
+    private val itemEditor =
+        MutableStateFlow<
+                NutritionItemEditorUiState?
+                >(null)
+
+    private var itemEditorRequestVersion = 0L
+
     private val settingsState =
         settings.stateIn(
             scope = viewModelScope,
@@ -119,24 +128,68 @@ class NutritionViewModel(
                 timeState.value.currentDay,
         )
 
+    private val manageControls =
+        MutableStateFlow(
+            NutritionManageControls()
+        )
+
+    private val manageState =
+        combine(
+            repository.observeItemUsage(),
+            manageControls,
+        ) { usage, controls ->
+            NutritionManageUiState(
+                itemOptions =
+                    itemOptions(usage),
+                itemSearch =
+                    controls.itemSearch,
+                itemSort =
+                    controls.itemSort,
+                minimumProteinText =
+                    controls.minimumProteinText,
+                minimumProteinRatioText =
+                    controls
+                        .minimumProteinRatioText,
+                archiveFilter =
+                    controls.archiveFilter,
+            )
+        }
+
+    private val editorOverlayState =
+        combine(
+            logEditor,
+            itemEditor,
+        ) { log, item ->
+            NutritionEditorOverlayState(
+                logEditor = log,
+                itemEditor = item,
+            )
+        }
+
     private val overlayState =
         combine(
             showDatePicker,
             operationError,
             destination,
-            logEditor,
+            editorOverlayState,
+            manageState,
         ) {
                 picker,
                 error,
                 requestedDestination,
-                editor,
+                editors,
+                manage,
             ->
             NutritionOverlayState(
                 showDatePicker = picker,
                 operationError = error,
                 destination =
                     requestedDestination,
-                logEditor = editor,
+                logEditor =
+                    editors.logEditor,
+                itemEditor =
+                    editors.itemEditor,
+                manage = manage,
             )
         }
 
@@ -181,6 +234,7 @@ class NutritionViewModel(
                 destination =
                     overlay.destination,
                 logEditor = overlay.logEditor,
+                manage = overlay.manage,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -314,6 +368,82 @@ class NutritionViewModel(
                 }
             }
 
+            NutritionAction.OpenAddItem -> {
+                openNewItemEditor()
+            }
+
+            is NutritionAction.InspectItem -> {
+                openItemEditor(action.itemId)
+            }
+
+            NutritionAction.DismissItemEditor -> {
+                dismissItemEditor()
+            }
+
+            is NutritionAction
+            .SelectItemEditorVersion -> {
+                openItemEditor(action.itemId)
+            }
+
+            is NutritionAction.ChangeManageSearch -> {
+                manageControls.update {
+                    it.copy(
+                        itemSearch = action.value
+                    )
+                }
+            }
+
+            is NutritionAction.ChangeManageSort -> {
+                manageControls.update {
+                    it.copy(
+                        itemSort = action.sort
+                    )
+                }
+            }
+
+            is NutritionAction
+            .ChangeManageMinimumProtein -> {
+                manageControls.update {
+                    it.copy(
+                        minimumProteinText =
+                            action.value
+                    )
+                }
+            }
+
+            is NutritionAction
+            .ChangeManageMinimumProteinRatio -> {
+                manageControls.update {
+                    it.copy(
+                        minimumProteinRatioText =
+                            action.value
+                    )
+                }
+            }
+
+            is NutritionAction
+            .ChangeManageArchiveFilter -> {
+                manageControls.update {
+                    it.copy(
+                        archiveFilter =
+                            action.filter
+                    )
+                }
+            }
+
+            NutritionAction.ResetManageFilters -> {
+                manageControls.update {
+                    it.copy(
+                        itemSort =
+                            NutritionItemSort.RECENT,
+                        minimumProteinText = "",
+                        minimumProteinRatioText = "",
+                        archiveFilter =
+                            NutritionArchiveFilter.ACTIVE,
+                    )
+                }
+            }
+
             NutritionAction.DismissLogVersions -> {
                 logEditor.update {
                     it?.copy(
@@ -410,12 +540,25 @@ class NutritionViewModel(
 
                 showDatePicker.value = false
                 logEditor.value = null
+                manageControls.value =
+                    NutritionManageControls()
+                itemEditorRequestVersion += 1L
+                itemEditor.value = null
                 destination.value =
                     NutritionDestination.Manage
             }
 
-            NutritionAction
-                .DismissDestination -> {
+            NutritionAction.DismissDestination -> {
+                if (
+                    logEditor.value?.isBusy == true ||
+                    itemEditor.value?.isBusy == true
+                ) {
+                    return
+                }
+
+                itemEditorRequestVersion += 1L
+                logEditor.value = null
+                itemEditor.value = null
                 destination.value = null
             }
 
@@ -430,6 +573,13 @@ class NutritionViewModel(
         currentTimestamp.value =
             clock.millis()
     }
+
+    private data class NutritionEditorOverlayState(
+        val logEditor:
+        NutritionLogEditorUiState?,
+        val itemEditor:
+        NutritionItemEditorUiState?,
+    )
 
     private fun selectDate(
         date: LocalDate,
@@ -883,6 +1033,227 @@ class NutritionViewModel(
         )
     }
 
+    private fun openNewItemEditor() {
+        if (
+            destination.value !=
+            NutritionDestination.Manage ||
+            itemEditor.value?.isBusy == true
+        ) {
+            return
+        }
+
+        operationError.value = null
+
+        val requestVersion =
+            ++itemEditorRequestVersion
+
+        viewModelScope.launch {
+            try {
+                val usage =
+                    repository
+                        .observeItemUsage()
+                        .first()
+
+                if (
+                    requestVersion !=
+                    itemEditorRequestVersion ||
+                    destination.value !=
+                    NutritionDestination.Manage
+                ) {
+                    return@launch
+                }
+
+                itemEditor.value =
+                    NutritionItemEditorUiState(
+                        knownItems =
+                            itemOptions(usage),
+                    )
+            } catch (error: Exception) {
+                if (
+                    error is CancellationException
+                ) {
+                    throw error
+                }
+
+                if (
+                    requestVersion ==
+                    itemEditorRequestVersion
+                ) {
+                    operationError.value =
+                        "Food editor could not be opened."
+                }
+            }
+        }
+    }
+
+    private fun openItemEditor(
+        itemId: Long,
+    ) {
+        if (
+            destination.value !=
+            NutritionDestination.Manage ||
+            itemEditor.value?.isBusy == true
+        ) {
+            return
+        }
+
+        operationError.value = null
+
+        val requestVersion =
+            ++itemEditorRequestVersion
+
+        viewModelScope.launch {
+            try {
+                val details =
+                    repository.getItemDetails(
+                        itemId
+                    )
+
+                if (details == null) {
+                    if (
+                        requestVersion ==
+                        itemEditorRequestVersion
+                    ) {
+                        operationError.value =
+                            "Food could not be found."
+                    }
+
+                    return@launch
+                }
+
+                val usage =
+                    repository
+                        .observeItemUsage()
+                        .first()
+
+                val knownItems =
+                    itemOptions(usage)
+
+                val removalMode =
+                    repository.getRemovalMode(
+                        itemId
+                    )
+
+                if (
+                    requestVersion !=
+                    itemEditorRequestVersion ||
+                    destination.value !=
+                    NutritionDestination.Manage
+                ) {
+                    return@launch
+                }
+
+                val loaded =
+                    itemEditorState(
+                        details = details,
+                        knownItems = knownItems,
+                        removalMode =
+                            removalMode,
+                    )
+
+                itemEditor.value =
+                    loaded.copy(
+                        initialSnapshot =
+                            loaded.currentSnapshot
+                    )
+            } catch (error: Exception) {
+                if (
+                    error is CancellationException
+                ) {
+                    throw error
+                }
+
+                if (
+                    requestVersion ==
+                    itemEditorRequestVersion
+                ) {
+                    operationError.value =
+                        "Food editor could not be opened."
+                }
+            }
+        }
+    }
+
+    private fun itemEditorState(
+        details: NutritionItemDetails,
+        knownItems:
+        List<NutritionItemOptionUiState>,
+        removalMode:
+        NutritionItemRemovalMode?,
+    ): NutritionItemEditorUiState {
+        val item = details.item
+
+        val optionsById =
+            knownItems.associateBy {
+                it.id
+            }
+
+        return NutritionItemEditorUiState(
+            itemId = item.id,
+            originalNameKey =
+                item.nameKey,
+            version = item.version,
+            knownItems = knownItems,
+            nameText = item.name,
+            versionLabelText =
+                item.versionLabel.orEmpty(),
+            entryMode =
+                NutritionEntryMode
+                    .PER_100_GRAMS,
+            caloriesPer100gText =
+                amountText(
+                    item.caloriesPer100g
+                ),
+            proteinPer100gText =
+                amountText(
+                    item.proteinPer100g
+                ),
+            components =
+                details.components.map {
+                        component ->
+                    NutritionItemComponentUiState(
+                        item =
+                            requireNotNull(
+                                optionsById[
+                                    component.item.id
+                                ]
+                            ),
+                        gramsText =
+                            amountText(
+                                component
+                                    .gramsPer100g
+                            ),
+                    )
+                },
+            isArchived =
+                item.archivedAtEpochMillis !=
+                        null,
+            removalMode =
+                when (removalMode) {
+                    NutritionItemRemovalMode
+                        .ARCHIVE ->
+                        NutritionItemRemovalModeUiState
+                            .ARCHIVE
+
+                    NutritionItemRemovalMode
+                        .DELETE ->
+                        NutritionItemRemovalModeUiState
+                            .DELETE
+
+                    null -> null
+                },
+        )
+    }
+
+    private fun dismissItemEditor() {
+        if (itemEditor.value?.isBusy == true) {
+            return
+        }
+
+        itemEditorRequestVersion += 1L
+        itemEditor.value = null
+    }
+
     private fun zoneFor(
         daylightSavingEnabled: Boolean,
     ): ZoneId =
@@ -915,6 +1286,8 @@ class NutritionViewModel(
         val operationError: String?,
         val destination: NutritionDestination?,
         val logEditor: NutritionLogEditorUiState?,
+        val manage: NutritionManageUiState,
+        val itemEditor: NutritionItemEditorUiState?,
     )
 
     private data class NutritionBoundarySettings(
@@ -957,3 +1330,16 @@ class NutritionViewModelFactory(
         )
     }
 }
+
+private data class NutritionManageControls(
+    val itemSearch: String = "",
+    val itemSort:
+    NutritionItemSort =
+        NutritionItemSort.RECENT,
+    val minimumProteinText: String = "",
+    val minimumProteinRatioText:
+    String = "",
+    val archiveFilter:
+    NutritionArchiveFilter =
+        NutritionArchiveFilter.ACTIVE,
+)

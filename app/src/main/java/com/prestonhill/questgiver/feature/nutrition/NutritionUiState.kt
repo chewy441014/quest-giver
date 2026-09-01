@@ -35,6 +35,8 @@ data class NutritionScreenUiState(
     val operationError: String? = null,
     val destination: NutritionDestination? = null,
     val logEditor: NutritionLogEditorUiState? = null,
+    val manage: NutritionManageUiState = NutritionManageUiState(),
+    val itemEditor: NutritionItemEditorUiState? = null,
 )
 
 data class NutritionItemOptionUiState(
@@ -89,6 +91,12 @@ enum class NutritionItemSort {
     CALORIES,
     PROTEIN,
     PROTEIN_RATIO,
+}
+
+enum class NutritionArchiveFilter {
+    ACTIVE,
+    ARCHIVED,
+    ALL,
 }
 
 data class NutritionFoodGroupUiState(
@@ -176,85 +184,20 @@ data class NutritionLogEditorUiState(
     val visibleFoodGroups:
             List<NutritionFoodGroupUiState>
         get() {
-            if (!filtersValid) {
-                return emptyList()
-            }
-
-            val query =
-                itemSearch.trim()
-
-            val minimumProtein =
-                optionalNumber(
-                    minimumProteinText
-                )
-
-            val minimumRatio =
-                optionalNumber(
-                    minimumProteinRatioText
-                )
-
-            val matchingOptions =
-                itemOptions.filter { option ->
-                    val searchMatches =
-                        query.isEmpty() ||
-                                option.name.contains(
-                                    query,
-                                    ignoreCase = true,
-                                ) ||
-                                option.versionLabel
-                                    ?.contains(
-                                        query,
-                                        ignoreCase = true,
-                                    ) == true ||
-                                "v${option.version}"
-                                    .contains(
-                                        query,
-                                        ignoreCase = true,
-                                    )
-
-                    val proteinMatches =
-                        minimumProtein == null ||
-                                option.proteinPer100g >=
-                                minimumProtein
-
-                    val ratioMatches =
-                        minimumRatio == null ||
-                                option
-                                    .proteinPer100Calories >=
-                                minimumRatio
-
-                    searchMatches &&
-                            proteinMatches &&
-                            ratioMatches
-                }
-
             val groups =
-                matchingOptions
-                    .groupBy {
-                        it.nameKey
-                    }
-                    .map {
-                            (nameKey, versions) ->
-                        NutritionFoodGroupUiState(
-                            name =
-                                versions.first().name,
-                            nameKey = nameKey,
-                            versions =
-                                versions.sortedBy {
-                                    it.version
-                                },
-                        )
-                    }
-                    .sortedWith(
-                        foodGroupComparator(
-                            itemSort
-                        )
-                    )
+                filteredFoodGroups(
+                    itemOptions = itemOptions,
+                    query = itemSearch,
+                    sort = itemSort,
+                    minimumProteinText =
+                        minimumProteinText,
+                    minimumProteinRatioText =
+                        minimumProteinRatioText,
+                )
 
             val isDefaultView =
-                query.isEmpty() &&
-                        minimumProteinText
-                            .isBlank() &&
+                itemSearch.isBlank() &&
+                        minimumProteinText.isBlank() &&
                         minimumProteinRatioText
                             .isBlank() &&
                         itemSort ==
@@ -298,6 +241,142 @@ data class NutritionLogEditorUiState(
                     weight.isFinite() &&
                     weight > 0.0
         }
+}
+
+data class NutritionManageUiState(
+    val itemOptions:
+    List<NutritionItemOptionUiState> =
+        emptyList(),
+    val itemSearch: String = "",
+    val itemSort:
+    NutritionItemSort =
+        NutritionItemSort.RECENT,
+    val minimumProteinText: String = "",
+    val minimumProteinRatioText:
+    String = "",
+    val archiveFilter:
+    NutritionArchiveFilter =
+        NutritionArchiveFilter.ACTIVE,
+) {
+    val filtersValid: Boolean
+        get() =
+            validOptionalNumber(
+                minimumProteinText
+            ) &&
+                    validOptionalNumber(
+                        minimumProteinRatioText
+                    )
+
+    val visibleFoodGroups:
+            List<NutritionFoodGroupUiState>
+        get() {
+            val archiveFiltered =
+                itemOptions.filter { option ->
+                    when (archiveFilter) {
+                        NutritionArchiveFilter.ACTIVE ->
+                            !option.isArchived
+
+                        NutritionArchiveFilter.ARCHIVED ->
+                            option.isArchived
+
+                        NutritionArchiveFilter.ALL ->
+                            true
+                    }
+                }
+
+            return filteredFoodGroups(
+                itemOptions = archiveFiltered,
+                query = itemSearch,
+                sort = itemSort,
+                minimumProteinText =
+                    minimumProteinText,
+                minimumProteinRatioText =
+                    minimumProteinRatioText,
+            )
+        }
+}
+
+private fun filteredFoodGroups(
+    itemOptions:
+    List<NutritionItemOptionUiState>,
+    query: String,
+    sort: NutritionItemSort,
+    minimumProteinText: String,
+    minimumProteinRatioText: String,
+): List<NutritionFoodGroupUiState> {
+    if (
+        !validOptionalNumber(
+            minimumProteinText
+        ) ||
+        !validOptionalNumber(
+            minimumProteinRatioText
+        )
+    ) {
+        return emptyList()
+    }
+
+    val normalizedQuery =
+        query.trim()
+
+    val minimumProtein =
+        optionalNumber(
+            minimumProteinText
+        )
+
+    val minimumRatio =
+        optionalNumber(
+            minimumProteinRatioText
+        )
+
+    return itemOptions
+        .filter { option ->
+            val searchMatches =
+                normalizedQuery.isEmpty() ||
+                        option.name.contains(
+                            normalizedQuery,
+                            ignoreCase = true,
+                        ) ||
+                        option.versionLabel
+                            ?.contains(
+                                normalizedQuery,
+                                ignoreCase = true,
+                            ) == true ||
+                        "v${option.version}"
+                            .contains(
+                                normalizedQuery,
+                                ignoreCase = true,
+                            )
+
+            val proteinMatches =
+                minimumProtein == null ||
+                        option.proteinPer100g >=
+                        minimumProtein
+
+            val ratioMatches =
+                minimumRatio == null ||
+                        option.proteinPer100Calories >=
+                        minimumRatio
+
+            searchMatches &&
+                    proteinMatches &&
+                    ratioMatches
+        }
+        .groupBy {
+            it.nameKey
+        }
+        .map { (nameKey, versions) ->
+            NutritionFoodGroupUiState(
+                name = versions.first().name,
+                nameKey = nameKey,
+                versions =
+                    versions.sortedBy {
+                        it.version
+                    },
+            )
+        }
+        .sortedWith(
+            foodGroupComparator(sort)
+        )
 }
 
 private fun optionalNumber(

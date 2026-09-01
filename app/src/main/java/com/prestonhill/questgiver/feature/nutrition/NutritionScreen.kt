@@ -76,123 +76,133 @@ fun NutritionScreen(
         return
     }
 
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-        verticalArrangement =
-            Arrangement.spacedBy(16.dp),
+    if (
+        state.destination ==
+        NutritionDestination.Manage
     ) {
-        DateHeader(
-            state = state,
+        NutritionManageScreen(
+            state = state.manage,
             onAction = onAction,
         )
+    } else {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+            verticalArrangement =
+                Arrangement.spacedBy(16.dp),
+        ) {
+            DateHeader(
+                state = state,
+                onAction = onAction,
+            )
 
-        GoalProgress(
-            label = "Calories",
-            amount =
-                state.totalCalories,
-            goal = state.calorieGoal,
-            unit = "kcal",
-            progress =
-                state.calorieProgress,
-            tag =
-                NutritionTags
-                    .CALORIE_PROGRESS,
-        )
+            GoalProgress(
+                label = "Calories",
+                amount =
+                    state.totalCalories,
+                goal = state.calorieGoal,
+                unit = "kcal",
+                progress =
+                    state.calorieProgress,
+                tag =
+                    NutritionTags
+                        .CALORIE_PROGRESS,
+            )
 
-        GoalProgress(
-            label = "Protein",
-            amount =
-                state.totalProteinGrams,
-            goal =
-                state.proteinGoalGrams,
-            unit = "g",
-            progress =
-                state.proteinProgress,
-            tag =
-                NutritionTags
-                    .PROTEIN_PROGRESS,
-        )
+            GoalProgress(
+                label = "Protein",
+                amount =
+                    state.totalProteinGrams,
+                goal =
+                    state.proteinGoalGrams,
+                unit = "g",
+                progress =
+                    state.proteinProgress,
+                tag =
+                    NutritionTags
+                        .PROTEIN_PROGRESS,
+            )
 
-        if (state.logs.isEmpty()) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                contentAlignment =
-                    Alignment.Center,
-            ) {
-                Text(
-                    "No food logged for this day."
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier =
-                    Modifier.weight(1f),
-                verticalArrangement =
-                    Arrangement.spacedBy(
-                        8.dp
-                    ),
-            ) {
-                items(
-                    items = state.logs,
-                    key = {
-                        it.logId
-                    },
-                ) { log ->
-                    NutritionLogRow(
-                        log = log,
-                        onClick = {
-                            onAction(
-                                NutritionAction
-                                    .InspectLog(
-                                        log.logId
-                                    )
-                            )
-                        },
+            if (state.logs.isEmpty()) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                    contentAlignment =
+                        Alignment.Center,
+                ) {
+                    Text(
+                        "No food logged for this day."
                     )
                 }
+            } else {
+                LazyColumn(
+                    modifier =
+                        Modifier.weight(1f),
+                    verticalArrangement =
+                        Arrangement.spacedBy(
+                            8.dp
+                        ),
+                ) {
+                    items(
+                        items = state.logs,
+                        key = {
+                            it.logId
+                        },
+                    ) { log ->
+                        NutritionLogRow(
+                            log = log,
+                            onClick = {
+                                onAction(
+                                    NutritionAction
+                                        .InspectLog(
+                                            log.logId
+                                        )
+                                )
+                            },
+                        )
+                    }
+                }
             }
-        }
 
-        Row(
-            modifier =
-                Modifier.fillMaxWidth(),
-            horizontalArrangement =
-                Arrangement.SpaceBetween,
-        ) {
-            OutlinedButton(
+            Row(
                 modifier =
-                    Modifier.testTag(
-                        NutritionTags.MANAGE
-                    ),
-                onClick = {
-                    onAction(
-                        NutritionAction
-                            .OpenManage
-                    )
-                },
+                    Modifier.fillMaxWidth(),
+                horizontalArrangement =
+                    Arrangement.SpaceBetween,
             ) {
-                Text("Manage")
-            }
+                OutlinedButton(
+                    modifier =
+                        Modifier.testTag(
+                            NutritionTags.MANAGE
+                        ),
+                    onClick = {
+                        onAction(
+                            NutritionAction
+                                .OpenManage
+                        )
+                    },
+                ) {
+                    Text("Manage")
+                }
 
-            Button(
-                modifier =
-                    Modifier.testTag(
-                        NutritionTags.ADD
-                    ),
-                onClick = {
-                    onAction(
-                        NutritionAction
-                            .OpenAddLog
-                    )
-                },
-            ) {
-                Text("Add")
+                Button(
+                    modifier =
+                        Modifier.testTag(
+                            NutritionTags.ADD
+                        ),
+                    onClick = {
+                        onAction(
+                            NutritionAction
+                                .OpenAddLog
+                        )
+                    },
+                ) {
+                    Text("Add")
+                }
             }
         }
     }

@@ -592,6 +592,52 @@ class NutritionRepository(
     ): Boolean =
         dao.deleteLog(logId) == 1
 
+    suspend fun getItemDetails(
+        itemId: Long,
+    ): NutritionItemDetails? =
+        database.withWriteTransaction {
+            val item =
+                dao.getItem(itemId)
+                    ?: return@withWriteTransaction null
+
+            val relationships =
+                dao.getComponents(itemId)
+
+            val componentItems =
+                if (relationships.isEmpty()) {
+                    emptyMap()
+                } else {
+                    dao.getItemsByIds(
+                        relationships.map {
+                            it.componentItemId
+                        }
+                    )
+                        .associateBy {
+                            it.id
+                        }
+                }
+
+            NutritionItemDetails(
+                item = item,
+                components =
+                    relationships.map {
+                            relationship ->
+                        NutritionItemComponent(
+                            item =
+                                requireNotNull(
+                                    componentItems[
+                                        relationship
+                                            .componentItemId
+                                    ]
+                                ),
+                            gramsPer100g =
+                                relationship
+                                    .gramsPer100g,
+                        )
+                    },
+            )
+        }
+
     private fun validateLogDraft(
         draft: FoodLogDraft,
     ) {

@@ -622,6 +622,198 @@ class NutritionViewModelTest {
         }
 
     @Test
+    fun manageFiltersActiveAndArchivedItems(): Unit =
+        runBlocking {
+            val activeId = addItem()
+            val archivedId = addItem()
+
+            repository.createComposedItem(
+                composedDraft(
+                    "Archive parent",
+                    archivedId to 100.0,
+                )
+            )
+
+            assertEquals(
+                NutritionItemRemovalResult.ARCHIVED,
+                repository.removeItem(
+                    itemId = archivedId,
+                    timestampMillis =
+                        clock.millis(),
+                )
+            )
+
+            viewModel.onAction(
+                NutritionAction.OpenManage
+            )
+
+            val active =
+                awaitState { state ->
+                    state.destination ==
+                            NutritionDestination.Manage &&
+                            state.manage.itemOptions.any {
+                                it.id == activeId
+                            } &&
+                            state.manage.itemOptions.any {
+                                it.id == archivedId
+                            }
+                }
+
+            assertTrue(
+                active.manage.visibleFoodGroups
+                    .flatMap { it.versions }
+                    .any { it.id == activeId }
+            )
+
+            assertTrue(
+                active.manage.visibleFoodGroups
+                    .flatMap { it.versions }
+                    .none { it.id == archivedId }
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeManageArchiveFilter(
+                        NutritionArchiveFilter
+                            .ARCHIVED
+                    )
+            )
+
+            val archived =
+                awaitState {
+                    it.manage.archiveFilter ==
+                            NutritionArchiveFilter
+                                .ARCHIVED
+                }
+
+            assertTrue(
+                archived.manage.visibleFoodGroups
+                    .flatMap { it.versions }
+                    .any { it.id == archivedId }
+            )
+
+            assertTrue(
+                archived.manage.visibleFoodGroups
+                    .flatMap { it.versions }
+                    .none { !it.isArchived }
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeManageArchiveFilter(
+                        NutritionArchiveFilter.ALL
+                    )
+            )
+
+            val all =
+                awaitState {
+                    it.manage.archiveFilter ==
+                            NutritionArchiveFilter.ALL
+                }
+
+            val visibleIds =
+                all.manage.visibleFoodGroups
+                    .flatMap { it.versions }
+                    .map { it.id }
+                    .toSet()
+
+            assertTrue(activeId in visibleIds)
+            assertTrue(archivedId in visibleIds)
+        }
+
+    @Test
+    fun manageControlsChangeAndReset(): Unit =
+        runBlocking {
+            awaitState {
+                !it.isLoading
+            }
+
+            viewModel.onAction(
+                NutritionAction.OpenManage
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeManageSearch(
+                        "milk"
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeManageSort(
+                        NutritionItemSort.PROTEIN
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeManageMinimumProtein(
+                        "20"
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeManageMinimumProteinRatio(
+                        "10"
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeManageArchiveFilter(
+                        NutritionArchiveFilter.ALL
+                    )
+            )
+
+            val changed =
+                awaitState {
+                    it.manage.itemSearch ==
+                            "milk" &&
+                            it.manage.itemSort ==
+                            NutritionItemSort.PROTEIN &&
+                            it.manage
+                                .minimumProteinText ==
+                            "20" &&
+                            it.manage
+                                .minimumProteinRatioText ==
+                            "10" &&
+                            it.manage.archiveFilter ==
+                            NutritionArchiveFilter.ALL
+                }
+
+            assertEquals(
+                "milk",
+                changed.manage.itemSearch,
+            )
+
+            viewModel.onAction(
+                NutritionAction.ResetManageFilters
+            )
+
+            val reset =
+                awaitState {
+                    it.manage.itemSort ==
+                            NutritionItemSort.RECENT &&
+                            it.manage
+                                .minimumProteinText
+                                .isEmpty() &&
+                            it.manage
+                                .minimumProteinRatioText
+                                .isEmpty() &&
+                            it.manage.archiveFilter ==
+                            NutritionArchiveFilter.ACTIVE
+                }
+
+            // Search is separate from filters.
+            assertEquals(
+                "milk",
+                reset.manage.itemSearch,
+            )
+        }
+
+    @Test
     fun missingLogCannotOpenEditor(): Unit =
         runBlocking {
             awaitState {

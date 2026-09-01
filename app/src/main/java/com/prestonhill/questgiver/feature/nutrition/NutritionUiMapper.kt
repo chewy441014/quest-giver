@@ -17,6 +17,8 @@ class NutritionUiMapper {
         operationError: String? = null,
         destination: NutritionDestination? = null,
         logEditor: NutritionLogEditorUiState? = null,
+        manage: NutritionManageUiState = NutritionManageUiState(),
+        itemEditor: NutritionItemEditorUiState? = null,
     ): NutritionScreenUiState {
         val logs =
             summary.entries
@@ -104,6 +106,8 @@ class NutritionUiMapper {
             destination = destination,
             operationError =
                 operationError,
+            manage = manage,
+            itemEditor = itemEditor
         )
     }
 

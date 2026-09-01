@@ -267,6 +267,49 @@ class NutritionScreenTest {
         )
     }
 
+    @Test
+    fun manageDestinationDisplaysManageScreen(): Unit {
+        showScreen(
+            state =
+                screenState().copy(
+                    destination =
+                        NutritionDestination.Manage,
+                    manage =
+                        NutritionManageUiState(
+                            itemOptions =
+                                listOf(
+                                    NutritionItemOptionUiState(
+                                        id = 1L,
+                                        name = "Milk",
+                                        nameKey = "milk",
+                                        version = 0,
+                                        versionLabel = null,
+                                        caloriesPer100g =
+                                            120.0,
+                                        proteinPer100g =
+                                            8.0,
+                                        createdAtEpochMillis =
+                                            1_000L,
+                                        lastConsumedAtEpochMillis =
+                                            null,
+                                        isArchived = false,
+                                    )
+                                )
+                        ),
+                )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                NutritionManageTags.SCREEN
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("Milk")
+            .assertIsDisplayed()
+    }
+
     private fun showScreen(
         state: NutritionScreenUiState =
             screenState(),
