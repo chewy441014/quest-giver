@@ -824,6 +824,168 @@ class NutritionViewModelTest {
         }
 
     @Test
+    fun selectingFoodWithVersionsRequiresVersionChoice(): Unit =
+        runBlocking {
+            val firstId =
+                repository.createItem(
+                    NutritionItemDraft(
+                        name = "Milk",
+                        versionLabel = "Store",
+                        nutrition =
+                            NutritionValuesInput
+                                .Per100Grams(
+                                    calories = 100.0,
+                                    proteinGrams =
+                                        10.0,
+                                ),
+                    )
+                )
+
+            val secondId =
+                repository.createItem(
+                    NutritionItemDraft(
+                        name = "Milk",
+                        versionLabel = "Brand",
+                        nutrition =
+                            NutritionValuesInput
+                                .Per100Grams(
+                                    calories = 120.0,
+                                    proteinGrams =
+                                        12.0,
+                                ),
+                    )
+                )
+
+            viewModel.onAction(
+                NutritionAction.OpenAddLog
+            )
+
+            awaitState {
+                it.logEditor
+                    ?.visibleFoodGroups
+                    ?.any { group ->
+                        group.nameKey == "milk"
+                    } == true
+            }
+
+            viewModel.onAction(
+                NutritionAction.SelectLogFood(
+                    "milk"
+                )
+            )
+
+            val choosing =
+                requireNotNull(
+                    awaitState {
+                        it.logEditor
+                            ?.versionGroupNameKey ==
+                                "milk"
+                    }.logEditor
+                )
+
+            assertEquals(
+                listOf(firstId, secondId),
+                choosing.versionChoices
+                    .map { it.id },
+            )
+
+            viewModel.onAction(
+                NutritionAction.SelectLogItem(
+                    secondId
+                )
+            )
+
+            val selected =
+                requireNotNull(
+                    awaitState {
+                        it.logEditor
+                            ?.selectedItemId ==
+                                secondId
+                    }.logEditor
+                )
+
+            assertEquals(
+                secondId,
+                selected.selectedItemId,
+            )
+
+            assertNull(
+                selected.versionGroupNameKey
+            )
+        }
+
+    @Test
+    fun archivedLogSearchExcludesOtherArchivedItems(): Unit =
+        runBlocking {
+            val selectedArchivedId =
+                addItem()
+
+            val otherArchivedId =
+                addItem()
+
+            val logId =
+                addLog(
+                    itemId =
+                        selectedArchivedId,
+                    date = CURRENT_DATE,
+                    hour = 12,
+                )
+
+            repository.createComposedItem(
+                composedDraft(
+                    "Selected parent",
+                    selectedArchivedId to 100.0,
+                )
+            )
+
+            repository.createComposedItem(
+                composedDraft(
+                    "Other parent",
+                    otherArchivedId to 100.0,
+                )
+            )
+
+            repository.removeItem(
+                itemId = selectedArchivedId,
+                timestampMillis =
+                    clock.millis(),
+            )
+
+            repository.removeItem(
+                itemId = otherArchivedId,
+                timestampMillis =
+                    clock.millis(),
+            )
+
+            viewModel.onAction(
+                NutritionAction.InspectLog(
+                    logId
+                )
+            )
+
+            val editor =
+                requireNotNull(
+                    awaitState {
+                        it.logEditor?.logId ==
+                                logId
+                    }.logEditor
+                )
+
+            assertTrue(
+                editor.itemOptions.any {
+                    it.id == selectedArchivedId &&
+                            it.isArchived
+                }
+            )
+
+            assertTrue(
+                editor.itemOptions.none {
+                    it.id == otherArchivedId
+                }
+            )
+        }
+
+    @Test
     fun customBoundaryIncludesAfterMidnightLog(): Unit =
         runBlocking {
             settings.value =
@@ -956,6 +1118,23 @@ class NutritionViewModelTest {
                 state.selectedDate,
             )
         }
+
+    private fun composedDraft(
+        name: String,
+        vararg components:
+        Pair<Long, Double>,
+    ): ComposedNutritionItemDraft =
+        ComposedNutritionItemDraft(
+            name = name,
+            components =
+                components.map {
+                        (itemId, grams) ->
+                    NutritionComponentDraft(
+                        itemId = itemId,
+                        gramsPer100g = grams,
+                    )
+                },
+        )
 
     private suspend fun addItem(
         calories: Double = 100.0,

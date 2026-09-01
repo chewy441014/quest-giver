@@ -924,6 +924,242 @@ class NutritionRepositoryTest {
         }
 
     @Test
+    fun itemUsageTracksLatestActivity(): Unit =
+        runBlocking {
+            val consumedItemId =
+                repository.createItem(
+                    draft =
+                        itemDraft(
+                            name = "Consumed"
+                        ),
+                    timestampMillis =
+                        FIRST_TIME,
+                )
+
+            val newItemId =
+                repository.createItem(
+                    draft =
+                        itemDraft(
+                            name = "New"
+                        ),
+                    timestampMillis =
+                        THIRD_TIME,
+                )
+
+            repository.createLog(
+                draft =
+                    FoodLogDraft(
+                        itemId = consumedItemId,
+                        consumedAtEpochMillis =
+                            SECOND_TIME,
+                        weightGrams = 100.0,
+                    ),
+                timestampMillis =
+                    SECOND_TIME,
+            )
+
+            val usage =
+                repository
+                    .observeItemUsage()
+                    .first()
+
+            val consumed =
+                usage.single {
+                    it.item.id ==
+                            consumedItemId
+                }
+
+            val new =
+                usage.single {
+                    it.item.id == newItemId
+                }
+
+            assertEquals(
+                SECOND_TIME,
+                consumed
+                    .lastConsumedAtEpochMillis,
+            )
+
+            assertEquals(
+                SECOND_TIME,
+                consumed
+                    .latestActivityEpochMillis,
+            )
+
+            assertNull(
+                new.lastConsumedAtEpochMillis
+            )
+
+            assertEquals(
+                THIRD_TIME,
+                new.latestActivityEpochMillis,
+            )
+        }
+
+    @Test
+    fun itemUsageUpdatesWithLogChanges(): Unit =
+        runBlocking {
+            val itemId =
+                repository.createItem(
+                    draft = itemDraft(),
+                    timestampMillis =
+                        FIRST_TIME,
+                )
+
+            val firstLogId =
+                requireNotNull(
+                    repository.createLog(
+                        draft =
+                            FoodLogDraft(
+                                itemId = itemId,
+                                consumedAtEpochMillis =
+                                    SECOND_TIME,
+                                weightGrams =
+                                    100.0,
+                            ),
+                        timestampMillis =
+                            SECOND_TIME,
+                    )
+                )
+
+            val latestLogId =
+                requireNotNull(
+                    repository.createLog(
+                        draft =
+                            FoodLogDraft(
+                                itemId = itemId,
+                                consumedAtEpochMillis =
+                                    THIRD_TIME,
+                                weightGrams =
+                                    100.0,
+                            ),
+                        timestampMillis =
+                            THIRD_TIME,
+                    )
+                )
+
+            assertEquals(
+                THIRD_TIME,
+                repository
+                    .observeItemUsage()
+                    .first()
+                    .single {
+                        it.item.id == itemId
+                    }
+                    .lastConsumedAtEpochMillis,
+            )
+
+            assertTrue(
+                repository.updateLog(
+                    logId = latestLogId,
+                    draft =
+                        FoodLogDraft(
+                            itemId = itemId,
+                            consumedAtEpochMillis =
+                                FIRST_TIME,
+                            weightGrams = 100.0,
+                        ),
+                    timestampMillis =
+                        THIRD_TIME,
+                )
+            )
+
+            assertEquals(
+                SECOND_TIME,
+                repository
+                    .observeItemUsage()
+                    .first()
+                    .single {
+                        it.item.id == itemId
+                    }
+                    .lastConsumedAtEpochMillis,
+            )
+
+            assertTrue(
+                repository.deleteLog(
+                    firstLogId
+                )
+            )
+
+            assertEquals(
+                FIRST_TIME,
+                repository
+                    .observeItemUsage()
+                    .first()
+                    .single {
+                        it.item.id == itemId
+                    }
+                    .lastConsumedAtEpochMillis,
+            )
+
+            assertTrue(
+                repository.deleteLog(
+                    latestLogId
+                )
+            )
+
+            val withoutLogs =
+                repository
+                    .observeItemUsage()
+                    .first()
+                    .single {
+                        it.item.id == itemId
+                    }
+
+            assertNull(
+                withoutLogs
+                    .lastConsumedAtEpochMillis
+            )
+
+            assertEquals(
+                FIRST_TIME,
+                withoutLogs
+                    .latestActivityEpochMillis,
+            )
+        }
+
+    @Test
+    fun itemUsageIncludesArchivedItems(): Unit =
+        runBlocking {
+            val itemId =
+                repository.createItem(
+                    itemDraft(
+                        name = "Archived"
+                    )
+                )
+
+            repository.createComposedItem(
+                composedDraft(
+                    "Parent",
+                    itemId to 100.0,
+                )
+            )
+
+            assertEquals(
+                NutritionItemRemovalResult.ARCHIVED,
+                repository.removeItem(
+                    itemId = itemId,
+                    timestampMillis =
+                        SECOND_TIME,
+                ),
+            )
+
+            val usage =
+                repository
+                    .observeItemUsage()
+                    .first()
+                    .single {
+                        it.item.id == itemId
+                    }
+
+            assertEquals(
+                SECOND_TIME,
+                usage.item
+                    .archivedAtEpochMillis,
+            )
+        }
+
+    @Test
     fun missingItemLifecycleDoesNothing(): Unit =
         runBlocking {
             assertNull(

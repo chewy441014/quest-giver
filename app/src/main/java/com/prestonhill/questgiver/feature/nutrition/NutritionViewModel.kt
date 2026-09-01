@@ -11,6 +11,7 @@ import com.prestonhill.questgiver.core.time.RealBoundaryTimer
 import com.prestonhill.questgiver.data.repository.NutritionRepository
 import com.prestonhill.questgiver.data.local.database.entity.NutritionItemEntity
 import com.prestonhill.questgiver.data.repository.FoodLogDraft
+import com.prestonhill.questgiver.data.repository.NutritionItemUsage
 import java.time.Instant
 import java.time.LocalTime
 import java.util.concurrent.CancellationException
@@ -226,7 +227,8 @@ class NutritionViewModel(
                     it?.takeUnless {
                             editor -> editor.isBusy
                     }?.copy(
-                        itemSearch = action.value
+                        itemSearch = action.value,
+                        versionGroupNameKey = null,
                     ) ?: it
                 }
             }
@@ -247,6 +249,7 @@ class NutritionViewModel(
                                 action.itemId,
                             itemSearch = "",
                             errorMessage = null,
+                            versionGroupNameKey = null,
                         )
                     }
                 }
@@ -271,6 +274,89 @@ class NutritionViewModel(
                         time = action.time,
                         errorMessage = null,
                     ) ?: it
+                }
+            }
+
+            is NutritionAction.SelectLogFood -> {
+                logEditor.update { editor ->
+                    if (
+                        editor == null ||
+                        editor.isBusy
+                    ) {
+                        editor
+                    } else {
+                        val versions =
+                            editor.itemOptions.filter {
+                                it.nameKey ==
+                                        action.nameKey
+                            }
+
+                        when (versions.size) {
+                            0 -> editor
+
+                            1 ->
+                                editor.copy(
+                                    selectedItemId =
+                                        versions.single().id,
+                                    itemSearch = "",
+                                    versionGroupNameKey =
+                                        null,
+                                    errorMessage = null,
+                                )
+
+                            else ->
+                                editor.copy(
+                                    versionGroupNameKey =
+                                        action.nameKey
+                                )
+                        }
+                    }
+                }
+            }
+
+            NutritionAction.DismissLogVersions -> {
+                logEditor.update {
+                    it?.copy(
+                        versionGroupNameKey = null
+                    )
+                }
+            }
+
+            is NutritionAction.ChangeLogItemSort -> {
+                logEditor.update {
+                    it?.copy(
+                        itemSort = action.sort
+                    )
+                }
+            }
+
+            is NutritionAction.ChangeLogMinimumProtein -> {
+                logEditor.update {
+                    it?.copy(
+                        minimumProteinText =
+                            action.value
+                    )
+                }
+            }
+
+            is NutritionAction
+            .ChangeLogMinimumProteinRatio -> {
+                logEditor.update {
+                    it?.copy(
+                        minimumProteinRatioText =
+                            action.value
+                    )
+                }
+            }
+
+            NutritionAction.ResetLogItemFilters -> {
+                logEditor.update {
+                    it?.copy(
+                        itemSort =
+                            NutritionItemSort.RECENT,
+                        minimumProteinText = "",
+                        minimumProteinRatioText = "",
+                    )
                 }
             }
 
@@ -387,8 +473,13 @@ class NutritionViewModel(
             try {
                 val items =
                     repository
-                        .observeActiveItems()
+                        .observeItemUsage()
                         .first()
+                        .filter {
+                            it.item
+                                .archivedAtEpochMillis ==
+                                    null
+                        }
 
                 if (
                     destination.value !=
@@ -471,10 +562,17 @@ class NutritionViewModel(
                     return@launch
                 }
 
-                val activeItems =
+                val items =
                     repository
-                        .observeActiveItems()
+                        .observeItemUsage()
                         .first()
+                        .filter { usage ->
+                            usage.item
+                                .archivedAtEpochMillis ==
+                                    null ||
+                                    usage.item.id ==
+                                    selectedItem.id
+                        }
 
                 if (
                     destination.value !=
@@ -505,15 +603,7 @@ class NutritionViewModel(
                     NutritionLogEditorUiState(
                         logId = log.id,
                         date = date,
-                        itemOptions =
-                            itemOptions(
-                                (
-                                        activeItems +
-                                                selectedItem
-                                        ).distinctBy {
-                                        it.id
-                                    }
-                            ),
+                        itemOptions = itemOptions(items),
                         selectedItemId =
                             selectedItem.id,
                         weightText =
@@ -683,27 +773,32 @@ class NutritionViewModel(
     }
 
     private fun itemOptions(
-        items: List<NutritionItemEntity>,
+        items: List<NutritionItemUsage>,
     ): List<NutritionItemOptionUiState> =
-        items
-            .sortedWith(
-                compareBy(
-                    NutritionItemEntity::nameKey,
-                    NutritionItemEntity::version,
-                )
+        items.map { usage ->
+            val item = usage.item
+
+            NutritionItemOptionUiState(
+                id = item.id,
+                name = item.name,
+                nameKey = item.nameKey,
+                version = item.version,
+                versionLabel =
+                    item.versionLabel,
+                caloriesPer100g =
+                    item.caloriesPer100g,
+                proteinPer100g =
+                    item.proteinPer100g,
+                createdAtEpochMillis =
+                    item.createdAtEpochMillis,
+                lastConsumedAtEpochMillis =
+                    usage
+                        .lastConsumedAtEpochMillis,
+                isArchived =
+                    item.archivedAtEpochMillis !=
+                            null,
             )
-            .map { item ->
-                NutritionItemOptionUiState(
-                    id = item.id,
-                    name = item.name,
-                    version = item.version,
-                    versionLabel =
-                        item.versionLabel,
-                    isArchived =
-                        item.archivedAtEpochMillis !=
-                                null,
-                )
-            }
+        }
 
     private fun amountText(
         value: Double,

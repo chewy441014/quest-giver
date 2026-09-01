@@ -603,6 +603,40 @@ class NutritionRepository(
         )
     }
 
+    fun observeItemUsage():
+            Flow<List<NutritionItemUsage>> =
+        combine(
+            dao.observeAllItems(),
+            dao.observeAllLogs(),
+        ) { items, logs ->
+            val lastConsumedByItem =
+                logs.groupingBy {
+                    it.itemId
+                }
+                    .fold(
+                        initialValue =
+                            Long.MIN_VALUE
+                    ) { latest, log ->
+                        maxOf(
+                            latest,
+                            log.consumedAtEpochMillis,
+                        )
+                    }
+
+            items.map { item ->
+                NutritionItemUsage(
+                    item = item,
+                    lastConsumedAtEpochMillis =
+                        lastConsumedByItem[
+                            item.id
+                        ]
+                            ?.takeUnless {
+                                it == Long.MIN_VALUE
+                            },
+                )
+            }
+        }
+
     private suspend fun prepareComponents(
         components:
         List<NutritionComponentDraft>,

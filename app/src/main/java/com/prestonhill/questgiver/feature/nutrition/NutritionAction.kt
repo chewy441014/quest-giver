@@ -60,4 +60,26 @@ sealed interface NutritionAction {
 
     data object DeleteLog :
         NutritionAction
+
+    data class SelectLogFood(
+        val nameKey: String,
+    ) : NutritionAction
+
+    data object DismissLogVersions :
+        NutritionAction
+
+    data class ChangeLogItemSort(
+        val sort: NutritionItemSort,
+    ) : NutritionAction
+
+    data class ChangeLogMinimumProtein(
+        val value: String,
+    ) : NutritionAction
+
+    data class ChangeLogMinimumProteinRatio(
+        val value: String,
+    ) : NutritionAction
+
+    data object ResetLogItemFilters :
+        NutritionAction
 }
