@@ -101,9 +101,10 @@ class SettingsViewModelTest {
         runBlocking {
             repository.setNutritionGoals(
                 calorieGoal = 2_000.0,
+                maximumCalorieGoal = 2_400.0,
                 proteinGoalGrams = 100.0,
+                maximumProteinGoalGrams = 150.0,
             )
-
             awaitState {
                 !it.isLoading &&
                         it.settings.calorieGoal ==
@@ -122,6 +123,16 @@ class SettingsViewModelTest {
                                 null
                     }.nutritionGoalsEditor
                 )
+
+            assertEquals(
+                "2400",
+                editor.maximumCalorieGoalText,
+            )
+
+            assertEquals(
+                "150",
+                editor.maximumProteinGoalText,
+            )
 
             assertEquals(
                 "2000",
@@ -219,6 +230,20 @@ class SettingsViewModelTest {
 
             viewModel.onAction(
                 SettingsAction
+                    .ChangeMaximumCalorieGoal(
+                        "2750"
+                    )
+            )
+
+            viewModel.onAction(
+                SettingsAction
+                    .ChangeMaximumProteinGoal(
+                        "175"
+                    )
+            )
+
+            viewModel.onAction(
+                SettingsAction
                     .SaveNutritionGoals
             )
 
@@ -231,7 +256,9 @@ class SettingsViewModelTest {
                             2_250.0 &&
                             it.settings
                                 .proteinGoalGrams ==
-                            125.0
+                            125.0 &&
+                            it.settings.maximumCalorieGoal == 2750.0 &&
+                            it.settings.maximumProteinGoalGrams == 175.0
                 }
 
             assertEquals(
@@ -247,7 +274,158 @@ class SettingsViewModelTest {
                 0.0,
             )
 
+            assertEquals(2750.0,
+                requireNotNull(state.settings.maximumCalorieGoal),
+                0.0)
+
+            assertEquals(175.0,
+                requireNotNull(state.settings.maximumProteinGoalGrams),
+                0.0)
+
             assertNull(state.errorMessage)
+        }
+
+    @Test
+    fun nutritionGoalBoundsAreValidated(): Unit =
+        runBlocking {
+            awaitState {
+                !it.isLoading
+            }
+
+            viewModel.onAction(
+                SettingsAction.EditNutritionGoals
+            )
+
+            viewModel.onAction(
+                SettingsAction.ChangeCalorieGoal(
+                    "399"
+                )
+            )
+
+            var editor =
+                requireNotNull(
+                    awaitState {
+                        it.nutritionGoalsEditor
+                            ?.calorieGoalText ==
+                                "399"
+                    }.nutritionGoalsEditor
+                )
+
+            assertFalse(editor.canSave)
+
+            viewModel.onAction(
+                SettingsAction.ChangeCalorieGoal(
+                    "400"
+                )
+            )
+
+            viewModel.onAction(
+                SettingsAction
+                    .ChangeMaximumCalorieGoal(
+                        "399"
+                    )
+            )
+
+            editor =
+                requireNotNull(
+                    awaitState {
+                        it.nutritionGoalsEditor
+                            ?.maximumCalorieGoalText ==
+                                "399"
+                    }.nutritionGoalsEditor
+                )
+
+            assertFalse(editor.canSave)
+
+            viewModel.onAction(
+                SettingsAction
+                    .ChangeMaximumCalorieGoal(
+                        "400"
+                    )
+            )
+
+            editor =
+                requireNotNull(
+                    awaitState {
+                        it.nutritionGoalsEditor
+                            ?.maximumCalorieGoalText ==
+                                "400"
+                    }.nutritionGoalsEditor
+                )
+
+            assertTrue(editor.canSave)
+        }
+
+    @Test
+    fun blankMinimumsRestoreDefaults(): Unit =
+        runBlocking {
+            repository.setNutritionGoals(
+                calorieGoal = 2_000.0,
+                maximumCalorieGoal = null,
+                proteinGoalGrams = 100.0,
+                maximumProteinGoalGrams =
+                    null,
+            )
+
+            awaitState {
+                it.settings.calorieGoal ==
+                        2_000.0
+            }
+
+            viewModel.onAction(
+                SettingsAction.EditNutritionGoals
+            )
+
+            viewModel.onAction(
+                SettingsAction.ChangeCalorieGoal(
+                    ""
+                )
+            )
+
+            viewModel.onAction(
+                SettingsAction.ChangeProteinGoal(
+                    ""
+                )
+            )
+
+            val editor =
+                requireNotNull(
+                    awaitState {
+                        it.nutritionGoalsEditor
+                            ?.canSave == true
+                    }.nutritionGoalsEditor
+                )
+
+            assertEquals(
+                1_500.0,
+                requireNotNull(editor.calorieGoal),
+                0.0,
+            )
+
+            assertEquals(
+                40.0,
+                requireNotNull(editor.proteinGoalGrams),
+                0.0,
+            )
+
+            viewModel.onAction(
+                SettingsAction.SaveNutritionGoals
+            )
+
+            val saved =
+                awaitState {
+                    it.nutritionGoalsEditor ==
+                            null &&
+                            it.settings.calorieGoal ==
+                            1_500.0 &&
+                            it.settings
+                                .proteinGoalGrams ==
+                            40.0
+                }
+
+            assertNull(
+                saved.settings.maximumCalorieGoal
+            )
         }
 
     @Test

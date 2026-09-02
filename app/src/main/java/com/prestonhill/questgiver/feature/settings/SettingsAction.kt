@@ -34,4 +34,13 @@ sealed interface SettingsAction {
 
     data object DismissNutritionGoals :
         SettingsAction
+
+    data class ChangeMaximumCalorieGoal(
+        val value: String,
+    ) : SettingsAction
+
+    data class ChangeMaximumProteinGoal(
+        val value: String,
+    ) : SettingsAction
+
 }

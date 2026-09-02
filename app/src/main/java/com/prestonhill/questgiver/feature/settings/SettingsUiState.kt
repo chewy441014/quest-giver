@@ -15,20 +15,40 @@ data class NutritionGoalsEditorUiState(
     val originalProteinGoalGrams: Double,
     val calorieGoalText: String,
     val proteinGoalText: String,
+    val originalMaximumCalorieGoal: Double?,
+    val originalMaximumProteinGoalGrams: Double?,
+    val maximumCalorieGoalText: String,
+    val maximumProteinGoalText: String,
 ) {
     val calorieGoal: Double?
         get() =
-            calorieGoalText
-                .trim()
-                .toIntOrNull()
-                ?.toDouble()
+            requiredGoal(
+                text = calorieGoalText,
+                default =
+                    AppSettings
+                        .DEFAULT_CALORIE_GOAL,
+            )
 
     val proteinGoalGrams: Double?
         get() =
-            proteinGoalText
-                .trim()
-                .toIntOrNull()
-                ?.toDouble()
+            requiredGoal(
+                text = proteinGoalText,
+                default =
+                    AppSettings
+                        .DEFAULT_PROTEIN_GOAL_GRAMS,
+            )
+
+    val maximumCalorieGoal: Double?
+        get() =
+            optionalGoal(
+                maximumCalorieGoalText
+            )
+
+    val maximumProteinGoalGrams: Double?
+        get() =
+            optionalGoal(
+                maximumProteinGoalText
+            )
 
     val canSave: Boolean
         get() {
@@ -39,15 +59,85 @@ data class NutritionGoalsEditorUiState(
                 proteinGoalGrams
                     ?: return false
 
-            return calories.isFinite() &&
-                    calories > 0.0 &&
-                    protein.isFinite() &&
-                    protein > 0.0 &&
-                    (
-                            calories !=
-                                    originalCalorieGoal ||
-                                    protein !=
-                                    originalProteinGoalGrams
-                            )
+            if (
+                calories <
+                AppSettings.LOWEST_CALORIE_GOAL
+            ) {
+                return false
+            }
+
+            if (
+                protein <
+                AppSettings
+                    .LOWEST_PROTEIN_GOAL_GRAMS
+            ) {
+                return false
+            }
+
+            val maximumCalories =
+                maximumCalorieGoal
+
+            if (
+                maximumCalorieGoalText
+                    .isNotBlank() &&
+                maximumCalories == null
+            ) {
+                return false
+            }
+
+            if (
+                maximumCalories != null &&
+                maximumCalories < calories
+            ) {
+                return false
+            }
+
+            val maximumProtein =
+                maximumProteinGoalGrams
+
+            if (
+                maximumProteinGoalText
+                    .isNotBlank() &&
+                maximumProtein == null
+            ) {
+                return false
+            }
+
+            if (
+                maximumProtein != null &&
+                maximumProtein < protein
+            ) {
+                return false
+            }
+
+            return calories !=
+                    originalCalorieGoal ||
+                    maximumCalories !=
+                    originalMaximumCalorieGoal ||
+                    protein !=
+                    originalProteinGoalGrams ||
+                    maximumProtein !=
+                    originalMaximumProteinGoalGrams
         }
+
+    private fun requiredGoal(
+        text: String,
+        default: Double,
+    ): Double? =
+        if (text.isBlank()) {
+            default
+        } else {
+            text.trim()
+                .toIntOrNull()
+                ?.toDouble()
+        }
+
+    private fun optionalGoal(
+        text: String,
+    ): Double? =
+        text.trim()
+            .takeIf(String::isNotEmpty)
+            ?.toIntOrNull()
+            ?.toDouble()
+
 }

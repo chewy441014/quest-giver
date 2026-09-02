@@ -25,6 +25,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 
 @RunWith(AndroidJUnit4::class)
@@ -76,6 +77,42 @@ class AppSettingsRepositoryTest {
     }
 
     @Test
+    fun nullMaximumsRemoveStoredMaximums(): Unit =
+        runBlocking {
+            repository.setNutritionGoals(
+                calorieGoal = 1_500.0,
+                maximumCalorieGoal = 2_200.0,
+                proteinGoalGrams = 40.0,
+                maximumProteinGoalGrams =
+                    160.0,
+            )
+
+            repository.setNutritionGoals(
+                calorieGoal = 1_500.0,
+                maximumCalorieGoal = null,
+                proteinGoalGrams = 40.0,
+                maximumProteinGoalGrams =
+                    null,
+            )
+
+            val settings =
+                repository.settings.first {
+                    it.maximumCalorieGoal ==
+                            null &&
+                            it.maximumProteinGoalGrams ==
+                            null
+                }
+
+            assertNull(
+                settings.maximumCalorieGoal
+            )
+
+            assertNull(
+                settings.maximumProteinGoalGrams
+            )
+        }
+
+    @Test
     fun defaultSettings() = runBlocking {
         val settings =
             repository.settings.first()
@@ -103,6 +140,15 @@ class AppSettingsRepositoryTest {
             settings.proteinGoalGrams,
             0.0,
         )
+
+        assertNull(
+            settings.maximumCalorieGoal
+        )
+
+        assertNull(
+            settings.maximumProteinGoalGrams
+        )
+
     }
 
     @Test
@@ -110,14 +156,21 @@ class AppSettingsRepositoryTest {
         runBlocking {
             repository.setNutritionGoals(
                 calorieGoal = 2_250.0,
+                maximumCalorieGoal = 2_750.0,
                 proteinGoalGrams = 125.0,
+                maximumProteinGoalGrams =
+                    175.0,
             )
 
             val settings =
                 repository.settings.first {
                     it.calorieGoal == 2_250.0 &&
+                            it.maximumCalorieGoal ==
+                            2_750.0 &&
                             it.proteinGoalGrams ==
-                            125.0
+                            125.0 &&
+                            it.maximumProteinGoalGrams ==
+                            175.0
                 }
 
             assertEquals(
@@ -127,9 +180,19 @@ class AppSettingsRepositoryTest {
             )
 
             assertEquals(
+                2_750.0,
+                settings.maximumCalorieGoal,
+            )
+
+            assertEquals(
                 125.0,
                 settings.proteinGoalGrams,
                 0.0,
+            )
+
+            assertEquals(
+                175.0,
+                settings.maximumProteinGoalGrams,
             )
         }
 
@@ -138,33 +201,67 @@ class AppSettingsRepositoryTest {
         runBlocking {
             repository.setNutritionGoals(
                 calorieGoal = 2_000.0,
+                maximumCalorieGoal = 2_500.0,
                 proteinGoalGrams = 100.0,
+                maximumProteinGoalGrams =
+                    150.0,
             )
 
             val invalidGoals =
                 listOf(
-                    0.0 to 40.0,
-                    -1.0 to 40.0,
-                    Double.NaN to 40.0,
-                    Double.POSITIVE_INFINITY
-                            to 40.0,
-                    1_500.0 to 0.0,
-                    1_500.0 to -1.0,
-                    1_500.0 to Double.NaN,
-                    1_500.0 to
-                            Double.POSITIVE_INFINITY,
+                    GoalValues(
+                        calories = 399.0,
+                        maximumCalories = null,
+                        protein = 40.0,
+                        maximumProtein = null,
+                    ),
+                    GoalValues(
+                        calories = 1_500.0,
+                        maximumCalories = null,
+                        protein = 4.0,
+                        maximumProtein = null,
+                    ),
+                    GoalValues(
+                        calories = 1_500.0,
+                        maximumCalories = 1_499.0,
+                        protein = 40.0,
+                        maximumProtein = null,
+                    ),
+                    GoalValues(
+                        calories = 1_500.0,
+                        maximumCalories = null,
+                        protein = 40.0,
+                        maximumProtein = 39.0,
+                    ),
+                    GoalValues(
+                        calories = 1_500.5,
+                        maximumCalories = null,
+                        protein = 40.0,
+                        maximumProtein = null,
+                    ),
+                    GoalValues(
+                        calories = Double.NaN,
+                        maximumCalories = null,
+                        protein = 40.0,
+                        maximumProtein = null,
+                    ),
                 )
 
-            invalidGoals.forEach {
-                    (calories, protein) ->
+            invalidGoals.forEach { goals ->
                 val failure =
                     runCatching {
                         repository
                             .setNutritionGoals(
                                 calorieGoal =
-                                    calories,
+                                    goals.calories,
+                                maximumCalorieGoal =
+                                    goals
+                                        .maximumCalories,
                                 proteinGoalGrams =
-                                    protein,
+                                    goals.protein,
+                                maximumProteinGoalGrams =
+                                    goals
+                                        .maximumProtein,
                             )
                     }
 
@@ -183,9 +280,20 @@ class AppSettingsRepositoryTest {
             )
 
             assertEquals(
+                2_500.0,
+                unchanged.maximumCalorieGoal,
+            )
+
+            assertEquals(
                 100.0,
                 unchanged.proteinGoalGrams,
                 0.0,
+            )
+
+            assertEquals(
+                150.0,
+                unchanged
+                    .maximumProteinGoalGrams,
             )
         }
 
@@ -311,4 +419,11 @@ class AppSettingsRepositoryTest {
             0.0,
         )
     }
+
+    private data class GoalValues(
+        val calories: Double,
+        val maximumCalories: Double?,
+        val protein: Double,
+        val maximumProtein: Double?,
+    )
 }

@@ -75,6 +75,26 @@ class SettingsViewModel(
                 }
             }
 
+            is SettingsAction
+            .ChangeMaximumCalorieGoal -> {
+                nutritionGoalsEditor.update {
+                    it?.copy(
+                        maximumCalorieGoalText =
+                            action.value
+                    )
+                }
+            }
+
+            is SettingsAction
+            .ChangeMaximumProteinGoal -> {
+                nutritionGoalsEditor.update {
+                    it?.copy(
+                        maximumProteinGoalText =
+                            action.value
+                    )
+                }
+            }
+
             is SettingsAction.EditNutritionGoals -> {
                 if (!isSaving.value) {
                     val settings =
@@ -84,18 +104,30 @@ class SettingsViewModel(
                         NutritionGoalsEditorUiState(
                             originalCalorieGoal =
                                 settings.calorieGoal,
+                            originalMaximumCalorieGoal =
+                                settings.maximumCalorieGoal,
                             originalProteinGoalGrams =
+                                settings.proteinGoalGrams,
+                            originalMaximumProteinGoalGrams =
                                 settings
-                                    .proteinGoalGrams,
+                                    .maximumProteinGoalGrams,
                             calorieGoalText =
                                 goalText(
                                     settings.calorieGoal
                                 ),
+                            maximumCalorieGoalText =
+                                settings.maximumCalorieGoal
+                                    ?.let(::goalText)
+                                    .orEmpty(),
                             proteinGoalText =
                                 goalText(
-                                    settings
-                                        .proteinGoalGrams
+                                    settings.proteinGoalGrams
                                 ),
+                            maximumProteinGoalText =
+                                settings
+                                    .maximumProteinGoalGrams
+                                    ?.let(::goalText)
+                                    .orEmpty(),
                         )
                 }
             }
@@ -144,7 +176,8 @@ class SettingsViewModel(
         }
 
         val calorieGoal =
-            editor.calorieGoal ?: return
+            editor.calorieGoal
+                ?: return
 
         val proteinGoalGrams =
             editor.proteinGoalGrams
@@ -155,8 +188,13 @@ class SettingsViewModel(
         ) {
             repository.setNutritionGoals(
                 calorieGoal = calorieGoal,
+                maximumCalorieGoal =
+                    editor.maximumCalorieGoal,
                 proteinGoalGrams =
                     proteinGoalGrams,
+                maximumProteinGoalGrams =
+                    editor
+                        .maximumProteinGoalGrams,
             )
 
             nutritionGoalsEditor.value = null

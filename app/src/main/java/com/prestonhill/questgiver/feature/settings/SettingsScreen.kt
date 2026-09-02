@@ -61,6 +61,12 @@ object SettingsTags {
 
     const val CANCEL_NUTRITION_GOALS = "settings_cancel_nutrition_goals"
 
+    const val MAXIMUM_CALORIE_GOAL =
+        "settings_maximum_calorie_goal"
+
+    const val MAXIMUM_PROTEIN_GOAL =
+        "settings_maximum_protein_goal"
+
     fun weekDay(day: DayOfWeek) =
         "settings_week_${day.name}"
 }
@@ -146,7 +152,9 @@ fun SettingsScreen(
 @Composable
 private fun NutritionGoalsSetting(
     calorieGoal: Double,
+    maximumCalorieGoal: Double?,
     proteinGoalGrams: Double,
+    maximumProteinGoalGrams: Double?,
     enabled: Boolean,
     onEdit: () -> Unit,
 ) {
@@ -173,6 +181,21 @@ private fun NutritionGoalsSetting(
                         "${goalText(proteinGoalGrams)} g protein minimum"
             )
         }
+
+        Text(
+            goalRangeText(
+                minimum = calorieGoal,
+                maximum = maximumCalorieGoal,
+                unit = "kcal",
+            ) +
+                    " • " +
+                    goalRangeText(
+                        minimum = proteinGoalGrams,
+                        maximum =
+                            maximumProteinGoalGrams,
+                        unit = "g protein",
+                    )
+        )
     }
 }
 
@@ -214,7 +237,7 @@ private fun NutritionGoalsDialog(
                     singleLine = true,
                     label = {
                         Text(
-                            "Minimum calories (kcal)"
+                            "Minimum calories (400 kcal)"
                         )
                     },
                     keyboardOptions =
@@ -240,6 +263,40 @@ private fun NutritionGoalsDialog(
                             .fillMaxWidth()
                             .testTag(
                                 SettingsTags
+                                    .MAXIMUM_CALORIE_GOAL
+                            ),
+                    value =
+                        editor.maximumCalorieGoalText,
+                    enabled = !isSaving,
+                    singleLine = true,
+                    label = {
+                        Text(
+                            "Maximum calories (optional)"
+                        )
+                    },
+                    keyboardOptions =
+                        KeyboardOptions(
+                            keyboardType =
+                                KeyboardType.Number
+                        ),
+                    onValueChange = { value ->
+                        if (value.all(Char::isDigit)) {
+                            onAction(
+                                SettingsAction
+                                    .ChangeMaximumCalorieGoal(
+                                        value
+                                    )
+                            )
+                        }
+                    },
+                )
+
+                OutlinedTextField(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag(
+                                SettingsTags
                                     .PROTEIN_GOAL
                             ),
                     value =
@@ -248,7 +305,7 @@ private fun NutritionGoalsDialog(
                     singleLine = true,
                     label = {
                         Text(
-                            "Minimum protein (g)"
+                            "Minimum protein (5 g)"
                         )
                     },
                     keyboardOptions =
@@ -261,6 +318,40 @@ private fun NutritionGoalsDialog(
                             onAction(
                                 SettingsAction
                                     .ChangeProteinGoal(
+                                        value
+                                    )
+                            )
+                        }
+                    },
+                )
+
+                OutlinedTextField(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag(
+                                SettingsTags
+                                    .MAXIMUM_PROTEIN_GOAL
+                            ),
+                    value =
+                        editor.maximumProteinGoalText,
+                    enabled = !isSaving,
+                    singleLine = true,
+                    label = {
+                        Text(
+                            "Maximum protein (optional)"
+                        )
+                    },
+                    keyboardOptions =
+                        KeyboardOptions(
+                            keyboardType =
+                                KeyboardType.Number
+                        ),
+                    onValueChange = { value ->
+                        if (value.all(Char::isDigit)) {
+                            onAction(
+                                SettingsAction
+                                    .ChangeMaximumProteinGoal(
                                         value
                                     )
                             )
@@ -371,9 +462,15 @@ private fun SettingsContent(
         NutritionGoalsSetting(
             calorieGoal =
                 state.settings.calorieGoal,
+            maximumCalorieGoal =
+                state.settings
+                    .maximumCalorieGoal,
             proteinGoalGrams =
                 state.settings
                     .proteinGoalGrams,
+            maximumProteinGoalGrams =
+                state.settings
+                    .maximumProteinGoalGrams,
             enabled = !state.isSaving,
             onEdit = {
                 onAction(
@@ -560,6 +657,18 @@ private fun WeekStartSetting(
         }
     }
 }
+
+private fun goalRangeText(
+    minimum: Double,
+    maximum: Double?,
+    unit: String,
+): String =
+    if (maximum == null) {
+        "${goalText(minimum)}+ $unit"
+    } else {
+        "${goalText(minimum)}–" +
+                "${goalText(maximum)} $unit"
+    }
 
 private fun goalText(
     value: Double,

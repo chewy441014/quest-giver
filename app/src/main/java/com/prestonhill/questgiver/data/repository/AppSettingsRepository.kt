@@ -46,13 +46,48 @@ class AppSettingsRepository(
 
                 val calorieGoal =
                     preferences[CALORIE_GOAL]
-                        ?.takeIf(::isValidGoal)
-                        ?: DEFAULT_CALORIE_GOAL
+                        ?.takeIf {
+                            isValidMinimum(
+                                value = it,
+                                lowestAllowed =
+                                    AppSettings
+                                        .LOWEST_CALORIE_GOAL,
+                            )
+                        }
+                        ?: AppSettings.DEFAULT_CALORIE_GOAL
+
+                val maximumCalorieGoal =
+                    preferences[MAXIMUM_CALORIE_GOAL]
+                        ?.takeIf {
+                            isValidMaximum(
+                                value = it,
+                                minimum = calorieGoal,
+                            )
+                        }
 
                 val proteinGoalGrams =
                     preferences[PROTEIN_GOAL_GRAMS]
-                        ?.takeIf(::isValidGoal)
-                        ?: DEFAULT_PROTEIN_GOAL_GRAMS
+                        ?.takeIf {
+                            isValidMinimum(
+                                value = it,
+                                lowestAllowed =
+                                    AppSettings
+                                        .LOWEST_PROTEIN_GOAL_GRAMS,
+                            )
+                        }
+                        ?: AppSettings
+                            .DEFAULT_PROTEIN_GOAL_GRAMS
+
+                val maximumProteinGoalGrams =
+                    preferences[
+                        MAXIMUM_PROTEIN_GOAL_GRAMS
+                    ]
+                        ?.takeIf {
+                            isValidMaximum(
+                                value = it,
+                                minimum = proteinGoalGrams,
+                            )
+                        }
 
                 AppSettings(
                     dayBoundary =
@@ -68,22 +103,74 @@ class AppSettingsRepository(
                     calorieGoal = calorieGoal,
                     proteinGoalGrams =
                         proteinGoalGrams,
+                    maximumCalorieGoal = maximumCalorieGoal,
+                    maximumProteinGoalGrams = maximumProteinGoalGrams
                 )
             }
 
-    private fun isValidGoal(
+//    private fun isValidGoal(
+//        value: Double,
+//    ): Boolean =
+//        value.isFinite() &&
+//                value > 0.0 &&
+//                value % 1.0 == 0.0
+
+    private fun isWholeNumber(
         value: Double,
     ): Boolean =
         value.isFinite() &&
-                value > 0.0 &&
                 value % 1.0 == 0.0
+
+    private fun isValidMinimum(
+        value: Double,
+        lowestAllowed: Double,
+    ): Boolean =
+        isWholeNumber(value) &&
+                value >= lowestAllowed
+
+    private fun isValidMaximum(
+        value: Double,
+        minimum: Double,
+    ): Boolean =
+        isWholeNumber(value) &&
+                value >= minimum
 
     suspend fun setNutritionGoals(
         calorieGoal: Double,
+        maximumCalorieGoal: Double?,
         proteinGoalGrams: Double,
+        maximumProteinGoalGrams: Double?,
     ) {
-        require(isValidGoal(calorieGoal))
-        require(isValidGoal(proteinGoalGrams))
+        require(
+            isValidMinimum(
+                calorieGoal,
+                AppSettings.LOWEST_CALORIE_GOAL,
+            )
+        )
+
+        require(
+            maximumCalorieGoal == null ||
+                    isValidMaximum(
+                        maximumCalorieGoal,
+                        calorieGoal,
+                    )
+        )
+
+        require(
+            isValidMinimum(
+                proteinGoalGrams,
+                AppSettings
+                    .LOWEST_PROTEIN_GOAL_GRAMS,
+            )
+        )
+
+        require(
+            maximumProteinGoalGrams == null ||
+                    isValidMaximum(
+                        maximumProteinGoalGrams,
+                        proteinGoalGrams,
+                    )
+        )
 
         dataStore.edit { preferences ->
             preferences[CALORIE_GOAL] =
@@ -91,6 +178,25 @@ class AppSettingsRepository(
 
             preferences[PROTEIN_GOAL_GRAMS] =
                 proteinGoalGrams
+
+            if (maximumCalorieGoal == null) {
+                preferences.remove(
+                    MAXIMUM_CALORIE_GOAL
+                )
+            } else {
+                preferences[MAXIMUM_CALORIE_GOAL] =
+                    maximumCalorieGoal
+            }
+
+            if (maximumProteinGoalGrams == null) {
+                preferences.remove(
+                    MAXIMUM_PROTEIN_GOAL_GRAMS
+                )
+            } else {
+                preferences[
+                    MAXIMUM_PROTEIN_GOAL_GRAMS
+                ] = maximumProteinGoalGrams
+            }
         }
     }
     suspend fun setDaylightSaving(
@@ -132,6 +238,16 @@ class AppSettingsRepository(
         val WEEK_START =
             intPreferencesKey(
                 "week_start"
+            )
+
+        val MAXIMUM_CALORIE_GOAL =
+            doublePreferencesKey(
+                "maximum_calorie_goal"
+            )
+
+        val MAXIMUM_PROTEIN_GOAL_GRAMS =
+            doublePreferencesKey(
+                "maximum_protein_goal_grams"
             )
 
         const val MIN_MINUTES = 0

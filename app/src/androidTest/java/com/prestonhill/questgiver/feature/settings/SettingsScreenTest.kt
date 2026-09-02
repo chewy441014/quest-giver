@@ -65,6 +65,18 @@ class SettingsScreenTest {
             )
             .performTextReplacement("100")
 
+        composeRule
+            .onNodeWithTag(
+                SettingsTags.MAXIMUM_CALORIE_GOAL
+            )
+            .performTextReplacement("2750")
+
+        composeRule
+            .onNodeWithTag(
+                SettingsTags.MAXIMUM_PROTEIN_GOAL
+            )
+            .performTextReplacement("175")
+
         assertEquals(
             listOf(
                 SettingsAction
@@ -74,6 +86,14 @@ class SettingsScreenTest {
                 SettingsAction
                     .ChangeProteinGoal(
                         "100"
+                    ),
+                SettingsAction
+                    .ChangeMaximumCalorieGoal(
+                        "2750"
+                    ),
+                SettingsAction
+                    .ChangeMaximumProteinGoal(
+                        "175"
                     ),
             ),
             actions,
@@ -209,6 +229,51 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun maximumBelowMinimumCannotBeSaved(): Unit {
+        showScreen(
+            state =
+                editorState(
+                    calorieText = "1500",
+                    maximumCalorieText = "1499",
+                )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                SettingsTags
+                    .SAVE_NUTRITION_GOALS
+            )
+            .assertIsNotEnabled()
+    }
+
+    @Test
+    fun nutritionGoalRangesAreDisplayed(): Unit {
+        showScreen(
+            state =
+                SettingsUiState(
+                    settings =
+                        AppSettings(
+                            calorieGoal = 1_500.0,
+                            maximumCalorieGoal =
+                                2_200.0,
+                            proteinGoalGrams =
+                                40.0,
+                            maximumProteinGoalGrams =
+                                160.0,
+                        ),
+                    isLoading = false,
+                )
+        )
+
+        composeRule
+            .onNodeWithText(
+                "1500–2200 kcal • " +
+                        "40–160 g protein"
+            )
+            .assertIsDisplayed()
+    }
+
+    @Test
     fun savingDisablesNutritionGoalEditor(): Unit {
         showScreen(
             state =
@@ -228,6 +293,18 @@ class SettingsScreenTest {
         composeRule
             .onNodeWithTag(
                 SettingsTags.PROTEIN_GOAL
+            )
+            .assertIsNotEnabled()
+
+        composeRule
+            .onNodeWithTag(
+                SettingsTags.MAXIMUM_PROTEIN_GOAL
+            )
+            .assertIsNotEnabled()
+
+        composeRule
+            .onNodeWithTag(
+                SettingsTags.MAXIMUM_CALORIE_GOAL
             )
             .assertIsNotEnabled()
 
@@ -312,6 +389,26 @@ class SettingsScreenTest {
                                             )
                                     )
 
+                                is SettingsAction
+                                .ChangeMaximumCalorieGoal ->
+                                    currentState.copy(
+                                        nutritionGoalsEditor =
+                                            editor?.copy(
+                                                maximumCalorieGoalText =
+                                                    action.value
+                                            )
+                                    )
+
+                                is SettingsAction
+                                .ChangeMaximumProteinGoal ->
+                                    currentState.copy(
+                                        nutritionGoalsEditor =
+                                            editor?.copy(
+                                                maximumProteinGoalText =
+                                                    action.value
+                                            )
+                                    )
+
                                 else -> currentState
                             }
                     },
@@ -323,7 +420,9 @@ class SettingsScreenTest {
 
     private fun editorState(
         calorieText: String = "1500",
+        maximumCalorieText: String = "",
         proteinText: String = "40",
+        maximumProteinText: String = "",
         isSaving: Boolean = false,
     ): SettingsUiState =
         SettingsUiState(
@@ -340,6 +439,12 @@ class SettingsScreenTest {
                         calorieText,
                     proteinGoalText =
                         proteinText,
+                    originalMaximumCalorieGoal = null,
+                    originalMaximumProteinGoalGrams = null,
+                    maximumCalorieGoalText =
+                        maximumCalorieText,
+                    maximumProteinGoalText =
+                        maximumProteinText,
                 ),
         )
 }
