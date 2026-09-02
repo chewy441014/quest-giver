@@ -8,6 +8,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import java.time.LocalDate
 import java.time.LocalTime
 import org.junit.Assert.assertEquals
@@ -34,13 +36,13 @@ class NutritionScreenTest {
 
         composeRule
             .onNodeWithText(
-                "750 / 1500 kcal minimum"
+                "750 / 1500+ kcal"
             )
             .assertIsDisplayed()
 
         composeRule
             .onNodeWithText(
-                "20 / 40 g minimum"
+                "20 / 40+ g"
             )
             .assertIsDisplayed()
 
@@ -55,6 +57,12 @@ class NutritionScreenTest {
                     range = 0f..1f,
                 )
             )
+
+        composeRule
+            .onAllNodesWithText(
+                "Below minimum"
+            )
+            .assertCountEquals(2)
 
         composeRule
             .onNodeWithTag(
@@ -85,6 +93,75 @@ class NutritionScreenTest {
                 "Archived item"
             )
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun goalRangesAndStatusesAreDisplayed(): Unit {
+        showScreen(
+            state =
+                screenState().copy(
+                    totalCalories = 2_000.0,
+                    maximumCalorieGoal =
+                        2_200.0,
+                    calorieProgress = 1f,
+                    calorieGoalStatus =
+                        NutritionGoalStatus
+                            .WITHIN_GOAL,
+                    totalProteinGrams =
+                        170.0,
+                    maximumProteinGoalGrams =
+                        160.0,
+                    proteinProgress = 1f,
+                    proteinGoalStatus =
+                        NutritionGoalStatus
+                            .ABOVE_MAXIMUM,
+                )
+        )
+
+        composeRule
+            .onNodeWithText(
+                "2000 / 1500–2200 kcal"
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText(
+                "170 / 40–160 g"
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("Within goal")
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("Above maximum")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun minimumOnlyGoalsShowMinimumMet(): Unit {
+        showScreen(
+            state =
+                screenState().copy(
+                    totalCalories = 1_500.0,
+                    calorieProgress = 1f,
+                    calorieGoalStatus =
+                        NutritionGoalStatus
+                            .WITHIN_GOAL,
+                    totalProteinGrams = 40.0,
+                    proteinProgress = 1f,
+                    proteinGoalStatus =
+                        NutritionGoalStatus
+                            .WITHIN_GOAL,
+                )
+        )
+
+        composeRule
+            .onAllNodesWithText(
+                "Minimum met"
+            )
+            .assertCountEquals(2)
     }
 
     @Test
@@ -376,6 +453,12 @@ class NutritionScreenTest {
             isLoading = false,
             operationError =
                 operationError,
+            maximumCalorieGoal = null,
+            maximumProteinGoalGrams = null,
+            calorieGoalStatus =
+                NutritionGoalStatus.BELOW_MINIMUM,
+            proteinGoalStatus =
+                NutritionGoalStatus.BELOW_MINIMUM,
         )
 
     private fun logRow(

@@ -108,13 +108,6 @@ class AppSettingsRepository(
                 )
             }
 
-//    private fun isValidGoal(
-//        value: Double,
-//    ): Boolean =
-//        value.isFinite() &&
-//                value > 0.0 &&
-//                value % 1.0 == 0.0
-
     private fun isWholeNumber(
         value: Double,
     ): Boolean =

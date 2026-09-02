@@ -98,12 +98,15 @@ fun NutritionScreen(
 
             GoalProgress(
                 label = "Calories",
-                amount =
-                    state.totalCalories,
-                goal = state.calorieGoal,
+                amount = state.totalCalories,
+                minimum = state.calorieGoal,
+                maximum =
+                    state.maximumCalorieGoal,
                 unit = "kcal",
                 progress =
                     state.calorieProgress,
+                status =
+                    state.calorieGoalStatus,
                 tag =
                     NutritionTags
                         .CALORIE_PROGRESS,
@@ -113,11 +116,15 @@ fun NutritionScreen(
                 label = "Protein",
                 amount =
                     state.totalProteinGrams,
-                goal =
+                minimum =
                     state.proteinGoalGrams,
+                maximum =
+                    state.maximumProteinGoalGrams,
                 unit = "g",
                 progress =
                     state.proteinProgress,
+                status =
+                    state.proteinGoalStatus,
                 tag =
                     NutritionTags
                         .PROTEIN_PROGRESS,
@@ -328,11 +335,58 @@ private fun DateHeader(
 private fun GoalProgress(
     label: String,
     amount: Double,
-    goal: Double,
+    minimum: Double,
+    maximum: Double?,
     unit: String,
     progress: Float,
+    status: NutritionGoalStatus,
     tag: String,
 ) {
+    val rangeText =
+        if (maximum == null) {
+            "${nutritionAmountText(minimum)}+"
+        } else {
+            "${nutritionAmountText(minimum)}–" +
+                    nutritionAmountText(maximum)
+        }
+
+    val statusText =
+        when (status) {
+            NutritionGoalStatus
+                .BELOW_MINIMUM ->
+                "Below minimum"
+
+            NutritionGoalStatus
+                .WITHIN_GOAL ->
+                if (maximum == null) {
+                    "Minimum met"
+                } else {
+                    "Within goal"
+                }
+
+            NutritionGoalStatus
+                .ABOVE_MAXIMUM ->
+                "Above maximum"
+        }
+
+    val progressColor =
+        when (status) {
+            NutritionGoalStatus
+                .BELOW_MINIMUM ->
+                MaterialTheme
+                    .colorScheme.primary
+
+            NutritionGoalStatus
+                .WITHIN_GOAL ->
+                MaterialTheme
+                    .colorScheme.tertiary
+
+            NutritionGoalStatus
+                .ABOVE_MAXIMUM ->
+                MaterialTheme
+                    .colorScheme.error
+        }
+
     Column(
         verticalArrangement =
             Arrangement.spacedBy(6.dp),
@@ -352,7 +406,7 @@ private fun GoalProgress(
 
             Text(
                 "${nutritionAmountText(amount)} / " +
-                        "${nutritionAmountText(goal)} $unit minimum"
+                        "$rangeText $unit"
             )
         }
 
@@ -364,6 +418,15 @@ private fun GoalProgress(
                 Modifier
                     .fillMaxWidth()
                     .testTag(tag),
+            color = progressColor,
+        )
+
+        Text(
+            text = statusText,
+            style =
+                MaterialTheme
+                    .typography.labelMedium,
+            color = progressColor,
         )
     }
 }

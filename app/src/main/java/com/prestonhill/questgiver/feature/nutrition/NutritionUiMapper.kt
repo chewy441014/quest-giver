@@ -86,6 +86,11 @@ class NutritionUiMapper {
                 settings.calorieGoal,
             proteinGoalGrams =
                 settings.proteinGoalGrams,
+            maximumCalorieGoal =
+                settings.maximumCalorieGoal,
+
+            maximumProteinGoalGrams =
+                settings.maximumProteinGoalGrams,
             calorieProgress =
                 progress(
                     total =
@@ -102,6 +107,26 @@ class NutritionUiMapper {
                         settings
                             .proteinGoalGrams,
                 ),
+            calorieGoalStatus =
+                goalStatus(
+                    total =
+                        summary.totalCalories,
+                    minimum =
+                        settings.calorieGoal,
+                    maximum =
+                        settings.maximumCalorieGoal,
+                ),
+
+            proteinGoalStatus =
+                goalStatus(
+                    total =
+                        summary.totalProteinGrams,
+                    minimum =
+                        settings.proteinGoalGrams,
+                    maximum =
+                        settings
+                            .maximumProteinGoalGrams,
+                ),
             isLoading = false,
             destination = destination,
             operationError =
@@ -110,6 +135,30 @@ class NutritionUiMapper {
             itemEditor = itemEditor
         )
     }
+
+    private fun goalStatus(
+        total: Double,
+        minimum: Double,
+        maximum: Double?,
+    ): NutritionGoalStatus =
+        when {
+            !total.isFinite() ->
+                NutritionGoalStatus
+                    .BELOW_MINIMUM
+
+            total < minimum ->
+                NutritionGoalStatus
+                    .BELOW_MINIMUM
+
+            maximum != null &&
+                    total > maximum ->
+                NutritionGoalStatus
+                    .ABOVE_MAXIMUM
+
+            else ->
+                NutritionGoalStatus
+                    .WITHIN_GOAL
+        }
 
     private fun progress(
         total: Double,

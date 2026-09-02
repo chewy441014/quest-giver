@@ -100,6 +100,16 @@ class NutritionUiMapperTest {
             state.currentDate,
         )
 
+        assertEquals(
+            NutritionGoalStatus.BELOW_MINIMUM,
+            state.calorieGoalStatus,
+        )
+
+        assertEquals(
+            NutritionGoalStatus.BELOW_MINIMUM,
+            state.proteinGoalStatus,
+        )
+
         assertFalse(state.isCurrentDay)
         assertTrue(state.canSelectNextDay)
         assertTrue(state.showDatePicker)
@@ -208,6 +218,113 @@ class NutritionUiMapperTest {
 
         assertFalse(
             state.canSelectNextDay
+        )
+
+        assertEquals(
+            1f,
+            state.calorieProgress,
+            FLOAT_TOLERANCE,
+        )
+
+        assertEquals(
+            1f,
+            state.proteinProgress,
+            FLOAT_TOLERANCE,
+        )
+    }
+
+    @Test
+    fun goalRangeBoundariesAreInclusive(): Unit {
+        val lower =
+            mapTotals(
+                calories = 1_500.0,
+                protein = 40.0,
+            )
+
+        assertEquals(
+            NutritionGoalStatus.WITHIN_GOAL,
+            lower.calorieGoalStatus,
+        )
+
+        assertEquals(
+            NutritionGoalStatus.WITHIN_GOAL,
+            lower.proteinGoalStatus,
+        )
+
+        val upper =
+            mapTotals(
+                calories = 2_200.0,
+                protein = 160.0,
+            )
+
+        assertEquals(
+            NutritionGoalStatus.WITHIN_GOAL,
+            upper.calorieGoalStatus,
+        )
+
+        assertEquals(
+            NutritionGoalStatus.WITHIN_GOAL,
+            upper.proteinGoalStatus,
+        )
+    }
+
+    @Test
+    fun totalsOutsideRangesAreIdentified(): Unit {
+        val below =
+            mapTotals(
+                calories = 1_499.0,
+                protein = 39.0,
+            )
+
+        assertEquals(
+            NutritionGoalStatus
+                .BELOW_MINIMUM,
+            below.calorieGoalStatus,
+        )
+
+        assertEquals(
+            NutritionGoalStatus
+                .BELOW_MINIMUM,
+            below.proteinGoalStatus,
+        )
+
+        val above =
+            mapTotals(
+                calories = 2_201.0,
+                protein = 161.0,
+            )
+
+        assertEquals(
+            NutritionGoalStatus
+                .ABOVE_MAXIMUM,
+            above.calorieGoalStatus,
+        )
+
+        assertEquals(
+            NutritionGoalStatus
+                .ABOVE_MAXIMUM,
+            above.proteinGoalStatus,
+        )
+    }
+
+    @Test
+    fun minimumOnlyGoalHasNoUpperFailure(): Unit {
+        val state =
+            mapTotals(
+                calories = 10_000.0,
+                protein = 500.0,
+                maximumCalories = null,
+                maximumProtein = null,
+            )
+
+        assertEquals(
+            NutritionGoalStatus.WITHIN_GOAL,
+            state.calorieGoalStatus,
+        )
+
+        assertEquals(
+            NutritionGoalStatus.WITHIN_GOAL,
+            state.proteinGoalStatus,
         )
 
         assertEquals(
@@ -347,4 +464,46 @@ class NutritionUiMapperTest {
         const val FLOAT_TOLERANCE =
             0.000_001f
     }
+
+    private fun mapTotals(
+        calories: Double,
+        protein: Double,
+        minimumCalories: Double =
+            1_500.0,
+        maximumCalories: Double? =
+            2_200.0,
+        minimumProtein: Double =
+            40.0,
+        maximumProtein: Double? =
+            160.0,
+    ): NutritionScreenUiState =
+        mapper.map(
+            summary =
+                NutritionDaySummary(
+                    entries = emptyList(),
+                    totalCalories = calories,
+                    totalProteinGrams =
+                        protein,
+                ),
+            selectedDay =
+                dayCalculator.forDate(
+                    CURRENT_DATE
+                ),
+            currentDay =
+                dayCalculator.forDate(
+                    CURRENT_DATE
+                ),
+            zoneId = zone,
+            settings =
+                AppSettings(
+                    calorieGoal =
+                        minimumCalories,
+                    maximumCalorieGoal =
+                        maximumCalories,
+                    proteinGoalGrams =
+                        minimumProtein,
+                    maximumProteinGoalGrams =
+                        maximumProtein,
+                ),
+        )
 }

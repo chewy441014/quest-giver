@@ -2448,19 +2448,26 @@ class NutritionViewModelTest {
 
             settings.value =
                 AppSettings(
-                    calorieGoal = 200.0,
+                    calorieGoal = 400.0,
+                    maximumCalorieGoal = 800.0,
                     proteinGoalGrams = 20.0,
+                    maximumProteinGoalGrams =
+                        60.0,
                 )
 
             val state =
                 awaitState {
-                    it.calorieGoal == 200.0 &&
+                    it.calorieGoal == 400.0 &&
+                            it.maximumCalorieGoal ==
+                            800.0 &&
                             it.proteinGoalGrams ==
-                            20.0
+                            20.0 &&
+                            it.maximumProteinGoalGrams ==
+                            60.0
                 }
 
             assertEquals(
-                0.5f,
+                0.25f,
                 state.calorieProgress,
                 FLOAT_TOLERANCE,
             )
@@ -2469,6 +2476,16 @@ class NutritionViewModelTest {
                 0.5f,
                 state.proteinProgress,
                 FLOAT_TOLERANCE,
+            )
+
+            assertEquals(
+                NutritionGoalStatus.BELOW_MINIMUM,
+                state.calorieGoalStatus,
+            )
+
+            assertEquals(
+                NutritionGoalStatus.BELOW_MINIMUM,
+                state.proteinGoalStatus,
             )
         }
 

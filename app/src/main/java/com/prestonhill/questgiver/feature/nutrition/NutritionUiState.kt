@@ -37,6 +37,10 @@ data class NutritionScreenUiState(
     val logEditor: NutritionLogEditorUiState? = null,
     val manage: NutritionManageUiState = NutritionManageUiState(),
     val itemEditor: NutritionItemEditorUiState? = null,
+    val maximumCalorieGoal: Double? = null,
+    val maximumProteinGoalGrams: Double? = null,
+    val calorieGoalStatus: NutritionGoalStatus = NutritionGoalStatus.BELOW_MINIMUM,
+    val proteinGoalStatus: NutritionGoalStatus = NutritionGoalStatus.BELOW_MINIMUM,
 )
 
 data class NutritionItemOptionUiState(
@@ -83,6 +87,12 @@ data class NutritionItemOptionUiState(
 
                 else -> 0.0
             }
+}
+
+enum class NutritionGoalStatus {
+    BELOW_MINIMUM,
+    WITHIN_GOAL,
+    ABOVE_MAXIMUM,
 }
 
 enum class NutritionItemSort {
