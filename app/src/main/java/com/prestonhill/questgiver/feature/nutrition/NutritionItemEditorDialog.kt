@@ -65,6 +65,16 @@ object NutritionItemEditorTags {
         "nutrition_item_save_as_version"
     const val CANCEL =
         "nutrition_item_cancel"
+    const val ARCHIVE =
+        "nutrition_item_archive"
+    const val DELETE =
+        "nutrition_item_delete"
+    const val RESTORE =
+        "nutrition_item_restore"
+    const val REMOVE_CONFIRM =
+        "nutrition_item_remove_confirm"
+    const val REMOVE_CANCEL =
+        "nutrition_item_remove_cancel"
 
     fun version(itemId: Long) =
         "nutrition_item_version_$itemId"
@@ -610,6 +620,20 @@ fun NutritionItemEditorDialog(
                     }
                 }
 
+                if (
+                    editor.isEditing &&
+                    editor.isDirty
+                ) {
+                    item {
+                        Text(
+                            "Save or cancel changes before changing this food’s status.",
+                            style =
+                                MaterialTheme.typography
+                                    .labelMedium,
+                        )
+                    }
+                }
+
                 editor.errorMessage
                     ?.let { message ->
                         item {
@@ -684,21 +708,105 @@ fun NutritionItemEditorDialog(
             }
         },
         dismissButton = {
-            TextButton(
-                modifier =
-                    Modifier.testTag(
-                        NutritionItemEditorTags
-                            .CANCEL
-                    ),
-                enabled = !editor.isBusy,
-                onClick = {
-                    onAction(
-                        NutritionAction
-                            .DismissItemEditor
-                    )
-                },
+            Row(
+                horizontalArrangement =
+                    Arrangement.spacedBy(8.dp),
             ) {
-                Text("Cancel")
+                if (editor.isEditing) {
+                    if (editor.isArchived) {
+                        OutlinedButton(
+                            modifier =
+                                Modifier.testTag(
+                                    NutritionItemEditorTags
+                                        .RESTORE
+                                ),
+                            enabled =
+                                !editor.isBusy &&
+                                        !editor.isDirty,
+                            onClick = {
+                                onAction(
+                                    NutritionAction
+                                        .RestoreItem
+                                )
+                            },
+                        ) {
+                            Text("Restore")
+                        }
+                    }
+
+                    val canOfferRemoval =
+                        !editor.isArchived ||
+                                editor.removalMode ==
+                                NutritionItemRemovalModeUiState
+                                    .DELETE
+
+                    if (canOfferRemoval) {
+                        TextButton(
+                            modifier =
+                                Modifier.testTag(
+                                    when (
+                                        editor.removalMode
+                                    ) {
+                                        NutritionItemRemovalModeUiState
+                                            .ARCHIVE ->
+                                            NutritionItemEditorTags
+                                                .ARCHIVE
+
+                                        NutritionItemRemovalModeUiState
+                                            .DELETE,
+                                        null,
+                                            ->
+                                            NutritionItemEditorTags
+                                                .DELETE
+                                    }
+                                ),
+                            enabled =
+                                !editor.isBusy &&
+                                        !editor.isDirty &&
+                                        editor.removalMode !=
+                                        null,
+                            onClick = {
+                                onAction(
+                                    NutritionAction
+                                        .RequestRemoveItem
+                                )
+                            },
+                        ) {
+                            Text(
+                                when (
+                                    editor.removalMode
+                                ) {
+                                    NutritionItemRemovalModeUiState
+                                        .ARCHIVE ->
+                                        "Archive"
+
+                                    NutritionItemRemovalModeUiState
+                                        .DELETE ->
+                                        "Delete"
+
+                                    null -> "Remove"
+                                }
+                            )
+                        }
+                    }
+                }
+
+                TextButton(
+                    modifier =
+                        Modifier.testTag(
+                            NutritionItemEditorTags
+                                .CANCEL
+                        ),
+                    enabled = !editor.isBusy,
+                    onClick = {
+                        onAction(
+                            NutritionAction
+                                .DismissItemEditor
+                        )
+                    },
+                ) {
+                    Text("Cancel")
+                }
             }
         },
     )
@@ -707,6 +815,86 @@ fun NutritionItemEditorDialog(
         NutritionComponentPicker(
             editor = editor,
             onAction = onAction,
+        )
+    }
+
+    if (editor.showRemovalConfirmation) {
+        val deleting =
+            editor.removalMode ==
+                    NutritionItemRemovalModeUiState
+                        .DELETE
+
+        AlertDialog(
+            onDismissRequest = {
+                if (!editor.isRemoving) {
+                    onAction(
+                        NutritionAction
+                            .DismissRemoveItem
+                    )
+                }
+            },
+            title = {
+                Text(
+                    if (deleting) {
+                        "Delete food?"
+                    } else {
+                        "Archive food?"
+                    }
+                )
+            },
+            text = {
+                Text(
+                    if (deleting) {
+                        "This permanently deletes the food and all of its consumption history."
+                    } else {
+                        "This hides the food from new selections. Existing logs and foods that use it remain intact."
+                    }
+                )
+            },
+            confirmButton = {
+                Button(
+                    modifier =
+                        Modifier.testTag(
+                            NutritionItemEditorTags
+                                .REMOVE_CONFIRM
+                        ),
+                    enabled =
+                        !editor.isRemoving,
+                    onClick = {
+                        onAction(
+                            NutritionAction
+                                .ConfirmRemoveItem
+                        )
+                    },
+                ) {
+                    Text(
+                        if (deleting) {
+                            "Delete"
+                        } else {
+                            "Archive"
+                        }
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    modifier =
+                        Modifier.testTag(
+                            NutritionItemEditorTags
+                                .REMOVE_CANCEL
+                        ),
+                    enabled =
+                        !editor.isRemoving,
+                    onClick = {
+                        onAction(
+                            NutritionAction
+                                .DismissRemoveItem
+                        )
+                    },
+                ) {
+                    Text("Cancel")
+                }
+            },
         )
     }
 }

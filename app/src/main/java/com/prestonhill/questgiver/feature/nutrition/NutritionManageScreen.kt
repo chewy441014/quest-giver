@@ -323,8 +323,10 @@ fun NutritionManageScreen(
                                         versions.single().id
                                     )
                                 )
+                            } else if (versions.isNotEmpty()) {
+                                selectedVersionGroup =
+                                    group.nameKey
                             }
-
                         },
                     )
                 }

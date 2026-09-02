@@ -268,6 +268,25 @@ class NutritionScreenTest {
     }
 
     @Test
+    fun itemEditorIsDisplayed(): Unit {
+        showScreen(
+            state =
+                screenState().copy(
+                    destination =
+                        NutritionDestination.Manage,
+                    itemEditor =
+                        NutritionItemEditorUiState(),
+                )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                NutritionItemEditorTags.EDITOR
+            )
+            .assertIsDisplayed()
+    }
+
+    @Test
     fun manageDestinationDisplaysManageScreen(): Unit {
         showScreen(
             state =

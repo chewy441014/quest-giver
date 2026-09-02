@@ -180,4 +180,16 @@ sealed interface NutritionAction {
 
     data object SaveItemAsVersion :
         NutritionAction
+
+    data object RequestRemoveItem :
+        NutritionAction
+
+    data object DismissRemoveItem :
+        NutritionAction
+
+    data object ConfirmRemoveItem :
+        NutritionAction
+
+    data object RestoreItem :
+        NutritionAction
 }

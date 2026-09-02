@@ -289,6 +289,113 @@ class NutritionManageScreenTest {
     }
 
     @Test
+    fun addItemSendsAction(): Unit {
+        val actions =
+            mutableListOf<NutritionAction>()
+
+        showScreen(actions = actions)
+
+        composeRule
+            .onNodeWithTag(
+                NutritionManageTags.ADD_ITEM
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                NutritionAction.OpenAddItem
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun singleVersionRowOpensItem(): Unit {
+        val actions =
+            mutableListOf<NutritionAction>()
+
+        showScreen(actions = actions)
+
+        composeRule
+            .onNodeWithTag(
+                NutritionManageTags.group(
+                    "milk"
+                )
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                NutritionAction.InspectItem(
+                    1L
+                )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun multipleVersionRowShowsChooser(): Unit {
+        val actions =
+            mutableListOf<NutritionAction>()
+
+        showScreen(
+            state =
+                NutritionManageUiState(
+                    itemOptions =
+                        listOf(
+                            option(
+                                id = 1L,
+                                name = "Milk",
+                                version = 0,
+                                versionLabel =
+                                    "Original",
+                            ),
+                            option(
+                                id = 2L,
+                                name = "Milk",
+                                version = 1,
+                                versionLabel =
+                                    "Regular",
+                                totalConsumed =
+                                    500.0,
+                            ),
+                        )
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                NutritionManageTags.group(
+                    "milk"
+                )
+            )
+            .performClick()
+
+        composeRule
+            .onNodeWithText("Choose version")
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(
+                NutritionManageTags.version(
+                    2L
+                )
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                NutritionAction.InspectItem(
+                    2L
+                )
+            ),
+            actions,
+        )
+    }
+
+    @Test
     fun archivedItemDisplaysStatus(): Unit {
         showScreen(
             state =
@@ -354,13 +461,14 @@ class NutritionManageScreenTest {
         protein: Double = 10.0,
         createdAt: Long = 1_000L,
         archived: Boolean = false,
+        version: Int = 0,
+        versionLabel: String? = null,
+        totalConsumed: Double = 0.0,
     ): NutritionItemOptionUiState =
         NutritionItemOptionUiState(
             id = id,
             name = name,
             nameKey = name.lowercase(),
-            version = 0,
-            versionLabel = null,
             caloriesPer100g = calories,
             proteinPer100g = protein,
             createdAtEpochMillis =
@@ -368,5 +476,9 @@ class NutritionManageScreenTest {
             lastConsumedAtEpochMillis =
                 null,
             isArchived = archived,
+            version = version,
+            versionLabel = versionLabel,
+            totalConsumedGrams =
+                totalConsumed,
         )
 }

@@ -18,6 +18,7 @@ import com.prestonhill.questgiver.data.repository.FoodLogDraft
 import com.prestonhill.questgiver.data.repository.NutritionItemUsage
 import com.prestonhill.questgiver.data.repository.NutritionItemDetails
 import com.prestonhill.questgiver.data.repository.NutritionItemRemovalMode
+import com.prestonhill.questgiver.data.repository.NutritionItemRemovalResult
 import java.time.Instant
 import java.time.LocalTime
 import java.util.concurrent.CancellationException
@@ -347,6 +348,46 @@ class NutritionViewModel(
                             action.value
                     )
                 }
+            }
+
+            NutritionAction.RequestRemoveItem -> {
+                updateItemEditor { editor ->
+                    val canRemove =
+                        editor.isEditing &&
+                                !editor.isDirty &&
+                                (
+                                        !editor.isArchived ||
+                                                editor.removalMode ==
+                                                NutritionItemRemovalModeUiState
+                                                    .DELETE
+                                        )
+
+                    if (canRemove) {
+                        editor.copy(
+                            showRemovalConfirmation =
+                                true
+                        )
+                    } else {
+                        editor
+                    }
+                }
+            }
+
+            NutritionAction.DismissRemoveItem -> {
+                updateItemEditor {
+                    it.copy(
+                        showRemovalConfirmation =
+                            false
+                    )
+                }
+            }
+
+            NutritionAction.ConfirmRemoveItem -> {
+                removeItem()
+            }
+
+            NutritionAction.RestoreItem -> {
+                restoreItem()
             }
 
             NutritionAction
@@ -788,6 +829,165 @@ class NutritionViewModel(
         val itemEditor:
         NutritionItemEditorUiState?,
     )
+
+    private fun removeItem() {
+        val editor =
+            itemEditor.value ?: return
+
+        val itemId =
+            editor.itemId ?: return
+
+        val mode =
+            editor.removalMode ?: return
+
+        val canRemove =
+            !editor.isBusy &&
+                    !editor.isDirty &&
+                    (
+                            !editor.isArchived ||
+                                    mode ==
+                                    NutritionItemRemovalModeUiState
+                                        .DELETE
+                            )
+
+        if (!canRemove) {
+            return
+        }
+
+        itemEditor.value =
+            editor.copy(
+                isRemoving = true,
+                showRemovalConfirmation =
+                    false,
+                showComponentPicker = false,
+                errorMessage = null,
+            )
+
+        viewModelScope.launch {
+            try {
+                val result =
+                    repository.removeItem(
+                        itemId = itemId,
+                        timestampMillis =
+                            clock.millis(),
+                    )
+
+                when (result) {
+                    NutritionItemRemovalResult
+                        .ARCHIVED,
+                    NutritionItemRemovalResult
+                        .DELETED,
+                    NutritionItemRemovalResult
+                        .ALREADY_ARCHIVED,
+                        -> {
+                        itemEditorRequestVersion +=
+                            1L
+                        itemEditor.value = null
+                    }
+
+                    NutritionItemRemovalResult
+                        .ITEM_NOT_FOUND -> {
+                        itemEditor.update {
+                            it?.copy(
+                                isRemoving = false,
+                                errorMessage =
+                                    removalError(mode),
+                            )
+                        }
+                    }
+                }
+            } catch (error: Exception) {
+                if (
+                    error is CancellationException
+                ) {
+                    throw error
+                }
+
+                itemEditor.update {
+                    it?.copy(
+                        isRemoving = false,
+                        errorMessage =
+                            removalError(mode),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun removalError(
+        mode:
+        NutritionItemRemovalModeUiState,
+    ): String =
+        when (mode) {
+            NutritionItemRemovalModeUiState
+                .ARCHIVE ->
+                "Food could not be archived."
+
+            NutritionItemRemovalModeUiState
+                .DELETE ->
+                "Food could not be deleted."
+        }
+
+    private fun restoreItem() {
+        val editor =
+            itemEditor.value ?: return
+
+        val itemId =
+            editor.itemId ?: return
+
+        if (
+            editor.isBusy ||
+            editor.isDirty ||
+            !editor.isArchived
+        ) {
+            return
+        }
+
+        itemEditor.value =
+            editor.copy(
+                isRemoving = true,
+                showComponentPicker = false,
+                errorMessage = null,
+            )
+
+        viewModelScope.launch {
+            try {
+                if (
+                    repository.restoreItem(
+                        itemId = itemId,
+                        timestampMillis =
+                            clock.millis(),
+                    )
+                ) {
+                    itemEditorRequestVersion +=
+                        1L
+                    itemEditor.value = null
+                } else {
+                    itemEditor.update {
+                        it?.copy(
+                            isRemoving = false,
+                            errorMessage =
+                                "Food could not be restored.",
+                        )
+                    }
+                }
+            } catch (error: Exception) {
+                if (
+                    error is CancellationException
+                ) {
+                    throw error
+                }
+
+                itemEditor.update {
+                    it?.copy(
+                        isRemoving = false,
+                        errorMessage =
+                            "Food could not be restored.",
+                    )
+                }
+            }
+        }
+    }
 
     private fun updateItemEditor(
         transform:
