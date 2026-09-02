@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import kotlin.math.round
@@ -322,10 +323,8 @@ fun NutritionManageScreen(
                                         versions.single().id
                                     )
                                 )
-                            } else {
-                                selectedVersionGroup =
-                                    group.nameKey
                             }
+
                         },
                     )
                 }
@@ -395,14 +394,20 @@ fun NutritionManageScreen(
                     Text("Choose version")
                 },
                 text = {
-                    Column(
-                        verticalArrangement =
-                            Arrangement.spacedBy(
-                                8.dp
+                    LazyColumn(
+                        modifier =
+                            Modifier.heightIn(
+                                max = 360.dp
                             ),
+                        verticalArrangement =
+                            Arrangement.spacedBy(8.dp),
                     ) {
-                        versions.forEach {
-                                version ->
+                        items(
+                            items = versions,
+                            key = {
+                                it.id
+                            },
+                        ) { version ->
                             OutlinedButton(
                                 modifier =
                                     Modifier
@@ -521,21 +526,25 @@ private fun NutritionManageGroupRow(
                         MaterialTheme.typography
                             .labelMedium,
                 )
-            } else {
-                Text(
-                    "${group.versions.size} versions"
-                )
+            }
 
-                when {
-                    archivedCount ==
-                            group.versions.size ->
-                        Text("Archived")
+            when {
+                archivedCount ==
+                        group.versions.size ->
+                    Text(
+                        if (
+                            group.versions.size == 1
+                        ) {
+                            "Archived"
+                        } else {
+                            "All versions archived"
+                        }
+                    )
 
-                    archivedCount > 0 ->
-                        Text(
-                            "$archivedCount archived"
-                        )
-                }
+                archivedCount > 0 ->
+                    Text(
+                        "$archivedCount archived"
+                    )
             }
         }
     }

@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
-import java.util.Locale
 import androidx.compose.ui.platform.LocalLocale
 
 object NutritionLogEditorTags {

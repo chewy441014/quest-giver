@@ -114,15 +114,16 @@ fun NutritionItemEditorDialog(
             LazyColumn(
                 modifier =
                     Modifier.heightIn(
-                        max = 560.dp
+                        max = 360.dp
                     ),
                 verticalArrangement =
-                    Arrangement.spacedBy(12.dp),
+                    Arrangement.spacedBy(8.dp),
             ) {
                 if (
                     editor.isEditing &&
                     editor.versionOptions.size > 1
                 ) {
+
                     item {
                         Column {
                             OutlinedButton(
