@@ -7,6 +7,10 @@ data class NutritionItemUsage(
     val item: NutritionItemEntity,
     val lastConsumedAtEpochMillis:
     Long?,
+    val totalConsumedGrams:
+    Double = 0.0,
+    val consumptionCount:
+    Int = 0,
 ) {
     val latestActivityEpochMillis: Long
         get() =

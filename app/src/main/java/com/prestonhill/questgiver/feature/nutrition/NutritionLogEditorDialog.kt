@@ -41,6 +41,7 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
+import androidx.compose.ui.platform.LocalLocale
 
 object NutritionLogEditorTags {
     const val EDITOR =
@@ -142,7 +143,7 @@ fun NutritionLogEditorDialog(
                         DateTimeFormatter
                             .ofPattern(
                                 "EEE, MMM d, yyyy",
-                                Locale.getDefault(),
+                                LocalLocale.current.platformLocale,
                             )
                     )
                 )
@@ -590,7 +591,10 @@ private fun FoodSearchResults(
                     modifier =
                         Modifier.fillMaxWidth()
                 ) {
-                    Text(group.name)
+                    val representative =
+                        group.representativeVersion
+
+                    Text("${group.name} · " + (representative.versionLabel ?: "v${representative.version}"))
 
                     if (
                         group.versions.size >

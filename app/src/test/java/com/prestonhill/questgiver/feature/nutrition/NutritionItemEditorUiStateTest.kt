@@ -8,11 +8,14 @@ import org.junit.Test
 class NutritionItemEditorUiStateTest {
     @Test
     fun perHundredGramEntryValidates(): Unit {
+
         val invalid =
             NutritionItemEditorUiState(
                 nameText = "Milk",
                 caloriesPer100gText = "",
                 proteinPer100gText = "8",
+                entryMode =
+                    NutritionEntryMode.PER_100_GRAMS,
             )
 
         assertFalse(invalid.canSave)
@@ -220,6 +223,7 @@ class NutritionItemEditorUiStateTest {
                         ),
                     ),
                 nameText = "Milk",
+                entryMode = NutritionEntryMode.PER_100_GRAMS,
                 caloriesPer100gText = "120",
                 proteinPer100gText = "8",
             )

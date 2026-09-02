@@ -48,9 +48,10 @@ data class NutritionItemOptionUiState(
     val caloriesPer100g: Double,
     val proteinPer100g: Double,
     val createdAtEpochMillis: Long,
-    val lastConsumedAtEpochMillis:
-    Long?,
+    val lastConsumedAtEpochMillis: Long?,
     val isArchived: Boolean,
+    val totalConsumedGrams: Double = 0.0,
+    val consumptionCount: Int = 0,
 ) {
     val displayName: String
         get() =
@@ -134,6 +135,27 @@ data class NutritionFoodGroupUiState(
             versions.maxOf {
                 it.proteinPer100Calories
             }
+
+    val representativeVersion:
+            NutritionItemOptionUiState
+        get() =
+            versions.maxWith(
+                compareBy<
+                        NutritionItemOptionUiState
+                        > {
+                    it.totalConsumedGrams
+                }
+                    .thenBy {
+                        it.consumptionCount
+                    }
+                    .thenBy {
+                        it.lastConsumedAtEpochMillis
+                            ?: Long.MIN_VALUE
+                    }
+                    .thenBy {
+                        it.version
+                    }
+            )
 }
 
 data class NutritionLogEditorUiState(

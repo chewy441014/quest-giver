@@ -119,4 +119,65 @@ sealed interface NutritionAction {
     data class SelectItemEditorVersion(
         val itemId: Long,
     ) : NutritionAction
+
+    data class ChangeItemName(
+        val value: String,
+    ) : NutritionAction
+
+    data class ChangeItemVersionLabel(
+        val value: String,
+    ) : NutritionAction
+
+    data class ChangeItemEntryMode(
+        val mode: NutritionEntryMode,
+    ) : NutritionAction
+
+    data class ChangeItemCaloriesPer100g(
+        val value: String,
+    ) : NutritionAction
+
+    data class ChangeItemProteinPer100g(
+        val value: String,
+    ) : NutritionAction
+
+    data class ChangeItemServingWeight(
+        val value: String,
+    ) : NutritionAction
+
+    data class ChangeItemServingCalories(
+        val value: String,
+    ) : NutritionAction
+
+    data class ChangeItemServingProtein(
+        val value: String,
+    ) : NutritionAction
+
+    data object OpenItemComponentPicker :
+        NutritionAction
+
+    data object DismissItemComponentPicker :
+        NutritionAction
+
+    data class ChangeItemComponentSearch(
+        val value: String,
+    ) : NutritionAction
+
+    data class AddItemComponent(
+        val itemId: Long,
+    ) : NutritionAction
+
+    data class ChangeItemComponentWeight(
+        val itemId: Long,
+        val value: String,
+    ) : NutritionAction
+
+    data class RemoveItemComponent(
+        val itemId: Long,
+    ) : NutritionAction
+
+    data object SaveItem :
+        NutritionAction
+
+    data object SaveItemAsVersion :
+        NutritionAction
 }

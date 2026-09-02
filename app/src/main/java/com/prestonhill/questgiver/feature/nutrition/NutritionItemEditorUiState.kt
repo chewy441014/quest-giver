@@ -62,9 +62,7 @@ data class NutritionItemEditorUiState(
         emptyList(),
     val nameText: String = "",
     val versionLabelText: String = "",
-    val entryMode:
-    NutritionEntryMode =
-        NutritionEntryMode.PER_100_GRAMS,
+    val entryMode: NutritionEntryMode = NutritionEntryMode.SERVING,
     val caloriesPer100gText: String = "",
     val proteinPer100gText: String = "",
     val servingWeightText: String = "",

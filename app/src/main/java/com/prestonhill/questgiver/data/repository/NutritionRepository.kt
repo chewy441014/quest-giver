@@ -655,30 +655,28 @@ class NutritionRepository(
             dao.observeAllItems(),
             dao.observeAllLogs(),
         ) { items, logs ->
-            val lastConsumedByItem =
-                logs.groupingBy {
+            val logsByItem =
+                logs.groupBy {
                     it.itemId
                 }
-                    .fold(
-                        initialValue =
-                            Long.MIN_VALUE
-                    ) { latest, log ->
-                        maxOf(
-                            latest,
-                            log.consumedAtEpochMillis,
-                        )
-                    }
 
             items.map { item ->
+                val itemLogs =
+                    logsByItem[item.id]
+                        .orEmpty()
+
                 NutritionItemUsage(
                     item = item,
                     lastConsumedAtEpochMillis =
-                        lastConsumedByItem[
-                            item.id
-                        ]
-                            ?.takeUnless {
-                                it == Long.MIN_VALUE
-                            },
+                        itemLogs.maxOfOrNull {
+                            it.consumedAtEpochMillis
+                        },
+                    totalConsumedGrams =
+                        itemLogs.sumOf {
+                            it.weightGrams
+                        },
+                    consumptionCount =
+                        itemLogs.size,
                 )
             }
         }

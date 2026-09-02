@@ -814,6 +814,1108 @@ class NutritionViewModelTest {
         }
 
     @Test
+    fun newItemEditorOpensFromManage(): Unit =
+        runBlocking {
+            val existingId = addItem()
+
+            viewModel.onAction(
+                NutritionAction.OpenManage
+            )
+
+            viewModel.onAction(
+                NutritionAction.OpenAddItem
+            )
+
+            val editor =
+                requireNotNull(
+                    awaitState {
+                        it.itemEditor != null
+                    }.itemEditor
+                )
+
+            assertNull(editor.itemId)
+
+            assertTrue(
+                editor.knownItems.any {
+                    it.id == existingId
+                }
+            )
+
+            assertEquals(
+                NutritionDestination.Manage,
+                awaitState {
+                    it.itemEditor != null
+                }.destination,
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .DismissItemEditor
+            )
+
+            val dismissed =
+                awaitState {
+                    it.itemEditor == null
+                }
+
+            assertEquals(
+                NutritionDestination.Manage,
+                dismissed.destination,
+            )
+        }
+    @Test
+    fun manualItemEditorLoadsStoredValues(): Unit =
+        runBlocking {
+            val itemId =
+                repository.createItem(
+                    NutritionItemDraft(
+                        name = "Milk",
+                        versionLabel =
+                            "Brand A",
+                        nutrition =
+                            NutritionValuesInput
+                                .Per100Grams(
+                                    calories = 120.0,
+                                    proteinGrams = 8.0,
+                                ),
+                    ),
+                    timestampMillis =
+                        clock.millis(),
+                )
+
+            viewModel.onAction(
+                NutritionAction.OpenManage
+            )
+
+            viewModel.onAction(
+                NutritionAction.InspectItem(
+                    itemId
+                )
+            )
+
+            val editor =
+                requireNotNull(
+                    awaitState {
+                        it.itemEditor?.itemId ==
+                                itemId
+                    }.itemEditor
+                )
+
+
+
+            assertEquals(
+                "Milk",
+                editor.nameText,
+            )
+
+            assertEquals(
+                "Brand A",
+                editor.versionLabelText,
+            )
+
+            assertEquals(
+                "120",
+                editor.caloriesPer100gText,
+            )
+
+            assertEquals(
+                "8",
+                editor.proteinPer100gText,
+            )
+
+            assertEquals(
+                NutritionEntryMode
+                    .PER_100_GRAMS,
+                editor.entryMode,
+            )
+
+            assertTrue(
+                editor.components.isEmpty()
+            )
+
+            assertFalse(editor.isDirty)
+            assertFalse(editor.canSave)
+
+            assertEquals(
+                NutritionItemRemovalModeUiState
+                    .DELETE,
+                editor.removalMode,
+            )
+        }
+
+    @Test
+    fun composedItemEditorLoadsComponents(): Unit =
+        runBlocking {
+            val firstId =
+                repository.createItem(
+                    NutritionItemDraft(
+                        name = "First",
+                        nutrition =
+                            NutritionValuesInput
+                                .Per100Grams(
+                                    calories = 200.0,
+                                    proteinGrams = 20.0,
+                                ),
+                    )
+                )
+
+            val secondId =
+                repository.createItem(
+                    NutritionItemDraft(
+                        name = "Second",
+                        nutrition =
+                            NutritionValuesInput
+                                .Per100Grams(
+                                    calories = 100.0,
+                                    proteinGrams = 10.0,
+                                ),
+                    )
+                )
+
+            val parentId =
+                repository.createComposedItem(
+                    composedDraft(
+                        "Combination",
+                        firstId to 25.0,
+                        secondId to 75.0,
+                    )
+                )
+
+            viewModel.onAction(
+                NutritionAction.OpenManage
+            )
+
+            viewModel.onAction(
+                NutritionAction.InspectItem(
+                    parentId
+                )
+            )
+
+            val editor =
+                requireNotNull(
+                    awaitState {
+                        it.itemEditor?.itemId ==
+                                parentId
+                    }.itemEditor
+                )
+
+            assertTrue(editor.isComposed)
+
+            assertEquals(
+                listOf(firstId, secondId),
+                editor.components
+                    .map { it.item.id },
+            )
+
+            assertEquals(
+                listOf("25", "75"),
+                editor.components
+                    .map { it.gramsText },
+            )
+
+            assertEquals(
+                125.0,
+                editor
+                    .calculatedCaloriesPer100g,
+                TOLERANCE,
+            )
+
+            assertEquals(
+                12.5,
+                editor
+                    .calculatedProteinPer100g,
+                TOLERANCE,
+            )
+
+            assertTrue(editor.componentsValid)
+            assertFalse(editor.isDirty)
+        }
+
+    @Test
+    fun archivedItemEditorLoadsLifecycleState(): Unit =
+        runBlocking {
+            val itemId = addItem()
+
+            repository.createComposedItem(
+                composedDraft(
+                    "Parent",
+                    itemId to 100.0,
+                )
+            )
+
+            assertEquals(
+                NutritionItemRemovalResult
+                    .ARCHIVED,
+                repository.removeItem(
+                    itemId = itemId,
+                    timestampMillis =
+                        clock.millis(),
+                )
+            )
+
+            viewModel.onAction(
+                NutritionAction.OpenManage
+            )
+
+            viewModel.onAction(
+                NutritionAction.InspectItem(
+                    itemId
+                )
+            )
+
+            val editor =
+                requireNotNull(
+                    awaitState {
+                        it.itemEditor?.itemId ==
+                                itemId
+                    }.itemEditor
+                )
+
+            assertTrue(editor.isArchived)
+
+            assertEquals(
+                NutritionItemRemovalModeUiState
+                    .ARCHIVE,
+                editor.removalMode,
+            )
+
+            assertTrue(
+                editor.knownItems
+                    .single {
+                        it.id == itemId
+                    }
+                    .isArchived
+            )
+        }
+
+    @Test
+    fun itemEditorCanSwitchVersions(): Unit =
+        runBlocking {
+            val firstId =
+                repository.createItem(
+                    NutritionItemDraft(
+                        name = "Milk",
+                        versionLabel = "Original",
+                        nutrition =
+                            NutritionValuesInput
+                                .Per100Grams(
+                                    calories = 100.0,
+                                    proteinGrams = 8.0,
+                                ),
+                    )
+                )
+
+            val secondId =
+                repository.createItem(
+                    NutritionItemDraft(
+                        name = "Milk",
+                        versionLabel = "New",
+                        nutrition =
+                            NutritionValuesInput
+                                .Per100Grams(
+                                    calories = 120.0,
+                                    proteinGrams = 10.0,
+                                ),
+                    )
+                )
+
+            viewModel.onAction(
+                NutritionAction.OpenManage
+            )
+
+            viewModel.onAction(
+                NutritionAction.InspectItem(
+                    firstId
+                )
+            )
+
+            val first =
+                requireNotNull(
+                    awaitState {
+                        it.itemEditor?.itemId ==
+                                firstId
+                    }.itemEditor
+                )
+
+            assertEquals(
+                listOf(firstId, secondId),
+                first.versionOptions
+                    .map { it.id },
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .SelectItemEditorVersion(
+                        secondId
+                    )
+            )
+
+            val second =
+                requireNotNull(
+                    awaitState {
+                        it.itemEditor?.itemId ==
+                                secondId
+                    }.itemEditor
+                )
+
+            assertEquals(1, second.version)
+
+            assertEquals(
+                "New",
+                second.versionLabelText,
+            )
+        }
+
+    @Test
+    fun missingItemCannotOpenEditor(): Unit =
+        runBlocking {
+            viewModel.onAction(
+                NutritionAction.OpenManage
+            )
+
+            viewModel.onAction(
+                NutritionAction.InspectItem(
+                    Long.MAX_VALUE
+                )
+            )
+
+            val state =
+                awaitState {
+                    it.operationError ==
+                            "Food could not be found."
+                }
+
+            assertNull(state.itemEditor)
+
+            assertEquals(
+                NutritionDestination.Manage,
+                state.destination,
+            )
+        }
+
+    @Test
+    fun selectingDateClosesItemEditor(): Unit =
+        runBlocking {
+            val itemId = addItem()
+
+            viewModel.onAction(
+                NutritionAction.OpenManage
+            )
+
+            viewModel.onAction(
+                NutritionAction.InspectItem(
+                    itemId
+                )
+            )
+
+            awaitState {
+                it.itemEditor?.itemId ==
+                        itemId
+            }
+
+            viewModel.onAction(
+                NutritionAction.SelectDate(
+                    PAST_DATE
+                )
+            )
+
+            val state =
+                awaitState {
+                    it.selectedDate ==
+                            PAST_DATE &&
+                            it.itemEditor == null
+                }
+
+            assertNull(state.destination)
+            assertNull(state.itemEditor)
+        }
+
+    @Test
+    fun itemEditorFieldsChange(): Unit =
+        runBlocking {
+            openNewItemEditorState()
+
+            viewModel.onAction(
+                NutritionAction.ChangeItemName(
+                    "Milk"
+                )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemVersionLabel(
+                        "Brand A"
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemEntryMode(
+                        NutritionEntryMode.SERVING
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemServingWeight(
+                        "250"
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemServingCalories(
+                        "300"
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemServingProtein(
+                        "20"
+                    )
+            )
+
+            val editor =
+                requireNotNull(
+                    awaitState {
+                        it.itemEditor
+                            ?.servingProteinText ==
+                                "20"
+                    }.itemEditor
+                )
+
+            assertEquals(
+                "Milk",
+                editor.nameText,
+            )
+
+            assertEquals(
+                "Brand A",
+                editor.versionLabelText,
+            )
+
+            assertEquals(
+                NutritionEntryMode.SERVING,
+                editor.entryMode,
+            )
+
+            assertEquals(
+                "250",
+                editor.servingWeightText,
+            )
+
+            assertTrue(editor.canSave)
+        }
+
+    @Test
+    fun itemComponentsCanBeAddedChangedAndRemoved(): Unit =
+        runBlocking {
+            val firstId =
+                addNamedItem("First")
+
+            val secondId =
+                addNamedItem("Second")
+
+            openNewItemEditorState()
+
+            viewModel.onAction(
+                NutritionAction
+                    .OpenItemComponentPicker
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemComponentSearch(
+                        "First"
+                    )
+            )
+
+            var editor =
+                requireNotNull(
+                    awaitState {
+                        it.itemEditor
+                            ?.componentSearch ==
+                                "First"
+                    }.itemEditor
+                )
+
+            assertTrue(
+                editor.showComponentPicker
+            )
+
+            viewModel.onAction(
+                NutritionAction.AddItemComponent(
+                    firstId
+                )
+            )
+
+            editor =
+                requireNotNull(
+                    awaitState {
+                        it.itemEditor
+                            ?.components
+                            ?.size == 1
+                    }.itemEditor
+                )
+
+            assertEquals(
+                "100",
+                editor.components
+                    .single()
+                    .gramsText,
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemComponentWeight(
+                        itemId = firstId,
+                        value = "25",
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .OpenItemComponentPicker
+            )
+
+            viewModel.onAction(
+                NutritionAction.AddItemComponent(
+                    secondId
+                )
+            )
+
+            editor =
+                requireNotNull(
+                    awaitState {
+                        it.itemEditor
+                            ?.components
+                            ?.size == 2
+                    }.itemEditor
+                )
+
+            assertEquals(
+                listOf("25", "75"),
+                editor.components
+                    .map { it.gramsText },
+            )
+
+            assertTrue(editor.componentsValid)
+
+            viewModel.onAction(
+                NutritionAction
+                    .RemoveItemComponent(
+                        firstId
+                    )
+            )
+
+            editor =
+                requireNotNull(
+                    awaitState {
+                        it.itemEditor
+                            ?.components
+                            ?.size == 1
+                    }.itemEditor
+                )
+
+            assertEquals(
+                secondId,
+                editor.components
+                    .single()
+                    .item.id,
+            )
+        }
+
+    @Test
+    fun perHundredGramItemIsCreated(): Unit =
+        runBlocking {
+            openNewItemEditorState()
+
+            viewModel.onAction(
+                NutritionAction.ChangeItemEntryMode(
+                    NutritionEntryMode.PER_100_GRAMS
+                )
+            )
+
+            viewModel.onAction(
+                NutritionAction.ChangeItemName(
+                    "Test milk"
+                )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemVersionLabel(
+                        "Brand A"
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemCaloriesPer100g(
+                        "120"
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemProteinPer100g(
+                        "8"
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction.SaveItem
+            )
+
+            val state =
+                awaitState {
+                    it.itemEditor == null &&
+                            it.manage.itemOptions.any {
+                                    option ->
+                                option.name ==
+                                        "Test milk"
+                            }
+                }
+
+            assertEquals(
+                NutritionDestination.Manage,
+                state.destination,
+            )
+
+            val item =
+                repository.getVersions(
+                    "Test milk"
+                )
+                    .single()
+
+            assertEquals(
+                "Brand A",
+                item.versionLabel,
+            )
+
+            assertEquals(
+                120.0,
+                item.caloriesPer100g,
+                TOLERANCE,
+            )
+
+            assertEquals(
+                8.0,
+                item.proteinPer100g,
+                TOLERANCE,
+            )
+        }
+
+    @Test
+    fun servingItemIsNormalizedOnSave(): Unit =
+        runBlocking {
+            openNewItemEditorState()
+
+            viewModel.onAction(
+                NutritionAction.ChangeItemName(
+                    "Serving food"
+                )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemEntryMode(
+                        NutritionEntryMode.SERVING
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemServingWeight(
+                        "250"
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemServingCalories(
+                        "500"
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemServingProtein(
+                        "25"
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction.SaveItem
+            )
+
+            awaitState {
+                it.itemEditor == null &&
+                        it.manage.itemOptions.any {
+                                option ->
+                            option.name ==
+                                    "Serving food"
+                        }
+            }
+
+            val item =
+                repository.getVersions(
+                    "Serving food"
+                )
+                    .single()
+
+            assertEquals(
+                200.0,
+                item.caloriesPer100g,
+                TOLERANCE,
+            )
+
+            assertEquals(
+                10.0,
+                item.proteinPer100g,
+                TOLERANCE,
+            )
+        }
+
+    @Test
+    fun composedItemIsCreated(): Unit =
+        runBlocking {
+            val firstId =
+                addNamedItem(
+                    name = "First component",
+                    calories = 200.0,
+                    protein = 20.0,
+                )
+
+            val secondId =
+                addNamedItem(
+                    name = "Second component",
+                    calories = 100.0,
+                    protein = 10.0,
+                )
+
+            openNewItemEditorState()
+
+            viewModel.onAction(
+                NutritionAction.ChangeItemName(
+                    "Combination"
+                )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .OpenItemComponentPicker
+            )
+
+            viewModel.onAction(
+                NutritionAction.AddItemComponent(
+                    firstId
+                )
+            )
+
+            awaitState {
+                it.itemEditor
+                    ?.components
+                    ?.singleOrNull()
+                    ?.item
+                    ?.id == firstId
+            }
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemComponentWeight(
+                        itemId = firstId,
+                        value = "25",
+                    )
+            )
+
+            awaitState {
+                it.itemEditor
+                    ?.components
+                    ?.singleOrNull()
+                    ?.gramsText == "25"
+            }
+
+            viewModel.onAction(
+                NutritionAction
+                    .OpenItemComponentPicker
+            )
+
+            viewModel.onAction(
+                NutritionAction.AddItemComponent(
+                    secondId
+                )
+            )
+
+            awaitState { state ->
+                state.itemEditor
+                    ?.let { editor ->
+                        editor.components.size == 2 &&
+                                editor.components.map {
+                                    it.item.id
+                                } ==
+                                listOf(
+                                    firstId,
+                                    secondId,
+                                ) &&
+                                editor.components.map {
+                                    it.gramsText
+                                } ==
+                                listOf("25", "75") &&
+                                editor.componentsValid
+                    } == true
+                }.itemEditor
+
+            viewModel.onAction(
+                NutritionAction.SaveItem
+            )
+
+            awaitState {
+                it.itemEditor == null &&
+                        it.manage.itemOptions.any {
+                                option ->
+                            option.name ==
+                                    "Combination"
+                        }
+            }
+
+            val item =
+                repository.getVersions(
+                    "Combination"
+                )
+                    .single()
+
+            val details =
+                requireNotNull(
+                    repository.getItemDetails(
+                        item.id
+                    )
+                )
+
+            assertEquals(
+                listOf(firstId, secondId),
+                details.components
+                    .map { it.item.id },
+            )
+
+            assertEquals(
+                listOf(25.0, 75.0),
+                details.components
+                    .map { it.gramsPer100g },
+            )
+
+            assertEquals(
+                125.0,
+                item.caloriesPer100g,
+                TOLERANCE,
+            )
+
+            assertEquals(
+                12.5,
+                item.proteinPer100g,
+                TOLERANCE,
+            )
+        }
+
+    @Test
+    fun editingItemUpdatesHistoricalNutrition(): Unit =
+        runBlocking {
+            val itemId =
+                addNamedItem(
+                    name = "Editable",
+                    calories = 100.0,
+                    protein = 10.0,
+                )
+
+            addLog(
+                itemId = itemId,
+                date = CURRENT_DATE,
+                hour = 12,
+                weightGrams = 100.0,
+            )
+
+            awaitState {
+                it.totalCalories == 100.0 &&
+                        it.totalProteinGrams ==
+                        10.0
+            }
+
+            openExistingItemEditorState(
+                itemId
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemCaloriesPer100g(
+                        "200"
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemProteinPer100g(
+                        "20"
+                    )
+            )
+
+            viewModel.onAction(
+                NutritionAction.SaveItem
+            )
+
+            val state =
+                awaitState {
+                    it.itemEditor == null &&
+                            it.totalCalories ==
+                            200.0 &&
+                            it.totalProteinGrams ==
+                            20.0
+                }
+
+            assertEquals(
+                NutritionDestination.Manage,
+                state.destination,
+            )
+        }
+
+    @Test
+    fun editedItemCanSaveAsNewVersion(): Unit =
+        runBlocking {
+            val originalId =
+                addNamedItem(
+                    name = "Versioned",
+                    calories = 100.0,
+                    protein = 10.0,
+                )
+
+            openExistingItemEditorState(
+                originalId
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemCaloriesPer100g(
+                        "150"
+                    )
+            )
+
+            val dirty =
+                requireNotNull(
+                    awaitState {
+                        it.itemEditor
+                            ?.canSaveAsVersion ==
+                                true
+                    }.itemEditor
+                )
+
+            assertEquals(
+                "Save as v1",
+                dirty.saveAsVersionText,
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .SaveItemAsVersion
+            )
+
+            awaitState {
+                it.itemEditor == null &&
+                        it.manage.itemOptions
+                            .count { option ->
+                                option.nameKey ==
+                                        "versioned"
+                            } == 2
+            }
+
+            val versions =
+                repository.getVersions(
+                    "Versioned"
+                )
+
+            assertEquals(2, versions.size)
+
+            assertEquals(
+                100.0,
+                versions.single {
+                    it.version == 0
+                }.caloriesPer100g,
+                TOLERANCE,
+            )
+
+            assertEquals(
+                150.0,
+                versions.single {
+                    it.version == 1
+                }.caloriesPer100g,
+                TOLERANCE,
+            )
+        }
+
+    @Test
+    fun cyclicComponentSaveShowsError(): Unit =
+        runBlocking {
+            val baseId =
+                addNamedItem("Base")
+
+            val middleId =
+                repository.createComposedItem(
+                    composedDraft(
+                        "Middle",
+                        baseId to 100.0,
+                    )
+                )
+
+            val topId =
+                repository.createComposedItem(
+                    composedDraft(
+                        "Top",
+                        middleId to 100.0,
+                    )
+                )
+
+            openExistingItemEditorState(
+                baseId
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .OpenItemComponentPicker
+            )
+
+            viewModel.onAction(
+                NutritionAction.AddItemComponent(
+                    topId
+                )
+            )
+
+            viewModel.onAction(
+                NutritionAction.SaveItem
+            )
+
+            val editor =
+                requireNotNull(
+                    awaitState {
+                        it.itemEditor
+                            ?.errorMessage ==
+                                "Food could not be saved."
+                    }.itemEditor
+                )
+
+            assertFalse(editor.isSaving)
+
+            val details =
+                requireNotNull(
+                    repository.getItemDetails(
+                        baseId
+                    )
+                )
+
+            assertTrue(
+                details.components.isEmpty()
+            )
+        }
+
+    @Test
     fun missingLogCannotOpenEditor(): Unit =
         runBlocking {
             awaitState {
@@ -1326,6 +2428,66 @@ class NutritionViewModelTest {
                         gramsPer100g = grams,
                     )
                 },
+        )
+
+    private suspend fun openNewItemEditorState():
+            NutritionItemEditorUiState {
+        viewModel.onAction(
+            NutritionAction.OpenManage
+        )
+
+        viewModel.onAction(
+            NutritionAction.OpenAddItem
+        )
+
+        return requireNotNull(
+            awaitState {
+                it.itemEditor != null
+            }.itemEditor
+        )
+    }
+
+    private suspend fun openExistingItemEditorState(
+        itemId: Long,
+    ): NutritionItemEditorUiState {
+        viewModel.onAction(
+            NutritionAction.OpenManage
+        )
+
+        viewModel.onAction(
+            NutritionAction.InspectItem(
+                itemId
+            )
+        )
+
+        return requireNotNull(
+            awaitState {
+                it.itemEditor?.itemId ==
+                        itemId
+            }.itemEditor
+        )
+    }
+
+    private suspend fun addNamedItem(
+        name: String,
+        calories: Double = 100.0,
+        protein: Double = 10.0,
+    ): Long =
+        repository.createItem(
+            draft =
+                NutritionItemDraft(
+                    name = name,
+                    nutrition =
+                        NutritionValuesInput
+                            .Per100Grams(
+                                calories =
+                                    calories,
+                                proteinGrams =
+                                    protein,
+                            ),
+                ),
+            timestampMillis =
+                clock.millis(),
         )
 
     private suspend fun addItem(

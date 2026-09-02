@@ -10,6 +10,10 @@ import com.prestonhill.questgiver.core.time.BoundaryTimer
 import com.prestonhill.questgiver.core.time.RealBoundaryTimer
 import com.prestonhill.questgiver.data.repository.NutritionRepository
 import com.prestonhill.questgiver.data.local.database.entity.NutritionItemEntity
+import com.prestonhill.questgiver.data.repository.ComposedNutritionItemDraft
+import com.prestonhill.questgiver.data.repository.NutritionComponentDraft
+import com.prestonhill.questgiver.data.repository.NutritionItemDraft
+import com.prestonhill.questgiver.data.repository.NutritionValuesInput
 import com.prestonhill.questgiver.data.repository.FoodLogDraft
 import com.prestonhill.questgiver.data.repository.NutritionItemUsage
 import com.prestonhill.questgiver.data.repository.NutritionItemDetails
@@ -235,6 +239,7 @@ class NutritionViewModel(
                     overlay.destination,
                 logEditor = overlay.logEditor,
                 manage = overlay.manage,
+                itemEditor = overlay.itemEditor,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -261,6 +266,189 @@ class NutritionViewModel(
             NutritionAction
                 .DismissDatePicker -> {
                 showDatePicker.value = false
+            }
+
+            is NutritionAction.ChangeItemName -> {
+                updateItemEditor {
+                    it.copy(
+                        nameText = action.value
+                    )
+                }
+            }
+
+            is NutritionAction
+            .ChangeItemVersionLabel -> {
+                updateItemEditor {
+                    it.copy(
+                        versionLabelText =
+                            action.value
+                    )
+                }
+            }
+
+            is NutritionAction
+            .ChangeItemEntryMode -> {
+                updateItemEditor { editor ->
+                    if (editor.isComposed) {
+                        editor
+                    } else {
+                        editor.copy(
+                            entryMode = action.mode
+                        )
+                    }
+                }
+            }
+
+            is NutritionAction
+            .ChangeItemCaloriesPer100g -> {
+                updateItemEditor {
+                    it.copy(
+                        caloriesPer100gText =
+                            action.value
+                    )
+                }
+            }
+
+            is NutritionAction
+            .ChangeItemProteinPer100g -> {
+                updateItemEditor {
+                    it.copy(
+                        proteinPer100gText =
+                            action.value
+                    )
+                }
+            }
+
+            is NutritionAction
+            .ChangeItemServingWeight -> {
+                updateItemEditor {
+                    it.copy(
+                        servingWeightText =
+                            action.value
+                    )
+                }
+            }
+
+            is NutritionAction
+            .ChangeItemServingCalories -> {
+                updateItemEditor {
+                    it.copy(
+                        servingCaloriesText =
+                            action.value
+                    )
+                }
+            }
+
+            is NutritionAction
+            .ChangeItemServingProtein -> {
+                updateItemEditor {
+                    it.copy(
+                        servingProteinText =
+                            action.value
+                    )
+                }
+            }
+
+            NutritionAction
+                .OpenItemComponentPicker -> {
+                updateItemEditor {
+                    it.copy(
+                        showComponentPicker = true,
+                        componentSearch = "",
+                    )
+                }
+            }
+
+            NutritionAction
+                .DismissItemComponentPicker -> {
+                updateItemEditor {
+                    it.copy(
+                        showComponentPicker = false,
+                        componentSearch = "",
+                    )
+                }
+            }
+
+            is NutritionAction
+            .ChangeItemComponentSearch -> {
+                updateItemEditor { editor ->
+                    if (!editor.showComponentPicker) {
+                        editor
+                    } else {
+                        editor.copy(
+                            componentSearch =
+                                action.value
+                        )
+                    }
+                }
+            }
+
+            is NutritionAction.AddItemComponent -> {
+                updateItemEditor { editor ->
+                    val selected =
+                        editor
+                            .selectableComponentOptions
+                            .firstOrNull {
+                                it.id == action.itemId
+                            }
+                            ?: return@updateItemEditor editor
+
+                    val remaining =
+                        editor.componentWeightRemaining
+
+                    editor.copy(
+                        components =
+                            editor.components +
+                                    NutritionItemComponentUiState(
+                                        item = selected,
+                                        gramsText =
+                                            if (remaining > 0.0) {
+                                                amountText(
+                                                    remaining
+                                                )
+                                            } else {
+                                                ""
+                                            },
+                                    ),
+                        showComponentPicker = false,
+                        componentSearch = "",
+                    )
+                }
+            }
+
+            is NutritionAction
+            .ChangeItemComponentWeight -> {
+                updateItemEditor { editor ->
+                    editor.copy(
+                        components =
+                            editor.components.map {
+                                    component ->
+                                if (
+                                    component.item.id ==
+                                    action.itemId
+                                ) {
+                                    component.copy(
+                                        gramsText =
+                                            action.value
+                                    )
+                                } else {
+                                    component
+                                }
+                            }
+                    )
+                }
+            }
+
+            is NutritionAction.RemoveItemComponent -> {
+                updateItemEditor { editor ->
+                    editor.copy(
+                        components =
+                            editor.components.filterNot {
+                                it.item.id ==
+                                        action.itemId
+                            }
+                    )
+                }
             }
 
             is NutritionAction.SelectDate -> {
@@ -382,7 +570,26 @@ class NutritionViewModel(
 
             is NutritionAction
             .SelectItemEditorVersion -> {
+                if (
+                    itemEditor.value?.isDirty ==
+                    true
+                ) {
+                    return
+                }
+
                 openItemEditor(action.itemId)
+            }
+
+            NutritionAction.SaveItem -> {
+                saveItem(
+                    asVersion = false
+                )
+            }
+
+            NutritionAction.SaveItemAsVersion -> {
+                saveItem(
+                    asVersion = true
+                )
             }
 
             is NutritionAction.ChangeManageSearch -> {
@@ -533,7 +740,8 @@ class NutritionViewModel(
 
             NutritionAction.OpenManage -> {
                 if (
-                    logEditor.value?.isBusy == true
+                    logEditor.value?.isBusy == true ||
+                    itemEditor.value?.isBusy == true
                 ) {
                     return
                 }
@@ -581,6 +789,220 @@ class NutritionViewModel(
         NutritionItemEditorUiState?,
     )
 
+    private fun updateItemEditor(
+        transform:
+            (NutritionItemEditorUiState) ->
+        NutritionItemEditorUiState,
+    ) {
+        itemEditor.update { editor ->
+            if (
+                editor == null ||
+                editor.isBusy
+            ) {
+                editor
+            } else {
+                transform(editor).copy(
+                    errorMessage = null
+                )
+            }
+        }
+    }
+
+    private fun saveItem(
+        asVersion: Boolean,
+    ) {
+        val editor =
+            itemEditor.value ?: return
+
+        if (
+            if (asVersion) {
+                !editor.canSaveAsVersion
+            } else {
+                !editor.canSave
+            }
+        ) {
+            return
+        }
+
+        itemEditor.value =
+            editor.copy(
+                isSaving = true,
+                errorMessage = null,
+                showComponentPicker = false,
+            )
+
+        viewModelScope.launch {
+            try {
+                val saved =
+                    persistItem(
+                        editor = editor,
+                        asVersion = asVersion,
+                    )
+
+                if (saved) {
+                    itemEditorRequestVersion += 1L
+                    itemEditor.value = null
+                } else {
+                    itemEditor.update {
+                        it?.copy(
+                            isSaving = false,
+                            errorMessage =
+                                "Food could not be saved.",
+                        )
+                    }
+                }
+            } catch (error: Exception) {
+                if (
+                    error is CancellationException
+                ) {
+                    throw error
+                }
+
+                itemEditor.update {
+                    it?.copy(
+                        isSaving = false,
+                        errorMessage =
+                            "Food could not be saved.",
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun persistItem(
+        editor: NutritionItemEditorUiState,
+        asVersion: Boolean,
+    ): Boolean =
+        if (editor.isComposed) {
+            val draft =
+                ComposedNutritionItemDraft(
+                    name = editor.nameText,
+                    versionLabel =
+                        editor.versionLabelText,
+                    components =
+                        editor.components.map {
+                                component ->
+                            NutritionComponentDraft(
+                                itemId =
+                                    component.item.id,
+                                gramsPer100g =
+                                    requireNotNull(
+                                        component
+                                            .gramsPer100g
+                                    ),
+                            )
+                        },
+                )
+
+            when {
+                editor.itemId == null ->
+                    repository.createComposedItem(
+                        draft = draft,
+                        timestampMillis =
+                            clock.millis(),
+                    ) > 0L
+
+                asVersion ->
+                    repository
+                        .saveComposedAsVersion(
+                            itemId =
+                                editor.itemId,
+                            draft = draft,
+                            timestampMillis =
+                                clock.millis(),
+                        ) != null
+
+                else ->
+                    repository.updateComposedItem(
+                        itemId = editor.itemId,
+                        draft = draft,
+                        timestampMillis =
+                            clock.millis(),
+                    )
+            }
+        } else {
+            val nutrition =
+                when (editor.entryMode) {
+                    NutritionEntryMode
+                        .PER_100_GRAMS ->
+                        NutritionValuesInput
+                            .Per100Grams(
+                                calories =
+                                    requireNotNull(
+                                        editor
+                                            .caloriesPer100gText
+                                            .trim()
+                                            .toDoubleOrNull()
+                                    ),
+                                proteinGrams =
+                                    requireNotNull(
+                                        editor
+                                            .proteinPer100gText
+                                            .trim()
+                                            .toDoubleOrNull()
+                                    ),
+                            )
+
+                    NutritionEntryMode.SERVING ->
+                        NutritionValuesInput.Serving(
+                            weightGrams =
+                                requireNotNull(
+                                    editor
+                                        .servingWeightText
+                                        .trim()
+                                        .toDoubleOrNull()
+                                ),
+                            calories =
+                                requireNotNull(
+                                    editor
+                                        .servingCaloriesText
+                                        .trim()
+                                        .toDoubleOrNull()
+                                ),
+                            proteinGrams =
+                                requireNotNull(
+                                    editor
+                                        .servingProteinText
+                                        .trim()
+                                        .toDoubleOrNull()
+                                ),
+                        )
+                }
+
+            val draft =
+                NutritionItemDraft(
+                    name = editor.nameText,
+                    versionLabel =
+                        editor.versionLabelText,
+                    nutrition = nutrition,
+                )
+
+            when {
+                editor.itemId == null ->
+                    repository.createItem(
+                        draft = draft,
+                        timestampMillis =
+                            clock.millis(),
+                    ) > 0L
+
+                asVersion ->
+                    repository.saveAsVersion(
+                        itemId = editor.itemId,
+                        draft = draft,
+                        timestampMillis =
+                            clock.millis(),
+                    ) != null
+
+                else ->
+                    repository.updateItem(
+                        itemId = editor.itemId,
+                        draft = draft,
+                        timestampMillis =
+                            clock.millis(),
+                    )
+            }
+        }
+
     private fun selectDate(
         date: LocalDate,
     ) {
@@ -603,6 +1025,8 @@ class NutritionViewModel(
         operationError.value = null
         destination.value = null
         logEditor.value = null
+        itemEditorRequestVersion += 1L
+        itemEditor.value = null
     }
 
     private fun openNewLogEditor() {
@@ -947,6 +1371,10 @@ class NutritionViewModel(
                 isArchived =
                     item.archivedAtEpochMillis !=
                             null,
+                totalConsumedGrams =
+                    usage.totalConsumedGrams,
+                consumptionCount =
+                    usage.consumptionCount,
             )
         }
 

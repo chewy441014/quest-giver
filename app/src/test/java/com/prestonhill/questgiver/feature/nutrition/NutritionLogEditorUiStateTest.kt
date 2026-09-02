@@ -279,6 +279,57 @@ class NutritionLogEditorUiStateTest {
         )
     }
 
+    @Test
+    fun groupUsesMostConsumedVersion(): Unit {
+        val state =
+            editor(
+                listOf(
+                    option(
+                        id = 1L,
+                        name = "Milk",
+                        version = 0,
+                        versionLabel =
+                            "Occasional",
+                        totalConsumed = 100.0,
+                        consumptionCount = 1,
+                    ),
+                    option(
+                        id = 2L,
+                        name = "Milk",
+                        version = 1,
+                        versionLabel =
+                            "Regular",
+                        totalConsumed = 800.0,
+                        consumptionCount = 4,
+                    ),
+                    option(
+                        id = 3L,
+                        name = "Milk",
+                        version = 2,
+                        versionLabel =
+                            "Newest",
+                        totalConsumed = 200.0,
+                        consumptionCount = 2,
+                    ),
+                )
+            )
+
+        val representative =
+            state.visibleFoodGroups
+                .single()
+                .representativeVersion
+
+        assertEquals(
+            2L,
+            representative.id,
+        )
+
+        assertEquals(
+            "Regular",
+            representative.versionLabel,
+        )
+    }
+
     private fun editor(
         options:
         List<NutritionItemOptionUiState>,
@@ -300,6 +351,8 @@ class NutritionLogEditorUiStateTest {
         protein: Double = 10.0,
         createdAt: Long = 1_000L,
         lastConsumedAt: Long? = null,
+        totalConsumed: Double = 0.0,
+        consumptionCount: Int = 0,
     ): NutritionItemOptionUiState =
         NutritionItemOptionUiState(
             id = id,
@@ -314,6 +367,10 @@ class NutritionLogEditorUiStateTest {
             lastConsumedAtEpochMillis =
                 lastConsumedAt,
             isArchived = false,
+            totalConsumedGrams =
+                totalConsumed,
+            consumptionCount =
+                consumptionCount,
         )
 
     private companion object {

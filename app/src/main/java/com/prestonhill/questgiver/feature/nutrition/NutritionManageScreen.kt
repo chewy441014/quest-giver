@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import kotlin.math.round
@@ -56,6 +57,12 @@ object NutritionManageTags {
     const val LIST =
         "nutrition_manage_list"
 
+    const val ADD_ITEM =
+        "nutrition_manage_add_item"
+
+    fun version(itemId: Long) =
+        "nutrition_manage_version_$itemId"
+
     fun group(nameKey: String) =
         "nutrition_manage_group_$nameKey"
 
@@ -79,6 +86,10 @@ fun NutritionManageScreen(
 
     var sortExpanded by remember {
         mutableStateOf(false)
+    }
+
+    var selectedVersionGroup by remember {
+        mutableStateOf<String?>(null)
     }
 
     Column(
@@ -279,9 +290,62 @@ fun NutritionManageScreen(
                         it.nameKey
                     },
                 ) { group ->
-                    NutritionManageGroupRow(group)
+                    NutritionManageGroupRow(
+                        group = group,
+                        onClick = {
+                            val versions =
+                                state.itemOptions
+                                    .filter {
+                                        it.nameKey ==
+                                                group.nameKey
+                                    }
+                                    .filter { option ->
+                                        when (
+                                            state.archiveFilter
+                                        ) {
+                                            NutritionArchiveFilter
+                                                .ACTIVE ->
+                                                !option.isArchived
+
+                                            NutritionArchiveFilter
+                                                .ARCHIVED ->
+                                                option.isArchived
+
+                                            NutritionArchiveFilter.ALL ->
+                                                true
+                                        }
+                                    }
+
+                            if (versions.size == 1) {
+                                onAction(
+                                    NutritionAction.InspectItem(
+                                        versions.single().id
+                                    )
+                                )
+                            } else {
+                                selectedVersionGroup =
+                                    group.nameKey
+                            }
+                        },
+                    )
                 }
             }
+        }
+        Button(
+            modifier =
+                Modifier
+                    .align(Alignment.End)
+                    .testTag(
+                        NutritionManageTags
+                            .ADD_ITEM
+                    ),
+            onClick = {
+                onAction(
+                    NutritionAction.OpenAddItem
+                )
+            },
+        ) {
+            Text("Add food")
         }
     }
 
@@ -294,11 +358,117 @@ fun NutritionManageScreen(
             onAction = onAction,
         )
     }
+
+    selectedVersionGroup
+        ?.let { nameKey ->
+            val versions =
+                state.itemOptions
+                    .filter {
+                        it.nameKey == nameKey
+                    }
+                    .filter { option ->
+                        when (
+                            state.archiveFilter
+                        ) {
+                            NutritionArchiveFilter
+                                .ACTIVE ->
+                                !option.isArchived
+
+                            NutritionArchiveFilter
+                                .ARCHIVED ->
+                                option.isArchived
+
+                            NutritionArchiveFilter.ALL ->
+                                true
+                        }
+                    }
+                    .sortedBy {
+                        it.version
+                    }
+
+            AlertDialog(
+                onDismissRequest = {
+                    selectedVersionGroup =
+                        null
+                },
+                title = {
+                    Text("Choose version")
+                },
+                text = {
+                    Column(
+                        verticalArrangement =
+                            Arrangement.spacedBy(
+                                8.dp
+                            ),
+                    ) {
+                        versions.forEach {
+                                version ->
+                            OutlinedButton(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .testTag(
+                                            NutritionManageTags
+                                                .version(
+                                                    version.id
+                                                )
+                                        ),
+                                onClick = {
+                                    selectedVersionGroup =
+                                        null
+
+                                    onAction(
+                                        NutritionAction
+                                            .InspectItem(
+                                                version.id
+                                            )
+                                    )
+                                },
+                            ) {
+                                Column(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                ) {
+                                    Text(
+                                        version.displayName
+                                    )
+
+                                    Text(
+                                        "${amountText(version.caloriesPer100g)} kcal" +
+                                                " · " +
+                                                "${amountText(version.proteinPer100g)} g protein" +
+                                                " per 100 g"
+                                    )
+
+                                    if (
+                                        version.isArchived
+                                    ) {
+                                        Text("Archived")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            selectedVersionGroup =
+                                null
+                        },
+                    ) {
+                        Text("Cancel")
+                    }
+                },
+            )
+        }
 }
 
 @Composable
 private fun NutritionManageGroupRow(
     group: NutritionFoodGroupUiState,
+    onClick: () -> Unit,
 ) {
     val archivedCount =
         group.versions.count {
@@ -309,6 +479,7 @@ private fun NutritionManageGroupRow(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .clickable(onClick = onClick)
                 .testTag(
                     NutritionManageTags.group(
                         group.nameKey
@@ -321,37 +492,35 @@ private fun NutritionManageGroupRow(
             verticalArrangement =
                 Arrangement.spacedBy(4.dp),
         ) {
+            val representative =
+                group.representativeVersion
+
             Text(
                 group.name,
                 style =
-                    MaterialTheme
-                        .typography.titleMedium,
+                    MaterialTheme.typography
+                        .titleMedium,
             )
 
-            if (group.versions.size == 1) {
-                val item =
-                    group.versions.single()
+            Text(
+                representative.versionLabel
+                    ?: "v${representative.version}"
+            )
 
+            Text(
+                "${amountText(representative.caloriesPer100g)} kcal" +
+                        " · " +
+                        "${amountText(representative.proteinPer100g)} g protein" +
+                        " per 100 g"
+            )
+
+            if (group.versions.size > 1) {
                 Text(
-                    item.versionLabel
-                        ?: "v${item.version}"
+                    "${group.versions.size} versions",
+                    style =
+                        MaterialTheme.typography
+                            .labelMedium,
                 )
-
-                Text(
-                    "${amountText(item.caloriesPer100g)} kcal" +
-                            " · " +
-                            "${amountText(item.proteinPer100g)} g protein" +
-                            " per 100 g"
-                )
-
-                if (item.isArchived) {
-                    Text(
-                        "Archived",
-                        style =
-                            MaterialTheme
-                                .typography.labelMedium,
-                    )
-                }
             } else {
                 Text(
                     "${group.versions.size} versions"

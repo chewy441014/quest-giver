@@ -994,6 +994,28 @@ class NutritionRepositoryTest {
                 THIRD_TIME,
                 new.latestActivityEpochMillis,
             )
+
+            assertEquals(
+                100.0,
+                consumed.totalConsumedGrams,
+                TOLERANCE,
+            )
+
+            assertEquals(
+                1,
+                consumed.consumptionCount,
+            )
+
+            assertEquals(
+                0.0,
+                new.totalConsumedGrams,
+                TOLERANCE,
+            )
+
+            assertEquals(
+                0,
+                new.consumptionCount,
+            )
         }
 
     @Test
@@ -1156,6 +1178,96 @@ class NutritionRepositoryTest {
                 SECOND_TIME,
                 usage.item
                     .archivedAtEpochMillis,
+            )
+        }
+
+    @Test
+    fun itemDetailsIncludeOrderedComponents(): Unit =
+        runBlocking {
+            val firstId =
+                repository.createItem(
+                    itemDraft(
+                        name = "First",
+                        calories = 200.0,
+                        protein = 20.0,
+                    )
+                )
+
+            val secondId =
+                repository.createItem(
+                    itemDraft(
+                        name = "Second",
+                        calories = 100.0,
+                        protein = 10.0,
+                    )
+                )
+
+            val parentId =
+                repository.createComposedItem(
+                    composedDraft(
+                        "Combination",
+                        firstId to 25.0,
+                        secondId to 75.0,
+                    )
+                )
+
+            val details =
+                requireNotNull(
+                    repository.getItemDetails(
+                        parentId
+                    )
+                )
+
+            assertEquals(
+                parentId,
+                details.item.id,
+            )
+
+            assertEquals(
+                listOf(firstId, secondId),
+                details.components
+                    .map { it.item.id },
+            )
+
+            assertEquals(
+                listOf(25.0, 75.0),
+                details.components
+                    .map { it.gramsPer100g },
+            )
+        }
+
+    @Test
+    fun manualItemDetailsHaveNoComponents(): Unit =
+        runBlocking {
+            val itemId =
+                repository.createItem(
+                    itemDraft()
+                )
+
+            val details =
+                requireNotNull(
+                    repository.getItemDetails(
+                        itemId
+                    )
+                )
+
+            assertEquals(
+                itemId,
+                details.item.id,
+            )
+
+            assertTrue(
+                details.components.isEmpty()
+            )
+        }
+
+    @Test
+    fun missingItemHasNoDetails(): Unit =
+        runBlocking {
+            assertNull(
+                repository.getItemDetails(
+                    Long.MAX_VALUE
+                )
             )
         }
 
