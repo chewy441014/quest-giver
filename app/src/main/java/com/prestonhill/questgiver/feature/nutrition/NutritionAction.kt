@@ -192,4 +192,5 @@ sealed interface NutritionAction {
 
     data object RestoreItem :
         NutritionAction
+
 }

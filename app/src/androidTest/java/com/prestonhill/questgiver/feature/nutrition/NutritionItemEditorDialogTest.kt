@@ -63,6 +63,285 @@ class NutritionItemEditorDialogTest {
     }
 
     @Test
+    fun referencedItemCanRequestArchive(): Unit {
+        val actions =
+            mutableListOf<NutritionAction>()
+
+        showEditor(
+            editor =
+                existingEditor().copy(
+                    removalMode =
+                        NutritionItemRemovalModeUiState
+                            .ARCHIVE
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                NutritionItemEditorTags.ARCHIVE
+            )
+            .assertIsDisplayed()
+            .assertIsEnabled()
+            .performClick()
+
+        assertEquals(
+            listOf(
+                NutritionAction
+                    .RequestRemoveItem
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun unreferencedItemCanRequestDelete(): Unit {
+        val actions =
+            mutableListOf<NutritionAction>()
+
+        showEditor(
+            editor =
+                existingEditor().copy(
+                    removalMode =
+                        NutritionItemRemovalModeUiState
+                            .DELETE
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                NutritionItemEditorTags.DELETE
+            )
+            .assertIsDisplayed()
+            .assertIsEnabled()
+            .performClick()
+
+        assertEquals(
+            listOf(
+                NutritionAction
+                    .RequestRemoveItem
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun referencedArchivedItemCanOnlyRestore(): Unit {
+        val actions =
+            mutableListOf<NutritionAction>()
+
+        showEditor(
+            editor =
+                existingEditor().copy(
+                    isArchived = true,
+                    removalMode =
+                        NutritionItemRemovalModeUiState
+                            .ARCHIVE,
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                NutritionItemEditorTags.RESTORE
+            )
+            .assertIsDisplayed()
+            .assertIsEnabled()
+            .performClick()
+
+        composeRule
+            .onNodeWithTag(
+                NutritionItemEditorTags.ARCHIVE
+            )
+            .assertDoesNotExist()
+
+        composeRule
+            .onNodeWithTag(
+                NutritionItemEditorTags.DELETE
+            )
+            .assertDoesNotExist()
+
+        assertEquals(
+            listOf(
+                NutritionAction.RestoreItem
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun unreferencedArchivedItemCanRestoreOrDelete(): Unit {
+        showEditor(
+            editor =
+                existingEditor().copy(
+                    isArchived = true,
+                    removalMode =
+                        NutritionItemRemovalModeUiState
+                            .DELETE,
+                )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                NutritionItemEditorTags.RESTORE
+            )
+            .assertIsDisplayed()
+            .assertIsEnabled()
+
+        composeRule
+            .onNodeWithTag(
+                NutritionItemEditorTags.DELETE
+            )
+            .assertIsDisplayed()
+            .assertIsEnabled()
+    }
+
+    @Test
+    fun dirtyItemDisablesLifecycleButtons(): Unit {
+        showEditor(
+            editor =
+                existingEditor().copy(
+                    proteinPer100gText = "9",
+                    removalMode =
+                        NutritionItemRemovalModeUiState
+                            .DELETE,
+                )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                NutritionItemEditorTags.DELETE
+            )
+            .assertIsNotEnabled()
+    }
+
+    @Test
+    fun archiveConfirmationSendsConfirmAction(): Unit {
+        val actions =
+            mutableListOf<NutritionAction>()
+
+        showEditor(
+            editor =
+                existingEditor().copy(
+                    removalMode =
+                        NutritionItemRemovalModeUiState
+                            .ARCHIVE,
+                    showRemovalConfirmation =
+                        true,
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithText("Archive food?")
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText(
+                "This hides the food from new selections. Existing logs and foods that use it remain intact."
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(
+                NutritionItemEditorTags
+                    .REMOVE_CONFIRM
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                NutritionAction
+                    .ConfirmRemoveItem
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun deleteConfirmationExplainsPermanentRemoval(): Unit {
+        showEditor(
+            editor =
+                existingEditor().copy(
+                    removalMode =
+                        NutritionItemRemovalModeUiState
+                            .DELETE,
+                    showRemovalConfirmation =
+                        true,
+                )
+        )
+
+        composeRule
+            .onNodeWithText("Delete food?")
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText(
+                "This permanently deletes the food and all of its consumption history."
+            )
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun removalConfirmationCanBeCancelled(): Unit {
+        val actions =
+            mutableListOf<NutritionAction>()
+
+        showEditor(
+            editor =
+                existingEditor().copy(
+                    removalMode =
+                        NutritionItemRemovalModeUiState
+                            .DELETE,
+                    showRemovalConfirmation =
+                        true,
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                NutritionItemEditorTags
+                    .REMOVE_CANCEL
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                NutritionAction
+                    .DismissRemoveItem
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun busyItemDisablesLifecycleAndCancel(): Unit {
+        showEditor(
+            editor =
+                existingEditor().copy(
+                    removalMode =
+                        NutritionItemRemovalModeUiState
+                            .DELETE,
+                    isRemoving = true,
+                )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                NutritionItemEditorTags.DELETE
+            )
+            .assertIsNotEnabled()
+
+        composeRule
+            .onNodeWithTag(
+                NutritionItemEditorTags.CANCEL
+            )
+            .assertIsNotEnabled()
+    }
+
+    @Test
     fun itemFieldsSendActions(): Unit {
         val actions =
             mutableListOf<NutritionAction>()

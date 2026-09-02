@@ -354,12 +354,11 @@ class NutritionViewModel(
                 updateItemEditor { editor ->
                     val canRemove =
                         editor.isEditing &&
+                                (editor.removalMode != null) &&
                                 !editor.isDirty &&
                                 (
                                         !editor.isArchived ||
-                                                editor.removalMode ==
-                                                NutritionItemRemovalModeUiState
-                                                    .DELETE
+                                                (editor.removalMode == NutritionItemRemovalModeUiState.DELETE)
                                         )
 
                     if (canRemove) {

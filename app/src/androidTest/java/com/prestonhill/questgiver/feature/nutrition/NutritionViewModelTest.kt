@@ -609,6 +609,7 @@ class NutritionViewModelTest {
             val state =
                 awaitState {
                     it.logEditor == null &&
+                            it.destination == null &&
                             it.logs.none { row ->
                                 row.logId == logId
                             }
@@ -1423,6 +1424,360 @@ class NutritionViewModelTest {
                 editor.components
                     .single()
                     .item.id,
+            )
+        }
+
+    @Test
+    fun referencedItemArchivesAndPreservesData(): Unit =
+        runBlocking {
+            val itemId =
+                addNamedItem("Referenced")
+
+            val logId =
+                addLog(
+                    itemId = itemId,
+                    date = CURRENT_DATE,
+                    hour = 12,
+                )
+
+            val parentId =
+                repository.createComposedItem(
+                    composedDraft(
+                        "Parent",
+                        itemId to 100.0,
+                    )
+                )
+
+            val opened =
+                openExistingItemEditorState(
+                    itemId
+                )
+
+            assertEquals(
+                NutritionItemRemovalModeUiState
+                    .ARCHIVE,
+                opened.removalMode,
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .RequestRemoveItem
+            )
+
+            awaitState {
+                it.itemEditor
+                    ?.showRemovalConfirmation ==
+                        true
+            }
+
+            viewModel.onAction(
+                NutritionAction
+                    .ConfirmRemoveItem
+            )
+
+            awaitState { state ->
+                state.itemEditor == null &&
+                        state.manage.itemOptions.any {
+                                option ->
+                            option.id == itemId &&
+                                    option.isArchived
+                        }
+            }
+
+            assertNotNull(
+                repository.getItem(itemId)
+                    ?.archivedAtEpochMillis
+            )
+
+            assertNotNull(
+                repository.getLog(logId)
+            )
+
+            val parent =
+                requireNotNull(
+                    repository.getItemDetails(
+                        parentId
+                    )
+                )
+
+            assertEquals(
+                itemId,
+                parent.components
+                    .single()
+                    .item.id,
+            )
+        }
+
+    @Test
+    fun unreferencedItemDeletesWithLogs(): Unit =
+        runBlocking {
+            val itemId =
+                addNamedItem("Delete me")
+
+            val logId =
+                addLog(
+                    itemId = itemId,
+                    date = CURRENT_DATE,
+                    hour = 12,
+                )
+
+            val opened =
+                openExistingItemEditorState(
+                    itemId
+                )
+
+            assertEquals(
+                NutritionItemRemovalModeUiState
+                    .DELETE,
+                opened.removalMode,
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .RequestRemoveItem
+            )
+
+            awaitState {
+                it.itemEditor
+                    ?.showRemovalConfirmation ==
+                        true
+            }
+
+            viewModel.onAction(
+                NutritionAction
+                    .ConfirmRemoveItem
+            )
+
+            awaitState { state ->
+                state.itemEditor == null &&
+                        state.manage.itemOptions.none {
+                            it.id == itemId
+                        }
+            }
+
+            assertNull(
+                repository.getItem(itemId)
+            )
+
+            assertNull(
+                repository.getLog(logId)
+            )
+        }
+
+    @Test
+    fun archivedItemRestores(): Unit =
+        runBlocking {
+            val itemId =
+                addNamedItem("Restore me")
+
+            repository.createComposedItem(
+                composedDraft(
+                    "Parent",
+                    itemId to 100.0,
+                )
+            )
+
+            assertEquals(
+                NutritionItemRemovalResult
+                    .ARCHIVED,
+                repository.removeItem(
+                    itemId = itemId,
+                    timestampMillis =
+                        clock.millis(),
+                )
+            )
+
+            val opened =
+                openExistingItemEditorState(
+                    itemId
+                )
+
+            assertTrue(opened.isArchived)
+
+            viewModel.onAction(
+                NutritionAction.RestoreItem
+            )
+
+            awaitState { state ->
+                state.itemEditor == null &&
+                        state.manage.itemOptions.any {
+                                option ->
+                            option.id == itemId &&
+                                    !option.isArchived
+                        }
+            }
+
+            assertNull(
+                repository.getItem(itemId)
+                    ?.archivedAtEpochMillis
+            )
+        }
+
+    @Test
+    fun archivedItemCanDeleteAfterReferencesDisappear(): Unit =
+        runBlocking {
+            val itemId =
+                addNamedItem("Former component")
+
+            val parentId =
+                repository.createComposedItem(
+                    composedDraft(
+                        "Temporary parent",
+                        itemId to 100.0,
+                    )
+                )
+
+            assertEquals(
+                NutritionItemRemovalResult
+                    .ARCHIVED,
+                repository.removeItem(
+                    itemId = itemId,
+                    timestampMillis =
+                        clock.millis(),
+                )
+            )
+
+            assertEquals(
+                NutritionItemRemovalResult
+                    .DELETED,
+                repository.removeItem(
+                    itemId = parentId,
+                    timestampMillis =
+                        clock.millis(),
+                )
+            )
+
+            val opened =
+                openExistingItemEditorState(
+                    itemId
+                )
+
+            assertTrue(opened.isArchived)
+
+            assertEquals(
+                NutritionItemRemovalModeUiState
+                    .DELETE,
+                opened.removalMode,
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .RequestRemoveItem
+            )
+
+            awaitState {
+                it.itemEditor
+                    ?.showRemovalConfirmation ==
+                        true
+            }
+
+            viewModel.onAction(
+                NutritionAction
+                    .ConfirmRemoveItem
+            )
+
+            awaitState {
+                it.itemEditor == null &&
+                        it.manage.itemOptions.none {
+                                option ->
+                            option.id == itemId
+                        }
+            }
+
+            assertNull(
+                repository.getItem(itemId)
+            )
+        }
+    @Test
+    fun itemRemovalConfirmationCanBeDismissed(): Unit =
+        runBlocking {
+            val itemId =
+                addNamedItem("Keep me")
+
+            openExistingItemEditorState(
+                itemId
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .RequestRemoveItem
+            )
+
+            awaitState {
+                it.itemEditor
+                    ?.showRemovalConfirmation ==
+                        true
+            }
+
+            viewModel.onAction(
+                NutritionAction
+                    .DismissRemoveItem
+            )
+
+            val editor =
+                requireNotNull(
+                    awaitState {
+                        it.itemEditor
+                            ?.showRemovalConfirmation ==
+                                false
+                    }.itemEditor
+                )
+
+            assertEquals(
+                itemId,
+                editor.itemId,
+            )
+
+            assertNotNull(
+                repository.getItem(itemId)
+            )
+        }
+
+    @Test
+    fun dirtyItemCannotChangeLifecycle(): Unit =
+        runBlocking {
+            val itemId =
+                addNamedItem("Dirty")
+
+            openExistingItemEditorState(
+                itemId
+            )
+
+            viewModel.onAction(
+                NutritionAction
+                    .ChangeItemName(
+                        "Changed"
+                    )
+            )
+
+            val dirty =
+                requireNotNull(
+                    awaitState {
+                        it.itemEditor?.isDirty ==
+                                true
+                    }.itemEditor
+                )
+
+            assertTrue(dirty.isDirty)
+
+            viewModel.onAction(
+                NutritionAction
+                    .RequestRemoveItem
+            )
+
+            val unchanged =
+                requireNotNull(
+                    viewModel.uiState.value
+                        .itemEditor
+                )
+
+            assertFalse(
+                unchanged
+                    .showRemovalConfirmation
+            )
+
+            assertNotNull(
+                repository.getItem(itemId)
             )
         }
 
