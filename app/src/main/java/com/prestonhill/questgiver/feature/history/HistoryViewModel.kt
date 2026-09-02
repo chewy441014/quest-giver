@@ -279,9 +279,19 @@ class HistoryViewModel(
         combine(
             taskScreenState,
             nutritionHistoryState,
-        ) { screen, nutrition ->
+            nav,
+        ) {
+                screen,
+                nutrition,
+                navigation,
+            ->
             screen.copy(
-                nutrition = nutrition
+                nutrition =
+                    nutrition.copy(
+                        showCustomRangePicker =
+                            navigation
+                                .showNutritionCustomRangePicker
+                    )
             )
         }
             .stateIn(
@@ -424,6 +434,22 @@ class HistoryViewModel(
             HistoryAction.DismissDelete ->
                 dismissDelete()
 
+            HistoryAction.OpenNutritionCustomRange ->
+                nav.update {
+                    it.copy(
+                        showNutritionCustomRangePicker =
+                            true
+                    )
+                }
+
+            HistoryAction.DismissNutritionCustomRange ->
+                nav.update {
+                    it.copy(
+                        showNutritionCustomRangePicker =
+                            false
+                    )
+                }
+
             is HistoryAction
             .SelectNutritionRange ->
                 nav.update {
@@ -449,6 +475,8 @@ class HistoryViewModel(
                                     .CUSTOM,
                             nutritionCustomRange =
                                 action.range,
+                            showNutritionCustomRangePicker =
+                                false,
                         )
                     }
                 }
@@ -853,6 +881,7 @@ private data class HistoryNavState(
     val nutritionRangePreset: NutritionHistoryRangePreset = NutritionHistoryRangePreset.THIRTY_DAYS,
     val nutritionCustomRange: NutritionHistoryDateRange? = null,
     val nutritionCalendarMonth: YearMonth? = null,
+    val showNutritionCustomRangePicker: Boolean = false,
 )
 
 private fun HistoryNavState.clearOverlays() =
@@ -861,6 +890,7 @@ private fun HistoryNavState.clearOverlays() =
         deleteTaskId = null,
         deleteTaskName = null,
         operationError = null,
+        showNutritionCustomRangePicker = false,
     )
 
 class HistoryViewModelFactory(

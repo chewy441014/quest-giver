@@ -97,6 +97,7 @@ class NutritionHistoryMapper {
             selectedRange = selectedRange,
             customRange = customRange,
             selectedDays = selectedDays,
+            currentDate = currentDate,
             calorieStatistics =
                 statistics(
                     days = selectedDays,

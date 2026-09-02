@@ -1,3 +1,7 @@
+@file:OptIn(
+    androidx.compose.material3
+        .ExperimentalMaterial3Api::class
+)
 package com.prestonhill.questgiver.feature.history
 
 import androidx.compose.foundation.background
@@ -30,6 +34,21 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.Button
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DateRangePicker
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.rememberDateRangePickerState
+import androidx.compose.runtime.remember
+import com.prestonhill.questgiver.feature.nutrition.nutritionAmountText
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 
 object HistoryTags {
     const val TASK_DASHBOARD =
@@ -52,6 +71,30 @@ object HistoryTags {
 
     const val CANCEL_DELETE =
         "history_cancel_delete"
+
+    const val NUTRITION_DASHBOARD =
+        "history_nutrition_dashboard"
+
+    const val NUTRITION_CALORIE_STATS =
+        "history_nutrition_calorie_stats"
+
+    const val NUTRITION_PROTEIN_STATS =
+        "history_nutrition_protein_stats"
+
+    const val NUTRITION_RANGE_CONFIRM =
+        "history_nutrition_range_confirm"
+
+    const val NUTRITION_RANGE_CANCEL =
+        "history_nutrition_range_cancel"
+
+    const val NUTRITION_RANGE_LIST =
+        "history_nutrition_range_list"
+
+    fun nutritionRange(
+        preset: NutritionHistoryRangePreset,
+    ) =
+        "history_nutrition_range_" +
+                preset.name
 
     fun deleteTask(taskId: Long) =
         "history_delete_task_$taskId"
@@ -120,10 +163,9 @@ fun HistoryScreen(
                 )
 
             HistorySection.NUTRITION ->
-                EmptyHistory(
-                    title = "Nutrition history",
-                    message =
-                        "No nutrition history to show yet.",
+                NutritionHistoryDashboard(
+                    state = state.nutrition,
+                    onAction = onAction,
                 )
         }
     }
@@ -180,6 +222,381 @@ fun HistoryScreen(
                     Text("OK")
                 }
             },
+        )
+    }
+}
+
+@Composable
+private fun NutritionHistoryDashboard(
+    state: NutritionHistoryUiState,
+    onAction: (HistoryAction) -> Unit,
+) {
+    val selectedRange =
+        state.selectedRange
+
+    if (selectedRange == null) {
+        Box(
+            modifier =
+                Modifier.fillMaxSize(),
+            contentAlignment =
+                Alignment.Center,
+        ) {
+            CircularProgressIndicator()
+        }
+
+        return
+    }
+
+    val dateFormatter =
+        remember {
+            DateTimeFormatter
+                .ofLocalizedDate(
+                    FormatStyle.MEDIUM
+                )
+                .withLocale(
+                    Locale.getDefault()
+                )
+        }
+
+    LazyColumn(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .testTag(
+                    HistoryTags
+                        .NUTRITION_DASHBOARD
+                ),
+        contentPadding =
+            androidx.compose.foundation.layout
+                .PaddingValues(16.dp),
+        verticalArrangement =
+            Arrangement.spacedBy(16.dp),
+    ) {
+        item {
+            Text(
+                text = "Nutrition history",
+                style =
+                    MaterialTheme
+                        .typography.headlineSmall,
+            )
+        }
+
+        item {
+            LazyRow(
+                modifier =
+                    Modifier.testTag(
+                        HistoryTags
+                            .NUTRITION_RANGE_LIST
+                    ),
+                horizontalArrangement =
+                    Arrangement.spacedBy(8.dp),
+            ) {
+                items(
+                    items =
+                        NutritionHistoryRangePreset
+                            .entries,
+                    key = {
+                        it.name
+                    },
+                ) { preset ->
+                    FilterChip(
+                        modifier =
+                            Modifier.testTag(
+                                HistoryTags
+                                    .nutritionRange(
+                                        preset
+                                    )
+                            ),
+                        selected =
+                            state.rangePreset ==
+                                    preset,
+                        onClick = {
+                            if (
+                                preset ==
+                                NutritionHistoryRangePreset
+                                    .CUSTOM
+                            ) {
+                                onAction(
+                                    HistoryAction
+                                        .OpenNutritionCustomRange
+                                )
+                            } else {
+                                onAction(
+                                    HistoryAction
+                                        .SelectNutritionRange(
+                                            preset
+                                        )
+                                )
+                            }
+                        },
+                        label = {
+                            Text(preset.label)
+                        },
+                    )
+                }
+            }
+        }
+
+        item {
+            Text(
+                selectedRange.startDate
+                    .format(dateFormatter) +
+                        " – " +
+                        selectedRange.endDate
+                            .format(dateFormatter),
+                style =
+                    MaterialTheme
+                        .typography.bodyMedium,
+            )
+        }
+
+        if (
+            state.calorieStatistics
+                .loggedDays == 0
+        ) {
+            item {
+                Card(
+                    modifier =
+                        Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text =
+                            "No nutrition was logged " +
+                                    "during this range.",
+                        modifier =
+                            Modifier.padding(16.dp),
+                    )
+                }
+            }
+        } else {
+            item {
+                NutritionMetricCard(
+                    title = "Calories",
+                    statistics =
+                        state
+                            .calorieStatistics,
+                    unit = "kcal",
+                    tag =
+                        HistoryTags
+                            .NUTRITION_CALORIE_STATS,
+                )
+            }
+
+            item {
+                NutritionMetricCard(
+                    title = "Protein",
+                    statistics =
+                        state
+                            .proteinStatistics,
+                    unit = "g",
+                    tag =
+                        HistoryTags
+                            .NUTRITION_PROTEIN_STATS,
+                )
+            }
+        }
+    }
+
+    if (state.showCustomRangePicker) {
+        NutritionCustomRangeDialog(
+            state = state,
+            onAction = onAction,
+        )
+    }
+}
+
+@Composable
+private fun NutritionMetricCard(
+    title: String,
+    statistics:
+    NutritionHistoryMetricUiState,
+    unit: String,
+    tag: String,
+) {
+    Card(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .testTag(tag),
+    ) {
+        Column(
+            modifier =
+                Modifier.padding(16.dp),
+            verticalArrangement =
+                Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                title,
+                style =
+                    MaterialTheme
+                        .typography.titleMedium,
+            )
+
+            Text(
+                "Logged days: " +
+                        statistics.loggedDays
+            )
+
+            MetricRow(
+                label =
+                    "Daily average",
+                value =
+                    metricText(
+                        statistics.average,
+                        unit,
+                    ),
+            )
+
+            MetricRow(
+                label =
+                    "Minimum (nonzero)",
+                value =
+                    metricText(
+                        statistics
+                            .minimumNonZero,
+                        unit,
+                    ),
+            )
+
+            MetricRow(
+                label = "Maximum",
+                value =
+                    metricText(
+                        statistics.maximum,
+                        unit,
+                    ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun MetricRow(
+    label: String,
+    value: String,
+) {
+    Row(
+        modifier =
+            Modifier.fillMaxWidth(),
+        horizontalArrangement =
+            Arrangement.SpaceBetween,
+    ) {
+        Text(label)
+        Text(value)
+    }
+}
+
+@Composable
+private fun NutritionCustomRangeDialog(
+    state: NutritionHistoryUiState,
+    onAction: (HistoryAction) -> Unit,
+) {
+    val currentDate =
+        requireNotNull(
+            state.currentDate
+        )
+
+    val customRange =
+        requireNotNull(
+            state.customRange
+        )
+
+    val selectableDates =
+        remember(currentDate) {
+            object : SelectableDates {
+                override fun isSelectableDate(
+                    utcTimeMillis: Long,
+                ): Boolean =
+                    utcTimeMillis
+                        .utcDate() <=
+                            currentDate
+
+                override fun isSelectableYear(
+                    year: Int,
+                ): Boolean =
+                    year <= currentDate.year
+            }
+        }
+
+    val pickerState =
+        rememberDateRangePickerState(
+            initialSelectedStartDateMillis =
+                customRange.startDate
+                    .utcMillis(),
+            initialSelectedEndDateMillis =
+                customRange.endDate
+                    .utcMillis(),
+            selectableDates =
+                selectableDates,
+        )
+
+    DatePickerDialog(
+        onDismissRequest = {
+            onAction(
+                HistoryAction
+                    .DismissNutritionCustomRange
+            )
+        },
+        confirmButton = {
+            val start =
+                pickerState
+                    .selectedStartDateMillis
+
+            val end =
+                pickerState
+                    .selectedEndDateMillis
+
+            TextButton(
+                modifier =
+                    Modifier.testTag(
+                        HistoryTags
+                            .NUTRITION_RANGE_CONFIRM
+                    ),
+                enabled =
+                    start != null &&
+                            end != null,
+                onClick = {
+                    if (
+                        start != null &&
+                        end != null
+                    ) {
+                        onAction(
+                            HistoryAction
+                                .SetNutritionCustomRange(
+                                    NutritionHistoryDateRange(
+                                        startDate =
+                                            start.utcDate(),
+                                        endDate =
+                                            end.utcDate(),
+                                    )
+                                )
+                        )
+                    }
+                },
+            ) {
+                Text("Set")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                modifier =
+                    Modifier.testTag(
+                        HistoryTags
+                            .NUTRITION_RANGE_CANCEL
+                    ),
+                onClick = {
+                    onAction(
+                        HistoryAction
+                            .DismissNutritionCustomRange
+                    )
+                },
+            ) {
+                Text("Cancel")
+            }
+        },
+    ) {
+        DateRangePicker(
+            state = pickerState,
         )
     }
 }
@@ -776,3 +1193,21 @@ private fun EmptyHistory(
         }
     }
 }
+
+private fun LocalDate.utcMillis(): Long =
+    atStartOfDay(ZoneOffset.UTC)
+        .toInstant()
+        .toEpochMilli()
+
+private fun Long.utcDate(): LocalDate =
+    Instant.ofEpochMilli(this)
+        .atZone(ZoneOffset.UTC)
+        .toLocalDate()
+
+private fun metricText(
+    value: Double?,
+    unit: String,
+): String =
+    value?.let {
+        "${nutritionAmountText(it)} $unit"
+    } ?: "—"

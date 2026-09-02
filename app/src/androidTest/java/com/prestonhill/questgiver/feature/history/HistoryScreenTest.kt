@@ -10,6 +10,11 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
+import java.time.YearMonth
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -36,6 +41,211 @@ class HistoryScreenTest {
                 HistoryTags.PINNED_GRAPHS
             )
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun nutritionDashboardShowsStatistics(): Unit {
+        showScreen(
+            state = nutritionScreenState()
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_DASHBOARD
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_CALORIE_STATS
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("1500 kcal")
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("1200 kcal")
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("1800 kcal")
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_PROTEIN_STATS
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("50 g")
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("40 g")
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("60 g")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun nutritionRangeSendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = nutritionScreenState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.nutritionRange(
+                    NutritionHistoryRangePreset
+                        .THIRTY_DAYS
+                )
+            )
+            .assertIsSelected()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.nutritionRange(
+                    NutritionHistoryRangePreset
+                        .SEVEN_DAYS
+                )
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .SelectNutritionRange(
+                        NutritionHistoryRangePreset
+                            .SEVEN_DAYS
+                    )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun customNutritionRangeOpensPicker(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = nutritionScreenState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_RANGE_LIST
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags.nutritionRange(
+                        NutritionHistoryRangePreset
+                            .CUSTOM
+                    )
+                )
+            )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.nutritionRange(
+                    NutritionHistoryRangePreset
+                        .CUSTOM
+                )
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .OpenNutritionCustomRange
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun nutritionRangePickerConfirmsRange(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        val nutrition =
+            nutritionState().copy(
+                showCustomRangePicker = true
+            )
+
+        showScreen(
+            state =
+                nutritionScreenState(
+                    nutrition = nutrition
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_RANGE_CONFIRM
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .SetNutritionCustomRange(
+                        requireNotNull(
+                            nutrition.customRange
+                        )
+                    )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun nutritionRangePickerCanCancel(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state =
+                nutritionScreenState(
+                    nutrition =
+                        nutritionState().copy(
+                            showCustomRangePicker =
+                                true
+                        )
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_RANGE_CANCEL
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .DismissNutritionCustomRange
+            ),
+            actions,
+        )
     }
 
     @Test
@@ -393,17 +603,24 @@ class HistoryScreenTest {
     }
 
     @Test
-    fun nutritionTemplateIsVisible(): Unit {
+    fun emptyNutritionRangeShowsMessage(): Unit {
         showScreen(
-            state = HistoryScreenUiState(
-                section =
-                    HistorySection.NUTRITION
-            )
+            state =
+                nutritionScreenState(
+                    nutrition =
+                        nutritionState().copy(
+                            calorieStatistics =
+                                NutritionHistoryMetricUiState(),
+                            proteinStatistics =
+                                NutritionHistoryMetricUiState(),
+                        )
+                )
         )
 
         composeRule
             .onNodeWithText(
-                "No nutrition history to show yet."
+                "No nutrition was logged " +
+                        "during this range."
             )
             .assertIsDisplayed()
     }
@@ -688,6 +905,68 @@ class HistoryScreenTest {
             .assertDoesNotExist()
     }
 
+    private fun nutritionScreenState(
+        nutrition:
+        NutritionHistoryUiState =
+            nutritionState(),
+    ): HistoryScreenUiState =
+        HistoryScreenUiState(
+            section =
+                HistorySection.NUTRITION,
+            nutrition = nutrition,
+        )
+
+    private fun nutritionState():
+            NutritionHistoryUiState =
+        NutritionHistoryUiState(
+            rangePreset =
+                NutritionHistoryRangePreset
+                    .THIRTY_DAYS,
+            selectedRange =
+                NutritionHistoryDateRange(
+                    startDate =
+                        CURRENT_DATE
+                            .minusDays(29),
+                    endDate =
+                        CURRENT_DATE,
+                ),
+            customRange =
+                NutritionHistoryDateRange(
+                    startDate =
+                        LocalDate.of(
+                            2026,
+                            8,
+                            1,
+                        ),
+                    endDate =
+                        LocalDate.of(
+                            2026,
+                            8,
+                            31,
+                        ),
+                ),
+            currentDate = CURRENT_DATE,
+            calorieStatistics =
+                NutritionHistoryMetricUiState(
+                    loggedDays = 2,
+                    average = 1_500.0,
+                    minimumNonZero =
+                        1_200.0,
+                    maximum = 1_800.0,
+                ),
+            proteinStatistics =
+                NutritionHistoryMetricUiState(
+                    loggedDays = 2,
+                    average = 50.0,
+                    minimumNonZero = 40.0,
+                    maximum = 60.0,
+                ),
+            calendarMonth =
+                YearMonth.from(
+                    CURRENT_DATE
+                ),
+        )
+
     private fun taskState(
         inspectedTaskId: Long?,
         completionEpochDay: Long? =
@@ -745,5 +1024,13 @@ class HistoryScreenTest {
             LocalDate.of(2026, 8, 24)
 
         const val TASK_DAY = 20_000L
+
+        val CURRENT_DATE:
+                LocalDate =
+            LocalDate.of(
+                2026,
+                9,
+                2,
+            )
     }
 }

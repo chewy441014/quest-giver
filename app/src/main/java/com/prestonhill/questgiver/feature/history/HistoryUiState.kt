@@ -94,6 +94,9 @@ data class NutritionHistoryUiState(
     val calendarDays:
     List<NutritionHistoryDayUiState> =
         emptyList(),
+    val currentDate: LocalDate? = null,
+    val showCustomRangePicker:
+    Boolean = false,
 )
 
 data class HistoryDeleteUiState(

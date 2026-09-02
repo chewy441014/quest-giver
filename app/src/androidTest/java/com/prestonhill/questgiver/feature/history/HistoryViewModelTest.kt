@@ -1138,6 +1138,95 @@ class HistoryViewModelTest {
         }
 
     @Test
+    fun nutritionCustomRangePickerChanges(): Unit =
+        runBlocking {
+            awaitState {
+                it.nutrition.currentDate != null
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .OpenNutritionCustomRange
+            )
+
+            awaitState {
+                it.nutrition
+                    .showCustomRangePicker
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .DismissNutritionCustomRange
+            )
+
+            val dismissed =
+                awaitState {
+                    !it.nutrition
+                        .showCustomRangePicker
+                }
+
+            assertFalse(
+                dismissed.nutrition
+                    .showCustomRangePicker
+            )
+        }
+
+    @Test
+    fun settingCustomRangeClosesPicker(): Unit =
+        runBlocking {
+            val range =
+                NutritionHistoryDateRange(
+                    startDate =
+                        LocalDate.of(
+                            2026,
+                            8,
+                            10,
+                        ),
+                    endDate =
+                        LocalDate.of(
+                            2026,
+                            8,
+                            20,
+                        ),
+                )
+
+            viewModel.onAction(
+                HistoryAction
+                    .OpenNutritionCustomRange
+            )
+
+            awaitState {
+                it.nutrition
+                    .showCustomRangePicker
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .SetNutritionCustomRange(
+                        range
+                    )
+            )
+
+            val state =
+                awaitState {
+                    !it.nutrition
+                        .showCustomRangePicker &&
+                            it.nutrition
+                                .rangePreset ==
+                            NutritionHistoryRangePreset
+                                .CUSTOM &&
+                            it.nutrition
+                                .selectedRange ==
+                            range
+                }
+
+            assertEquals(
+                range,
+                state.nutrition.customRange,
+            )
+        }
+
+    @Test
     fun restoreMovesTask(): Unit =
         runBlocking {
             val taskId = addTask()

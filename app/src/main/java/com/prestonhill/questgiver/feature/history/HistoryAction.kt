@@ -61,4 +61,10 @@ sealed interface HistoryAction {
     data object NextNutritionMonth :
         HistoryAction
 
+    data object OpenNutritionCustomRange :
+        HistoryAction
+
+    data object DismissNutritionCustomRange :
+        HistoryAction
+
 }
