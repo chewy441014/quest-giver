@@ -32,8 +32,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.unit.dp
-import kotlin.math.abs
-import kotlin.math.round
 
 object NutritionManageTags {
     const val SCREEN =
@@ -442,9 +440,9 @@ fun NutritionManageScreen(
                                     )
 
                                     Text(
-                                        "${amountText(version.caloriesPer100g)} kcal" +
+                                        "${nutritionAmountText(version.caloriesPer100g)} kcal" +
                                                 " · " +
-                                                "${amountText(version.proteinPer100g)} g protein" +
+                                                "${nutritionAmountText(version.proteinPer100g)} g protein" +
                                                 " per 100 g"
                                     )
 
@@ -515,9 +513,9 @@ private fun NutritionManageGroupRow(
             )
 
             Text(
-                "${amountText(representative.caloriesPer100g)} kcal" +
+                "${nutritionAmountText(representative.caloriesPer100g)} kcal" +
                         " · " +
-                        "${amountText(representative.proteinPer100g)} g protein" +
+                        "${nutritionAmountText(representative.proteinPer100g)} g protein" +
                         " per 100 g"
             )
 
@@ -583,8 +581,8 @@ private fun NutritionManageFilterDialog(
     }
 
     val valid =
-        validFilterText(proteinText) &&
-                validFilterText(ratioText)
+        validNutritionFilterText(proteinText) &&
+                validNutritionFilterText(ratioText)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -620,7 +618,7 @@ private fun NutritionManageFilterDialog(
                         ),
                     singleLine = true,
                     isError =
-                        !validFilterText(
+                        !validNutritionFilterText(
                             proteinText
                         ),
                 )
@@ -649,7 +647,7 @@ private fun NutritionManageFilterDialog(
                         ),
                     singleLine = true,
                     isError =
-                        !validFilterText(
+                        !validNutritionFilterText(
                             ratioText
                         ),
                 )
@@ -757,71 +755,4 @@ private fun NutritionManageFilterDialog(
             }
         },
     )
-}
-
-private fun NutritionItemSort.displayName():
-        String =
-    when (this) {
-        NutritionItemSort.RECENT ->
-            "Recent"
-
-        NutritionItemSort.NEWEST_ADDED ->
-            "Newest"
-
-        NutritionItemSort.NAME ->
-            "Name"
-
-        NutritionItemSort.CALORIES ->
-            "Calories"
-
-        NutritionItemSort.PROTEIN ->
-            "Protein"
-
-        NutritionItemSort.PROTEIN_RATIO ->
-            "Protein ratio"
-    }
-
-private fun NutritionArchiveFilter.displayName():
-        String =
-    when (this) {
-        NutritionArchiveFilter.ACTIVE ->
-            "Active"
-
-        NutritionArchiveFilter.ARCHIVED ->
-            "Archived"
-
-        NutritionArchiveFilter.ALL ->
-            "All"
-    }
-
-private fun validFilterText(
-    value: String,
-): Boolean {
-    if (value.isBlank()) {
-        return true
-    }
-
-    val parsed =
-        value.trim()
-            .toDoubleOrNull()
-            ?: return false
-
-    return parsed.isFinite() &&
-            parsed >= 0.0
-}
-
-private fun amountText(
-    value: Double,
-): String {
-    val rounded =
-        round(value * 10.0) / 10.0
-
-    return if (
-        abs(rounded - rounded.toLong()) <
-        0.000_001
-    ) {
-        rounded.toLong().toString()
-    } else {
-        rounded.toString()
-    }
 }

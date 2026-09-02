@@ -632,8 +632,8 @@ private fun LogItemFilterDialog(
     }
 
     val valid =
-        validFilterText(proteinText) &&
-                validFilterText(ratioText)
+        validNutritionFilterText(proteinText) &&
+                validNutritionFilterText(ratioText)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -950,40 +950,3 @@ private fun LogDeleteConfirmation(
         },
     )
 }
-
-private fun validFilterText(
-    value: String,
-): Boolean {
-    if (value.isBlank()) {
-        return true
-    }
-
-    val parsed =
-        value.toDoubleOrNull()
-            ?: return false
-
-    return parsed.isFinite() &&
-            parsed >= 0.0
-}
-
-private fun NutritionItemSort.displayName():
-        String =
-    when (this) {
-        NutritionItemSort.RECENT ->
-            "Recent"
-
-        NutritionItemSort.NEWEST_ADDED ->
-            "Newest"
-
-        NutritionItemSort.NAME ->
-            "Name"
-
-        NutritionItemSort.CALORIES ->
-            "Calories"
-
-        NutritionItemSort.PROTEIN ->
-            "Protein"
-
-        NutritionItemSort.PROTEIN_RATIO ->
-            "Protein ratio"
-    }

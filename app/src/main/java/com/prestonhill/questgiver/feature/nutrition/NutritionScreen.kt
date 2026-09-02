@@ -40,8 +40,6 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
-import kotlin.math.abs
-import kotlin.math.round
 
 object NutritionTags {
     const val DATE = "nutrition_date"
@@ -353,8 +351,8 @@ private fun GoalProgress(
             )
 
             Text(
-                "${amountText(amount)} / " +
-                        "${amountText(goal)} $unit minimum"
+                "${nutritionAmountText(amount)} / " +
+                        "${nutritionAmountText(goal)} $unit minimum"
             )
         }
 
@@ -416,13 +414,13 @@ private fun NutritionLogRow(
             Text(
                 "${log.consumedTime.format(timeFormatter)}" +
                         " · " +
-                        "${amountText(log.weightGrams)} g"
+                        "${nutritionAmountText(log.weightGrams)} g"
             )
 
             Text(
-                "${amountText(log.calories)} kcal" +
+                "${nutritionAmountText(log.calories)} kcal" +
                         " · " +
-                        "${amountText(log.proteinGrams)} g protein"
+                        "${nutritionAmountText(log.proteinGrams)} g protein"
             )
 
             if (log.isItemArchived) {
@@ -543,25 +541,6 @@ private fun NutritionDatePicker(
     ) {
         DatePicker(
             state = pickerState
-        )
-    }
-}
-
-private fun amountText(
-    value: Double,
-): String {
-    val rounded = round(value)
-
-    return if (
-        abs(value - rounded) <
-        0.05
-    ) {
-        rounded.toLong().toString()
-    } else {
-        String.format(
-            Locale.getDefault(),
-            "%.1f",
-            value,
         )
     }
 }

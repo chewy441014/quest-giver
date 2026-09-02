@@ -2285,8 +2285,8 @@ class NutritionViewModelTest {
 
             val state =
                 awaitState {
-                    it.operationError ==
-                            "Food log could not be found."
+                    it.operationError == "Food log could not be found." &&
+                        it.destination == null
                 }
 
             assertNull(state.logEditor)

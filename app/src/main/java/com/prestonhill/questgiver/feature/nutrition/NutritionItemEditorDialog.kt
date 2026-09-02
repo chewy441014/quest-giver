@@ -29,8 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import kotlin.math.abs
-import kotlin.math.round
 
 object NutritionItemEditorTags {
     const val EDITOR =
@@ -472,13 +470,13 @@ fun NutritionItemEditorDialog(
                             )
 
                             Text(
-                                "${amountText(editor.calculatedCaloriesPer100g)} kcal" +
+                                "${nutritionAmountText(editor.calculatedCaloriesPer100g)} kcal" +
                                         " · " +
-                                        "${amountText(editor.calculatedProteinPer100g)} g protein"
+                                        "${nutritionAmountText(editor.calculatedProteinPer100g)} g protein"
                             )
 
                             Text(
-                                "${amountText(editor.componentTotalGrams)} / 100 g"
+                                "${nutritionAmountText(editor.componentTotalGrams)} / 100 g"
                             )
 
                             if (!editor.componentsValid) {
@@ -1036,22 +1034,4 @@ private fun NumericField(
             ),
         onValueChange = onValueChange,
     )
-}
-
-private fun amountText(
-    value: Double,
-): String {
-    val rounded =
-        round(value * 10.0) / 10.0
-
-    return if (
-        abs(
-            rounded -
-                    rounded.toLong()
-        ) < 0.000_001
-    ) {
-        rounded.toLong().toString()
-    } else {
-        rounded.toString()
-    }
 }
