@@ -19,6 +19,7 @@ import com.prestonhill.questgiver.core.settings.AppSettings
 import com.prestonhill.questgiver.data.local.database.QuestGiverDatabase
 import com.prestonhill.questgiver.data.local.database.entity.TaskEntity
 import com.prestonhill.questgiver.data.local.database.entity.TaskScheduleTypeDb
+import com.prestonhill.questgiver.data.repository.NutritionRepository
 import com.prestonhill.questgiver.data.repository.TaskCompletionResult
 import com.prestonhill.questgiver.data.repository.TaskRepository
 import java.time.Clock
@@ -55,6 +56,9 @@ class HistoryJourneyTest {
     private lateinit var viewModelStore:
             ViewModelStore
 
+    private lateinit var nutritionRepository:
+            NutritionRepository
+
     private var taskId = 0L
 
     @Before
@@ -75,9 +79,14 @@ class HistoryJourneyTest {
 
         repository = TaskRepository(database)
 
+        nutritionRepository =
+            NutritionRepository(database)
+
         val factory =
             HistoryViewModelFactory(
                 repository = repository,
+                nutritionRepository =
+                    nutritionRepository,
                 settings =
                     flowOf(AppSettings()),
                 clock = CLOCK,

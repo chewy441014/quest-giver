@@ -97,6 +97,8 @@ class MainActivity : ComponentActivity() {
                 val historyViewModelFactory =
                     HistoryViewModelFactory(
                         repository = taskRepository,
+                        nutritionRepository =
+                            nutritionRepository,
                         settings =
                             settingsRepository.settings,
                         clock = appClock,

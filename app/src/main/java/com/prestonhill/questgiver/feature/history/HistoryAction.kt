@@ -44,4 +44,21 @@ sealed interface HistoryAction {
     data object ConfirmDelete : HistoryAction
 
     data object DismissDelete : HistoryAction
+
+    data class SelectNutritionRange(
+        val preset:
+        NutritionHistoryRangePreset,
+    ) : HistoryAction
+
+    data class SetNutritionCustomRange(
+        val range:
+        NutritionHistoryDateRange,
+    ) : HistoryAction
+
+    data object PreviousNutritionMonth :
+        HistoryAction
+
+    data object NextNutritionMonth :
+        HistoryAction
+
 }

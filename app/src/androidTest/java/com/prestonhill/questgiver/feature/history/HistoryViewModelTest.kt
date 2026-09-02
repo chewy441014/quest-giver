@@ -11,6 +11,14 @@ import com.prestonhill.questgiver.data.local.database.QuestGiverDatabase
 import com.prestonhill.questgiver.data.local.database.entity.TaskEntity
 import com.prestonhill.questgiver.data.local.database.entity.TaskScheduleTypeDb
 import com.prestonhill.questgiver.data.repository.TaskRepository
+import com.prestonhill.questgiver.core.settings.AppSettings
+import com.prestonhill.questgiver.data.repository.FoodLogDraft
+import com.prestonhill.questgiver.data.repository.NutritionItemDraft
+import com.prestonhill.questgiver.data.repository.NutritionRepository
+import com.prestonhill.questgiver.data.repository.NutritionValuesInput
+import java.time.Clock
+import java.time.ZoneId
+import kotlinx.coroutines.flow.MutableStateFlow
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -41,6 +49,14 @@ class HistoryViewModelTest {
     private lateinit var viewModelStore:
             ViewModelStore
 
+    private lateinit var nutritionRepository:
+            NutritionRepository
+
+    private lateinit var settings:
+            MutableStateFlow<AppSettings>
+
+    private lateinit var clock: Clock
+
     @Before
     fun setup() {
         val context =
@@ -59,8 +75,31 @@ class HistoryViewModelTest {
 
         repository = TaskRepository(database)
 
+        nutritionRepository =
+            NutritionRepository(database)
+
+        settings =
+            MutableStateFlow(
+                AppSettings()
+            )
+
+        clock =
+            Clock.fixed(
+                CURRENT_DATE
+                    .atTime(12, 0)
+                    .atZone(ZONE)
+                    .toInstant(),
+                ZONE,
+            )
+
         val factory =
-            HistoryViewModelFactory(repository)
+            HistoryViewModelFactory(
+                repository = repository,
+                nutritionRepository =
+                    nutritionRepository,
+                settings = settings,
+                clock = clock,
+            )
 
         viewModelStore = ViewModelStore()
 
@@ -794,6 +833,311 @@ class HistoryViewModelTest {
         }
 
     @Test
+    fun nutritionHistoryUsesDefaultRanges(): Unit =
+        runBlocking {
+            val state =
+                awaitState {
+                    it.nutrition
+                        .selectedRange != null &&
+                            it.nutrition
+                                .customRange != null
+                }
+                    .nutrition
+
+            assertEquals(
+                NutritionHistoryRangePreset
+                    .THIRTY_DAYS,
+                state.rangePreset,
+            )
+
+            assertEquals(
+                NutritionHistoryDateRange(
+                    startDate =
+                        CURRENT_DATE
+                            .minusDays(29),
+                    endDate = CURRENT_DATE,
+                ),
+                state.selectedRange,
+            )
+
+            assertEquals(
+                NutritionHistoryDateRange(
+                    startDate =
+                        LocalDate.of(
+                            2026,
+                            8,
+                            1,
+                        ),
+                    endDate =
+                        LocalDate.of(
+                            2026,
+                            8,
+                            31,
+                        ),
+                ),
+                state.customRange,
+            )
+
+            assertEquals(
+                java.time.YearMonth.of(
+                    2026,
+                    9,
+                ),
+                state.calendarMonth,
+            )
+        }
+
+    @Test
+    fun nutritionRangeCanChange(): Unit =
+        runBlocking {
+            awaitState {
+                it.nutrition
+                    .selectedRange != null
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .SelectNutritionRange(
+                        NutritionHistoryRangePreset
+                            .SEVEN_DAYS
+                    )
+            )
+
+            val preset =
+                awaitState {
+                    it.nutrition.rangePreset ==
+                            NutritionHistoryRangePreset
+                                .SEVEN_DAYS
+                }
+                    .nutrition
+
+            assertEquals(
+                NutritionHistoryDateRange(
+                    startDate =
+                        CURRENT_DATE
+                            .minusDays(6),
+                    endDate = CURRENT_DATE,
+                ),
+                preset.selectedRange,
+            )
+
+            val customRange =
+                NutritionHistoryDateRange(
+                    startDate =
+                        LocalDate.of(
+                            2026,
+                            8,
+                            10,
+                        ),
+                    endDate =
+                        LocalDate.of(
+                            2026,
+                            8,
+                            20,
+                        ),
+                )
+
+            viewModel.onAction(
+                HistoryAction
+                    .SetNutritionCustomRange(
+                        customRange
+                    )
+            )
+
+            val custom =
+                awaitState {
+                    it.nutrition.rangePreset ==
+                            NutritionHistoryRangePreset
+                                .CUSTOM &&
+                            it.nutrition.selectedRange ==
+                            customRange
+                }
+                    .nutrition
+
+            assertEquals(
+                customRange,
+                custom.customRange,
+            )
+        }
+
+    @Test
+    fun nutritionCalendarMonthCanChange(): Unit =
+        runBlocking {
+            awaitState {
+                it.nutrition.calendarMonth ==
+                        java.time.YearMonth.of(
+                            2026,
+                            9,
+                        )
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .PreviousNutritionMonth
+            )
+
+            awaitState {
+                it.nutrition.calendarMonth ==
+                        java.time.YearMonth.of(
+                            2026,
+                            8,
+                        )
+            }
+
+            viewModel.onAction(
+                HistoryAction.NextNutritionMonth
+            )
+
+            awaitState {
+                it.nutrition.calendarMonth ==
+                        java.time.YearMonth.of(
+                            2026,
+                            9,
+                        )
+            }
+
+            viewModel.onAction(
+                HistoryAction.NextNutritionMonth
+            )
+
+            val clamped =
+                awaitState {
+                    it.nutrition.calendarMonth ==
+                            java.time.YearMonth.of(
+                                2026,
+                                9,
+                            )
+                }
+
+            assertEquals(
+                java.time.YearMonth.of(
+                    2026,
+                    9,
+                ),
+                clamped.nutrition
+                    .calendarMonth,
+            )
+        }
+
+    @Test
+    fun nutritionLogsUpdateHistory(): Unit =
+        runBlocking {
+            val itemId =
+                addNutritionItem(
+                    calories = 1_500.0,
+                    protein = 40.0,
+                )
+
+            addNutritionLog(
+                itemId = itemId,
+                date = CURRENT_DATE,
+            )
+
+            val state =
+                awaitState {
+                    it.nutrition
+                        .selectedDays
+                        .any { day ->
+                            day.date ==
+                                    CURRENT_DATE &&
+                                    day.hasLogs
+                        }
+                }
+                    .nutrition
+
+            val today =
+                state.selectedDays.single {
+                    it.date == CURRENT_DATE
+                }
+
+            assertEquals(
+                1_500.0,
+                today.calories,
+                0.0,
+            )
+
+            assertEquals(
+                40.0,
+                today.proteinGrams,
+                0.0,
+            )
+
+            assertTrue(today.calorieGoalMet)
+            assertTrue(today.proteinGoalMet)
+
+            assertEquals(
+                1,
+                state.currentMonthCalories
+                    .metDays,
+            )
+
+            assertEquals(
+                CURRENT_DATE.dayOfMonth,
+                state.currentMonthCalories
+                    .totalDays,
+            )
+        }
+
+    @Test
+    fun currentGoalsRecalculateHistory(): Unit =
+        runBlocking {
+            val itemId =
+                addNutritionItem(
+                    calories = 1_500.0,
+                    protein = 40.0,
+                )
+
+            addNutritionLog(
+                itemId = itemId,
+                date = CURRENT_DATE,
+            )
+
+            awaitState {
+                it.nutrition
+                    .selectedDays
+                    .any { day ->
+                        day.date ==
+                                CURRENT_DATE &&
+                                day.calorieGoalMet &&
+                                day.proteinGoalMet
+                    }
+            }
+
+            settings.value =
+                AppSettings(
+                    calorieGoal = 1_000.0,
+                    maximumCalorieGoal =
+                        1_400.0,
+                    proteinGoalGrams = 20.0,
+                    maximumProteinGoalGrams =
+                        35.0,
+                )
+
+            val outside =
+                awaitState {
+                    it.nutrition
+                        .selectedDays
+                        .any { day ->
+                            day.date ==
+                                    CURRENT_DATE &&
+                                    !day.calorieGoalMet &&
+                                    !day.proteinGoalMet
+                        }
+                }
+
+            val today =
+                outside.nutrition
+                    .selectedDays
+                    .single {
+                        it.date ==
+                                CURRENT_DATE
+                    }
+
+            assertFalse(today.calorieGoalMet)
+            assertFalse(today.proteinGoalMet)
+        }
+
+    @Test
     fun restoreMovesTask(): Unit =
         runBlocking {
             val taskId = addTask()
@@ -852,6 +1196,49 @@ class HistoryViewModelTest {
             )
         }
 
+    private suspend fun addNutritionItem(
+        calories: Double,
+        protein: Double,
+    ): Long =
+        nutritionRepository.createItem(
+            draft =
+                NutritionItemDraft(
+                    name =
+                        "History food " +
+                                System.nanoTime(),
+                    nutrition =
+                        NutritionValuesInput
+                            .Per100Grams(
+                                calories = calories,
+                                proteinGrams =
+                                    protein,
+                            ),
+                ),
+            timestampMillis =
+                clock.millis(),
+        )
+
+    private suspend fun addNutritionLog(
+        itemId: Long,
+        date: LocalDate,
+    ): Long =
+        requireNotNull(
+            nutritionRepository.createLog(
+                draft =
+                    FoodLogDraft(
+                        itemId = itemId,
+                        consumedAtEpochMillis =
+                            date.atTime(12, 0)
+                                .atZone(ZONE)
+                                .toInstant()
+                                .toEpochMilli(),
+                        weightGrams = 100.0,
+                    ),
+                timestampMillis =
+                    clock.millis(),
+            )
+        )
+
     private suspend fun addTask(): Long =
         repository.createTask(
             TaskEntity(
@@ -880,5 +1267,18 @@ class HistoryViewModelTest {
 
         const val COMPLETION_TIME =
             1_777_000_000_000L
+
+        val CURRENT_DATE:
+                LocalDate =
+            LocalDate.of(
+                2026,
+                9,
+                2,
+            )
+
+        val ZONE: ZoneId =
+            ZoneId.of(
+                "America/Chicago"
+            )
     }
 }

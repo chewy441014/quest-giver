@@ -1,6 +1,7 @@
 package com.prestonhill.questgiver.feature.history
 
 import java.time.LocalDate
+import java.time.YearMonth
 
 enum class HistorySection(
     val label: String,
@@ -14,6 +15,86 @@ enum class TaskHistoryPage {
     DASHBOARD,
     ALL_TASKS,
 }
+
+enum class NutritionHistoryRangePreset(
+    val label: String,
+) {
+    SEVEN_DAYS("7 days"),
+    THIRTY_DAYS("30 days"),
+    NINETY_DAYS("90 days"),
+    ONE_YEAR("1 year"),
+    CUSTOM("Custom"),
+}
+
+data class NutritionHistoryDateRange(
+    val startDate: LocalDate,
+    val endDate: LocalDate,
+) {
+    init {
+        require(
+            !startDate.isAfter(endDate)
+        )
+    }
+}
+
+data class NutritionHistoryDayUiState(
+    val date: LocalDate,
+    val calories: Double,
+    val proteinGrams: Double,
+    val hasLogs: Boolean,
+    val calorieGoalMet: Boolean,
+    val proteinGoalMet: Boolean,
+    val isFuture: Boolean = false,
+)
+
+data class NutritionHistoryMetricUiState(
+    val loggedDays: Int = 0,
+    val average: Double? = null,
+    val minimumNonZero: Double? = null,
+    val maximum: Double? = null,
+)
+
+data class NutritionGoalCompletionUiState(
+    val metDays: Int = 0,
+    val totalDays: Int = 0,
+    val progress: Float = 0f,
+)
+
+data class NutritionHistoryUiState(
+    val rangePreset:
+    NutritionHistoryRangePreset =
+        NutritionHistoryRangePreset
+            .THIRTY_DAYS,
+    val selectedRange:
+    NutritionHistoryDateRange? = null,
+    val customRange:
+    NutritionHistoryDateRange? = null,
+    val selectedDays:
+    List<NutritionHistoryDayUiState> =
+        emptyList(),
+    val calorieStatistics:
+    NutritionHistoryMetricUiState =
+        NutritionHistoryMetricUiState(),
+    val proteinStatistics:
+    NutritionHistoryMetricUiState =
+        NutritionHistoryMetricUiState(),
+    val currentMonthCalories:
+    NutritionGoalCompletionUiState =
+        NutritionGoalCompletionUiState(),
+    val customRangeCalories:
+    NutritionGoalCompletionUiState =
+        NutritionGoalCompletionUiState(),
+    val currentMonthProtein:
+    NutritionGoalCompletionUiState =
+        NutritionGoalCompletionUiState(),
+    val customRangeProtein:
+    NutritionGoalCompletionUiState =
+        NutritionGoalCompletionUiState(),
+    val calendarMonth: YearMonth? = null,
+    val calendarDays:
+    List<NutritionHistoryDayUiState> =
+        emptyList(),
+)
 
 data class HistoryDeleteUiState(
     val taskId: Long,
@@ -98,4 +179,6 @@ data class HistoryScreenUiState(
         HistorySection.TASKS,
     val tasks: TaskHistoryUiState =
         TaskHistoryUiState(),
+    val nutrition: NutritionHistoryUiState =
+        NutritionHistoryUiState(),
 )

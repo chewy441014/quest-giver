@@ -11,10 +11,12 @@ import com.prestonhill.questgiver.core.time.BoundaryTimer
 import com.prestonhill.questgiver.core.time.RealBoundaryTimer
 import com.prestonhill.questgiver.feature.tasks.TaskScheduleCalculator
 import com.prestonhill.questgiver.data.repository.TaskCompletionResult
+import com.prestonhill.questgiver.data.repository.NutritionRepository
 import java.time.Clock
 import java.time.LocalTime
 import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
@@ -26,6 +28,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.YearMonth
 
 class HistoryViewModel(
     private val repository: TaskRepository,
@@ -37,6 +41,11 @@ class HistoryViewModel(
         RealBoundaryTimer,
     private val mapper: TaskHistoryMapper =
         TaskHistoryMapper(),
+    private val nutritionRepository:
+    NutritionRepository,
+    private val nutritionMapper:
+    NutritionHistoryMapper =
+        NutritionHistoryMapper(),
 ) : ViewModel() {
     private val nav =
         MutableStateFlow(HistoryNavState())
@@ -77,7 +86,125 @@ class HistoryViewModel(
                     ),
             )
 
-    val uiState =
+    private val nutritionHistoryState =
+        combine(
+            nav,
+            timeState,
+            settingsState,
+        ) {
+                navigation,
+                time,
+                appSettings,
+            ->
+            val currentDate =
+                time.appDay.date
+
+            val customRange =
+                navigation
+                    .nutritionCustomRange
+                    ?: defaultNutritionCustomRange(
+                        currentDate
+                    )
+
+            val currentMonth =
+                YearMonth.from(currentDate)
+
+            val calendarMonth =
+                navigation
+                    .nutritionCalendarMonth
+                    ?.takeUnless {
+                        it.isAfter(
+                            currentMonth
+                        )
+                    }
+                    ?: currentMonth
+
+            val selectedRange =
+                navigation
+                    .nutritionRangePreset
+                    .dateRange(
+                        currentDate =
+                            currentDate,
+                        customRange =
+                            customRange,
+                    )
+
+            val earliestDate =
+                listOf(
+                    selectedRange.startDate,
+                    customRange.startDate,
+                    currentDate
+                        .withDayOfMonth(1),
+                    calendarMonth.atDay(1),
+                )
+                    .minOrNull()
+                    ?: currentDate
+
+            NutritionHistoryQuery(
+                startTimestampMillis =
+                    time.dayCalculator
+                        .forDate(
+                            earliestDate
+                        )
+                        .startTimestampMillis,
+                endTimestampMillis =
+                    time.dayCalculator
+                        .forDate(
+                            currentDate
+                        )
+                        .endTimestampMillis,
+                rangePreset =
+                    navigation
+                        .nutritionRangePreset,
+                customRange = customRange,
+                calendarMonth =
+                    calendarMonth,
+                currentDate = currentDate,
+                calculator =
+                    time.dayCalculator,
+                settings = appSettings,
+            )
+        }
+            .distinctUntilChanged()
+            .flatMapLatest { query ->
+                nutritionRepository
+                    .observeNutritionBetween(
+                        startTimestampMillis =
+                            query
+                                .startTimestampMillis,
+                        endTimestampMillis =
+                            query
+                                .endTimestampMillis,
+                    )
+                    .map { summary ->
+                        nutritionMapper.map(
+                            summary = summary,
+                            rangePreset =
+                                query.rangePreset,
+                            customRange =
+                                query.customRange,
+                            calendarMonth =
+                                query.calendarMonth,
+                            currentDate =
+                                query.currentDate,
+                            calculator =
+                                query.calculator,
+                            settings =
+                                query.settings,
+                        )
+                    }
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started =
+                    SharingStarted.WhileSubscribed(
+                        stopTimeoutMillis = 5_000
+                    ),
+                initialValue =
+                    NutritionHistoryUiState(),
+            )
+
+    private val taskScreenState =
         combine(
             nav,
             repository.observeAllTasks(),
@@ -136,6 +263,25 @@ class HistoryViewModel(
                     deleteConfirmation =
                         deleteConfirmation,
                 ),
+            )
+        }
+            .stateIn(
+                scope = viewModelScope,
+                started =
+                    SharingStarted.WhileSubscribed(
+                        stopTimeoutMillis = 5_000
+                    ),
+                initialValue =
+                    HistoryScreenUiState(),
+            )
+
+    val uiState =
+        combine(
+            taskScreenState,
+            nutritionHistoryState,
+        ) { screen, nutrition ->
+            screen.copy(
+                nutrition = nutrition
             )
         }
             .stateIn(
@@ -222,6 +368,7 @@ class HistoryViewModel(
                 dayCalculator.containing(
                     timestamp
                 ),
+            dayCalculator = dayCalculator,
             calculator =
                 TaskScheduleCalculator(
                     dayCalculator
@@ -276,6 +423,76 @@ class HistoryViewModel(
 
             HistoryAction.DismissDelete ->
                 dismissDelete()
+
+            is HistoryAction
+            .SelectNutritionRange ->
+                nav.update {
+                    it.copy(
+                        nutritionRangePreset =
+                            action.preset
+                    )
+                }
+
+            is HistoryAction
+            .SetNutritionCustomRange -> {
+                val currentDate =
+                    timeState.value.appDay.date
+
+                if (
+                    !action.range.endDate
+                        .isAfter(currentDate)
+                ) {
+                    nav.update {
+                        it.copy(
+                            nutritionRangePreset =
+                                NutritionHistoryRangePreset
+                                    .CUSTOM,
+                            nutritionCustomRange =
+                                action.range,
+                        )
+                    }
+                }
+            }
+
+            HistoryAction.PreviousNutritionMonth ->
+                nav.update { current ->
+                    val currentMonth =
+                        YearMonth.from(
+                            timeState.value.appDay.date
+                        )
+
+                    current.copy(
+                        nutritionCalendarMonth =
+                            (
+                                    current
+                                        .nutritionCalendarMonth
+                                        ?: currentMonth
+                                    )
+                                .minusMonths(1)
+                    )
+                }
+
+            HistoryAction.NextNutritionMonth ->
+                nav.update { current ->
+                    val currentMonth =
+                        YearMonth.from(
+                            timeState.value.appDay.date
+                        )
+
+                    val displayed =
+                        current
+                            .nutritionCalendarMonth
+                            ?: currentMonth
+
+                    current.copy(
+                        nutritionCalendarMonth =
+                            displayed
+                                .plusMonths(1)
+                                .coerceAtMost(
+                                    currentMonth
+                                )
+                    )
+                }
 
             HistoryAction.BackToDashboard ->
                 nav.update {
@@ -598,7 +815,24 @@ class HistoryViewModel(
 private data class HistoryTimeState(
     val timestamp: Long,
     val appDay: AppDay,
-    val calculator: TaskScheduleCalculator,
+    val dayCalculator:
+    AppDayCalculator,
+    val calculator:
+    TaskScheduleCalculator,
+)
+
+private data class NutritionHistoryQuery(
+    val startTimestampMillis: Long,
+    val endTimestampMillis: Long,
+    val rangePreset:
+    NutritionHistoryRangePreset,
+    val customRange:
+    NutritionHistoryDateRange,
+    val calendarMonth: YearMonth,
+    val currentDate: LocalDate,
+    val calculator:
+    AppDayCalculator,
+    val settings: AppSettings,
 )
 
 private data class HistoryBoundarySettings(
@@ -616,6 +850,9 @@ private data class HistoryNavState(
     val showArchivedTasks: Boolean = false,
     val deleteTaskId: Long? = null,
     val deleteTaskName: String? = null,
+    val nutritionRangePreset: NutritionHistoryRangePreset = NutritionHistoryRangePreset.THIRTY_DAYS,
+    val nutritionCustomRange: NutritionHistoryDateRange? = null,
+    val nutritionCalendarMonth: YearMonth? = null,
 )
 
 private fun HistoryNavState.clearOverlays() =
@@ -634,6 +871,8 @@ class HistoryViewModelFactory(
         Clock.systemDefaultZone(),
     private val timer: BoundaryTimer =
         RealBoundaryTimer,
+    private val nutritionRepository:
+    NutritionRepository,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(
         modelClass: Class<T>,
@@ -646,6 +885,8 @@ class HistoryViewModelFactory(
             @Suppress("UNCHECKED_CAST")
             return HistoryViewModel(
                 repository = repository,
+                nutritionRepository =
+                    nutritionRepository,
                 settings = settings,
                 clock = clock,
                 timer = timer,
