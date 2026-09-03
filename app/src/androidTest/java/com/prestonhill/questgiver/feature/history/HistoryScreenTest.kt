@@ -26,22 +26,243 @@ class HistoryScreenTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun dashboardShowsGraphs(): Unit {
+    fun taskDashboardShowsStampCalendar(): Unit {
         showScreen(
-            state = HistoryScreenUiState()
+            state = taskCalendarScreenState()
         )
 
         composeRule
             .onNodeWithTag(
-                HistoryTags.CATEGORY_GRAPH
+                HistoryTags.TASK_STAMP_CALENDAR
+            )
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun taskStampGroupSendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = taskCalendarScreenState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.TASK_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags.taskStampGroup(
+                        "Categories"
+                    )
+                )
+            )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.taskStampGroup(
+                    "Categories"
+                )
+            )
+            .assertIsOn()
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .SetTaskStampGroupSelected(
+                        groupLabel =
+                            "Categories",
+                        selected = false,
+                    )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun partialTaskStampGroupCanSelectAll(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state =
+                taskCalendarScreenState(
+                    selectedKeys =
+                        setOf(
+                            TASK_FILTER_A,
+                            CATEGORY_FILTER,
+                        )
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.TASK_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags.taskStampGroup(
+                        "Recurring tasks"
+                    )
+                )
+            )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.taskStampGroup(
+                    "Recurring tasks"
+                )
+            )
+            .assertIsOff()
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .SetTaskStampGroupSelected(
+                        groupLabel =
+                            "Recurring tasks",
+                        selected = true,
+                    )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun taskStampFilterSendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = taskCalendarScreenState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.taskStampFilter(
+                    TASK_FILTER_A
+                )
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .ToggleTaskStampFilter(
+                        TASK_FILTER_A
+                    )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun taskStampedDaySendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = taskCalendarScreenState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.taskStampDay(
+                    CURRENT_DATE
+                )
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .OpenTaskCalendarDay(
+                        CURRENT_DATE
+                    )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun taskDayDialogUsesSelectedFilters(): Unit {
+        showScreen(
+            state =
+                taskCalendarScreenState(
+                    selectedKeys =
+                        setOf(TASK_FILTER_A),
+                    selectedDate =
+                        CURRENT_DATE,
+                )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .TASK_STAMP_DAY_DIALOG
             )
             .assertIsDisplayed()
 
         composeRule
             .onNodeWithTag(
-                HistoryTags.PINNED_GRAPHS
+                HistoryTags.taskDayStamp(
+                    TASK_FILTER_A
+                )
             )
             .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.taskDayStamp(
+                    TASK_FILTER_B
+                )
+            )
+            .assertDoesNotExist()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.taskDayStamp(
+                    CATEGORY_FILTER
+                )
+            )
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun taskDayDialogCanClose(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state =
+                taskCalendarScreenState(
+                    selectedDate =
+                        CURRENT_DATE
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .TASK_STAMP_DAY_CLOSE
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .DismissTaskCalendarDay
+            ),
+            actions,
+        )
     }
 
     @Test
@@ -1447,6 +1668,92 @@ class HistoryScreenTest {
             nutrition = nutrition,
         )
 
+    private fun taskCalendarScreenState(
+        selectedKeys: Set<String> =
+            setOf(
+                TASK_FILTER_A,
+                TASK_FILTER_B,
+                CATEGORY_FILTER,
+            ),
+        selectedDate: LocalDate? = null,
+    ): HistoryScreenUiState =
+        HistoryScreenUiState(
+            section = HistorySection.TASKS,
+            tasks =
+                TaskHistoryUiState(
+                    stampCalendar =
+                        HistoryStampCalendarUiState(
+                            month =
+                                YearMonth.from(
+                                    CURRENT_DATE
+                                ),
+                            currentDate =
+                                CURRENT_DATE,
+                            availableFilters =
+                                listOf(
+                                    HistoryStampFilterUiState(
+                                        key =
+                                            TASK_FILTER_A,
+                                        label =
+                                            "Morning planning",
+                                        groupLabel =
+                                            "Recurring tasks",
+                                        colors =
+                                            HistoryStampColorsUiState(
+                                                left = 0,
+                                                middle = 1,
+                                                right = 2,
+                                            ),
+                                    ),
+                                    HistoryStampFilterUiState(
+                                        key =
+                                            TASK_FILTER_B,
+                                        label =
+                                            "Exercise",
+                                        groupLabel =
+                                            "Recurring tasks",
+                                        colors =
+                                            HistoryStampColorsUiState(
+                                                left = 3,
+                                                middle = 4,
+                                                right = 5,
+                                            ),
+                                    ),
+                                    HistoryStampFilterUiState(
+                                        key =
+                                            CATEGORY_FILTER,
+                                        label = "Health",
+                                        groupLabel =
+                                            "Categories",
+                                        colors =
+                                            HistoryStampColorsUiState(
+                                                left = 6,
+                                                middle = 7,
+                                                right = 8,
+                                            ),
+                                    ),
+                                ),
+                            selectedFilterKeys =
+                                selectedKeys,
+                            days =
+                                listOf(
+                                    HistoryStampCalendarDayUiState(
+                                        date =
+                                            CURRENT_DATE,
+                                        stampKeys =
+                                            listOf(
+                                                TASK_FILTER_A,
+                                                TASK_FILTER_B,
+                                                CATEGORY_FILTER,
+                                            ),
+                                    )
+                                ),
+                            selectedDate =
+                                selectedDate,
+                        )
+                ),
+        )
+
     private fun nutritionState():
             NutritionHistoryUiState =
         NutritionHistoryUiState(
@@ -1654,5 +1961,14 @@ class HistoryScreenTest {
                 9,
                 2,
             )
+
+        const val TASK_FILTER_A =
+            "task:1"
+
+        const val TASK_FILTER_B =
+            "task:2"
+
+        const val CATEGORY_FILTER =
+            "category:health"
     }
 }

@@ -83,4 +83,29 @@ sealed interface HistoryAction {
     data object DismissNutritionCalendarDay :
         HistoryAction
 
+    data object PreviousTaskCalendarMonth :
+        HistoryAction
+
+    data object NextTaskCalendarMonth :
+        HistoryAction
+
+    data class ToggleTaskStampFilter(
+        val key: String,
+    ) : HistoryAction
+
+    data object SelectAllTaskStamps :
+        HistoryAction
+
+    data class OpenTaskCalendarDay(
+        val date: LocalDate,
+    ) : HistoryAction
+
+    data object DismissTaskCalendarDay :
+        HistoryAction
+
+    data class SetTaskStampGroupSelected(
+        val groupLabel: String,
+        val selected: Boolean,
+    ) : HistoryAction
+
 }

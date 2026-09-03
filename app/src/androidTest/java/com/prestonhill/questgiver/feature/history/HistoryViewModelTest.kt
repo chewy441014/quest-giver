@@ -16,6 +16,8 @@ import com.prestonhill.questgiver.data.repository.FoodLogDraft
 import com.prestonhill.questgiver.data.repository.NutritionItemDraft
 import com.prestonhill.questgiver.data.repository.NutritionRepository
 import com.prestonhill.questgiver.data.repository.NutritionValuesInput
+import com.prestonhill.questgiver.data.repository.TaskCompletionResult
+import java.time.DayOfWeek
 import java.time.Clock
 import java.time.ZoneId
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -1415,6 +1417,430 @@ class HistoryViewModelTest {
         }
 
     @Test
+    fun taskCalendarShowsTaskAndCategoryStamps(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            completeTask(taskId)
+
+            val calendar =
+                awaitState {
+                    it.tasks
+                        .stampCalendar
+                        .availableFilters
+                        .size == 2 &&
+                            it.tasks
+                                .stampCalendar
+                                .days
+                                .any { day ->
+                                    day.date ==
+                                            CURRENT_DATE &&
+                                            day.stampKeys
+                                                .size == 2
+                                }
+                }
+                    .tasks
+                    .stampCalendar
+
+            assertEquals(
+                YearMonth.from(CURRENT_DATE),
+                calendar.month,
+            )
+
+            assertEquals(
+                setOf(
+                    "Recurring tasks",
+                    "Categories",
+                ),
+                calendar.availableFilters
+                    .map {
+                        it.groupLabel
+                    }
+                    .toSet(),
+            )
+
+            assertEquals(
+                calendar.availableFilters
+                    .mapTo(linkedSetOf()) {
+                        it.key
+                    },
+                calendar.selectedFilterKeys,
+            )
+        }
+
+    @Test
+    fun taskStampFiltersAreMultiSelect(): Unit =
+        runBlocking {
+            val taskId = addTask()
+
+            completeTask(taskId)
+
+            val initial =
+                awaitState {
+                    it.tasks
+                        .stampCalendar
+                        .availableFilters
+                        .size == 2
+                }
+                    .tasks
+                    .stampCalendar
+
+            val taskFilter =
+                initial.availableFilters.single {
+                    it.groupLabel ==
+                            "Recurring tasks"
+                }
+
+            val categoryFilter =
+                initial.availableFilters.single {
+                    it.groupLabel ==
+                            "Categories"
+                }
+
+            viewModel.onAction(
+                HistoryAction
+                    .ToggleTaskStampFilter(
+                        taskFilter.key
+                    )
+            )
+
+            awaitState {
+                it.tasks
+                    .stampCalendar
+                    .selectedFilterKeys ==
+                        setOf(categoryFilter.key)
+            }
+
+            /*
+             * The last selected filter cannot
+             * be removed.
+             */
+            viewModel.onAction(
+                HistoryAction
+                    .ToggleTaskStampFilter(
+                        categoryFilter.key
+                    )
+            )
+
+            /*
+             * Opening a day provides a subsequent
+             * state change so the assertion cannot
+             * accidentally inspect stale state.
+             */
+            viewModel.onAction(
+                HistoryAction
+                    .OpenTaskCalendarDay(
+                        CURRENT_DATE
+                    )
+            )
+
+            val protected =
+                awaitState {
+                    it.tasks
+                        .stampCalendar
+                        .selectedDate ==
+                            CURRENT_DATE
+                }
+                    .tasks
+                    .stampCalendar
+
+            assertEquals(
+                setOf(categoryFilter.key),
+                protected.selectedFilterKeys,
+            )
+
+            viewModel.onAction(
+                HistoryAction
+                    .SelectAllTaskStamps
+            )
+
+            val restored =
+                awaitState {
+                    it.tasks
+                        .stampCalendar
+                        .selectedFilterKeys
+                        .size == 2
+                }
+                    .tasks
+                    .stampCalendar
+
+            assertEquals(
+                restored.availableFilters
+                    .mapTo(linkedSetOf()) {
+                        it.key
+                    },
+                restored.selectedFilterKeys,
+            )
+        }
+
+    @Test
+    fun taskCalendarMonthCanChange(): Unit =
+        runBlocking {
+            awaitState {
+                it.tasks
+                    .stampCalendar
+                    .month ==
+                        YearMonth.of(2026, 9)
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .OpenTaskCalendarDay(
+                        CURRENT_DATE
+                    )
+            )
+
+            awaitState {
+                it.tasks
+                    .stampCalendar
+                    .selectedDate ==
+                        CURRENT_DATE
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .PreviousTaskCalendarMonth
+            )
+
+            awaitState {
+                it.tasks
+                    .stampCalendar
+                    .month ==
+                        YearMonth.of(2026, 8) &&
+                        it.tasks
+                            .stampCalendar
+                            .selectedDate == null
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .NextTaskCalendarMonth
+            )
+
+            awaitState {
+                it.tasks
+                    .stampCalendar
+                    .month ==
+                        YearMonth.of(2026, 9)
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .NextTaskCalendarMonth
+            )
+
+            val clamped =
+                awaitState {
+                    it.tasks
+                        .stampCalendar
+                        .month ==
+                            YearMonth.of(2026, 9)
+                }
+
+            assertEquals(
+                YearMonth.of(2026, 9),
+                clamped.tasks
+                    .stampCalendar
+                    .month,
+            )
+        }
+
+    @Test
+    fun taskCalendarDayCanBeDismissed(): Unit =
+        runBlocking {
+            viewModel.onAction(
+                HistoryAction
+                    .OpenTaskCalendarDay(
+                        CURRENT_DATE
+                    )
+            )
+
+            awaitState {
+                it.tasks
+                    .stampCalendar
+                    .selectedDate ==
+                        CURRENT_DATE
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .DismissTaskCalendarDay
+            )
+
+            val dismissed =
+                awaitState {
+                    it.tasks
+                        .stampCalendar
+                        .selectedDate == null
+                }
+
+            assertNull(
+                dismissed.tasks
+                    .stampCalendar
+                    .selectedDate
+            )
+        }
+
+    @Test
+    fun taskCalendarUsesConfiguredWeekStart(): Unit =
+        runBlocking {
+            settings.value =
+                AppSettings(
+                    weekStart =
+                        DayOfWeek.SUNDAY
+                )
+
+            val state =
+                awaitState {
+                    it.tasks
+                        .stampCalendar
+                        .weekStart ==
+                            DayOfWeek.SUNDAY
+                }
+
+            assertEquals(
+                DayOfWeek.SUNDAY,
+                state.tasks
+                    .stampCalendar
+                    .weekStart,
+            )
+        }
+
+    @Test
+    fun taskStampGroupsCanBeSelectedTogether(): Unit =
+        runBlocking {
+            val firstId =
+                addTask(
+                    name = "Planning",
+                    category = "General",
+                    displayOrder = 0,
+                )
+
+            val secondId =
+                addTask(
+                    name = "Exercise",
+                    category = "Health",
+                    displayOrder = 1,
+                )
+
+            completeTask(firstId)
+            completeTask(secondId)
+
+            val initial =
+                awaitState {
+                    it.tasks
+                        .stampCalendar
+                        .availableFilters
+                        .size == 4
+                }
+                    .tasks
+                    .stampCalendar
+
+            val recurringKeys =
+                initial.availableFilters
+                    .filter {
+                        it.groupLabel ==
+                                "Recurring tasks"
+                    }
+                    .mapTo(linkedSetOf()) {
+                        it.key
+                    }
+
+            val categoryKeys =
+                initial.availableFilters
+                    .filter {
+                        it.groupLabel ==
+                                "Categories"
+                    }
+                    .mapTo(linkedSetOf()) {
+                        it.key
+                    }
+
+            viewModel.onAction(
+                HistoryAction
+                    .SetTaskStampGroupSelected(
+                        groupLabel =
+                            "Recurring tasks",
+                        selected = false,
+                    )
+            )
+
+            awaitState {
+                it.tasks
+                    .stampCalendar
+                    .selectedFilterKeys ==
+                        categoryKeys
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .SetTaskStampGroupSelected(
+                        groupLabel =
+                            "Recurring tasks",
+                        selected = true,
+                    )
+            )
+
+            awaitState {
+                it.tasks
+                    .stampCalendar
+                    .selectedFilterKeys ==
+                        recurringKeys +
+                        categoryKeys
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .SetTaskStampGroupSelected(
+                        groupLabel =
+                            "Categories",
+                        selected = false,
+                    )
+            )
+
+            awaitState {
+                it.tasks
+                    .stampCalendar
+                    .selectedFilterKeys ==
+                        recurringKeys
+            }
+
+            /*
+             * The remaining group cannot be cleared.
+             */
+            viewModel.onAction(
+                HistoryAction
+                    .SetTaskStampGroupSelected(
+                        groupLabel =
+                            "Recurring tasks",
+                        selected = false,
+                    )
+            )
+
+            viewModel.onAction(
+                HistoryAction
+                    .OpenTaskCalendarDay(
+                        CURRENT_DATE
+                    )
+            )
+
+            val protected =
+                awaitState {
+                    it.tasks
+                        .stampCalendar
+                        .selectedDate ==
+                            CURRENT_DATE
+                }
+                    .tasks
+                    .stampCalendar
+
+            assertEquals(
+                recurringKeys,
+                protected.selectedFilterKeys,
+            )
+        }
+
+    @Test
     fun restoreMovesTask(): Unit =
         runBlocking {
             val taskId = addTask()
@@ -1516,18 +1942,41 @@ class HistoryViewModelTest {
             )
         )
 
-    private suspend fun addTask(): Long =
+    private suspend fun addTask(
+        name: String = "Test task",
+        category: String? = "General",
+        displayOrder: Int = 0,
+    ): Long =
         repository.createTask(
             TaskEntity(
-                name = "Test task",
-                category = "General",
-                displayOrder = 0,
+                name = name,
+                category = category,
+                displayOrder = displayOrder,
                 scheduleType =
                     TaskScheduleTypeDb.DAILY,
                 recurrenceStartEpochDay = DAY,
-                createdAtEpochMillis = 1_000L,
+                createdAtEpochMillis =
+                    1_000L + displayOrder,
             )
         )
+
+    private suspend fun completeTask(
+        taskId: Long,
+        date: LocalDate = CURRENT_DATE,
+    ) {
+        assertEquals(
+            TaskCompletionResult.SUCCESS,
+            repository.complete(
+                taskId = taskId,
+                scheduledEpochDay =
+                    date.toEpochDay(),
+                completionTimestampMillis =
+                    clock.millis(),
+                recordedTimestampMillis =
+                    clock.millis(),
+            ),
+        )
+    }
 
     private suspend fun awaitState(
         condition: (HistoryScreenUiState) ->

@@ -9,6 +9,8 @@ import com.prestonhill.questgiver.feature.tasks.TaskScheduleCalculator
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.LocalDate
+import java.time.DayOfWeek
+import java.time.YearMonth
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -382,6 +384,386 @@ class TaskHistoryMapperTest {
     }
 
     @Test
+    fun recurringTaskGetsOneStampPerDay(): Unit {
+        val task =
+            task(
+                id = 1L,
+                type = TaskScheduleTypeDb.DAILY,
+                category = null,
+            )
+
+        val calendar =
+            mapCalendar(
+                tasks = listOf(task),
+                logs =
+                    listOf(
+                        log(
+                            id = 1L,
+                            day = DAY,
+                            taskId = task.id,
+                            completedAt = 1_000L,
+                            category = null,
+                        ),
+                        log(
+                            id = 2L,
+                            day = DAY,
+                            taskId = task.id,
+                            completedAt = 2_000L,
+                            category = null,
+                        ),
+                    ),
+            )
+
+        val filter =
+            calendar.availableFilters.single()
+
+        assertEquals(
+            "Recurring tasks",
+            filter.groupLabel,
+        )
+
+        assertEquals(
+            listOf(filter.key),
+            calendar.days
+                .single {
+                    it.date == CURRENT_DATE
+                }
+                .stampKeys,
+        )
+    }
+
+    @Test
+    fun categoryGetsOneStampPerDay(): Unit {
+        val first =
+            task(
+                id = 1L,
+                type =
+                    TaskScheduleTypeDb.ONE_TIME,
+                category = "Work",
+            )
+
+        val second =
+            task(
+                id = 2L,
+                type =
+                    TaskScheduleTypeDb.ONE_TIME,
+                category = "work",
+            )
+
+        val calendar =
+            mapCalendar(
+                tasks = listOf(first, second),
+                logs =
+                    listOf(
+                        log(
+                            id = 1L,
+                            day = DAY,
+                            taskId = first.id,
+                            category = "Work",
+                        ),
+                        log(
+                            id = 2L,
+                            day = DAY,
+                            taskId = second.id,
+                            completedAt = 2_000L,
+                            category = "work",
+                        ),
+                    ),
+            )
+
+        val filter =
+            calendar.availableFilters.single()
+
+        assertEquals(
+            "Categories",
+            filter.groupLabel,
+        )
+
+        assertEquals(
+            listOf(filter.key),
+            calendar.days
+                .single {
+                    it.date == CURRENT_DATE
+                }
+                .stampKeys,
+        )
+    }
+
+    @Test
+    fun recurringCompletionCanCreateTwoStamps(): Unit {
+        val task =
+            task(
+                id = 1L,
+                type = TaskScheduleTypeDb.DAILY,
+                category = "Health",
+            )
+
+        val calendar =
+            mapCalendar(
+                tasks = listOf(task),
+                logs =
+                    listOf(
+                        log(
+                            id = 1L,
+                            day = DAY,
+                            taskId = task.id,
+                            category = "Health",
+                        )
+                    ),
+            )
+
+        assertEquals(
+            setOf(
+                "Recurring tasks",
+                "Categories",
+            ),
+            calendar.availableFilters
+                .map {
+                    it.groupLabel
+                }
+                .toSet(),
+        )
+
+        assertEquals(
+            2,
+            calendar.days
+                .single {
+                    it.date == CURRENT_DATE
+                }
+                .stampKeys
+                .size,
+        )
+    }
+
+    @Test
+    fun correctedCompletionCreatesNoStamp(): Unit {
+        val task =
+            task(
+                id = 1L,
+                type = TaskScheduleTypeDb.DAILY,
+                category = "Work",
+            )
+
+        val calendar =
+            mapCalendar(
+                tasks = listOf(task),
+                logs =
+                    listOf(
+                        log(
+                            id = 10L,
+                            day = DAY,
+                            taskId = task.id,
+                            category = "Work",
+                        ),
+                        log(
+                            id = 11L,
+                            day = DAY,
+                            taskId = task.id,
+                            delta = -1,
+                            reversesLogId = 10L,
+                            category = "Work",
+                        ),
+                    ),
+            )
+
+        assertTrue(
+            calendar.availableFilters.isEmpty()
+        )
+
+        assertTrue(
+            calendar.days
+                .single {
+                    it.date == CURRENT_DATE
+                }
+                .stampKeys
+                .isEmpty()
+        )
+    }
+
+    @Test
+    fun uncategorizedOneTimeTaskCreatesNoStamp(): Unit {
+        val task =
+            task(
+                id = 1L,
+                type =
+                    TaskScheduleTypeDb.ONE_TIME,
+                category = null,
+                scheduledDay = DAY,
+            )
+
+        val calendar =
+            mapCalendar(
+                tasks = listOf(task),
+                logs =
+                    listOf(
+                        log(
+                            id = 1L,
+                            day = DAY,
+                            taskId = task.id,
+                            category = null,
+                        )
+                    ),
+            )
+
+        assertTrue(
+            calendar.availableFilters.isEmpty()
+        )
+
+        assertTrue(
+            calendar.days
+                .single {
+                    it.date == CURRENT_DATE
+                }
+                .stampKeys
+                .isEmpty()
+        )
+    }
+
+    @Test
+    fun archivedRecurringTaskRemainsSelectable(): Unit {
+        val task =
+            task(
+                id = 1L,
+                type = TaskScheduleTypeDb.DAILY,
+                category = null,
+                archivedAt = 5_000L,
+            )
+
+        val calendar =
+            mapCalendar(
+                tasks = listOf(task),
+                logs =
+                    listOf(
+                        log(
+                            id = 1L,
+                            day = DAY,
+                            taskId = task.id,
+                            category = null,
+                        )
+                    ),
+            )
+
+        val filter =
+            calendar.availableFilters.single()
+
+        assertEquals(
+            task.name,
+            filter.label,
+        )
+
+        assertEquals(
+            "Recurring tasks",
+            filter.groupLabel,
+        )
+    }
+
+    @Test
+    fun calendarUsesScheduledDay(): Unit {
+        val task =
+            task(
+                id = 1L,
+                type = TaskScheduleTypeDb.DAILY,
+                category = null,
+            )
+
+        val nextDate =
+            CURRENT_DATE.plusDays(1)
+
+        val completedNextDay =
+            nextDate
+                .atTime(12, 0)
+                .atZone(zone)
+                .toInstant()
+                .toEpochMilli()
+
+        val calendar =
+            mapCalendar(
+                tasks = listOf(task),
+                logs =
+                    listOf(
+                        log(
+                            id = 1L,
+                            day = DAY,
+                            taskId = task.id,
+                            completedAt =
+                                completedNextDay,
+                            category = null,
+                        )
+                    ),
+            )
+
+        val filter =
+            calendar.availableFilters.single()
+
+        assertEquals(
+            listOf(filter.key),
+            calendar.days
+                .single {
+                    it.date == CURRENT_DATE
+                }
+                .stampKeys,
+        )
+
+        assertTrue(
+            calendar.days
+                .single {
+                    it.date == nextDate
+                }
+                .stampKeys
+                .isEmpty()
+        )
+    }
+
+    @Test
+    fun stampColorsRemainStableAfterRename(): Unit {
+        val original =
+            task(
+                id = 1L,
+                type = TaskScheduleTypeDb.DAILY,
+                name = "Original name",
+                category = null,
+            )
+
+        val renamed =
+            original.copy(
+                name = "Renamed task"
+            )
+
+        val logs =
+            listOf(
+                log(
+                    id = 1L,
+                    day = DAY,
+                    taskId = original.id,
+                    category = null,
+                )
+            )
+
+        val originalColors =
+            mapCalendar(
+                tasks = listOf(original),
+                logs = logs,
+            )
+                .availableFilters
+                .single()
+                .colors
+
+        val renamedColors =
+            mapCalendar(
+                tasks = listOf(renamed),
+                logs = logs,
+            )
+                .availableFilters
+                .single()
+                .colors
+
+        assertEquals(
+            originalColors,
+            renamedColors,
+        )
+    }
+
+    @Test
     fun recurringDaysStaySeparate(): Unit {
         val daily =
             task(
@@ -444,6 +826,18 @@ class TaskHistoryMapperTest {
         )
     }
 
+    private fun mapCalendar(
+        tasks: List<TaskEntity>,
+        logs: List<TaskLogEntity>,
+    ): HistoryStampCalendarUiState =
+        mapper.stampCalendar(
+            tasks = tasks,
+            logs = logs,
+            month = MONTH,
+            currentDate = CURRENT_DATE,
+            weekStart = DayOfWeek.MONDAY,
+        )
+
     private fun mapTasks(
         tasks: List<TaskEntity>,
         logs: List<TaskLogEntity> =
@@ -468,17 +862,20 @@ class TaskHistoryMapperTest {
     private fun task(
         id: Long,
         type: TaskScheduleTypeDb,
+        name: String = "Task $id",
+        category: String? = "Test",
         scheduledDay: Long? = null,
         weekdaysMask: Int? = null,
         intervalDays: Int? = null,
-        intervalBasis: TaskIntervalBasisDb? = null,
+        intervalBasis:
+        TaskIntervalBasisDb? = null,
         dueMinuteOfDay: Int? = null,
         archivedAt: Long? = null,
     ): TaskEntity =
         TaskEntity(
             id = id,
-            name = "Task $id",
-            category = "Test",
+            name = name,
+            category = category,
             displayOrder = id.toInt(),
             scheduleType = type,
             scheduledEpochDay = scheduledDay,
@@ -506,12 +903,13 @@ class TaskHistoryMapperTest {
         completedAt: Long = 1_000L,
         delta: Int = 1,
         reversesLogId: Long? = null,
+        category: String? = "Test",
     ): TaskLogEntity =
         TaskLogEntity(
             id = id,
             taskId = taskId,
             taskNameSnapshot = "Task $id",
-            categorySnapshot = "Test",
+            categorySnapshot = category,
             scheduledEpochDay = day,
             completionTimestampMillis =
                 completedAt,
@@ -525,5 +923,12 @@ class TaskHistoryMapperTest {
         val DAY: Long =
             LocalDate.of(2026, 8, 24)
                 .toEpochDay()
+
+        val CURRENT_DATE: LocalDate =
+            LocalDate.ofEpochDay(DAY)
+
+        val MONTH: YearMonth =
+            YearMonth.from(CURRENT_DATE)
+
     }
 }

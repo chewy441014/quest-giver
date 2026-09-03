@@ -137,6 +137,49 @@ object HistoryTags {
     const val NUTRITION_DAY_CLOSE =
         "history_nutrition_day_close"
 
+    const val TASK_STAMP_PREFIX =
+        "history_task_stamp"
+
+    const val TASK_STAMP_CALENDAR =
+        "${TASK_STAMP_PREFIX}_calendar"
+
+    const val TASK_STAMP_PREVIOUS =
+        "${TASK_STAMP_PREFIX}_previous"
+
+    const val TASK_STAMP_NEXT =
+        "${TASK_STAMP_PREFIX}_next"
+
+    const val TASK_STAMP_ALL =
+        "${TASK_STAMP_PREFIX}_all"
+
+    const val TASK_STAMP_DAY_DIALOG =
+        "${TASK_STAMP_PREFIX}_day_dialog"
+
+    const val TASK_STAMP_DAY_CLOSE =
+        "${TASK_STAMP_PREFIX}_day_close"
+
+    fun taskStampFilter(
+        key: String,
+    ) =
+        "${TASK_STAMP_PREFIX}_filter_$key"
+
+    fun taskStampDay(
+        date: LocalDate,
+    ) =
+        "${TASK_STAMP_PREFIX}_day_$date"
+
+    fun taskDayStamp(
+        key: String,
+    ) =
+        "${TASK_STAMP_PREFIX}_" +
+                "day_stamp_$key"
+
+    fun taskStampGroup(
+        groupLabel: String,
+    ) =
+        "${TASK_STAMP_PREFIX}_" +
+                "group_$groupLabel"
+
     fun nutritionStampFilter(
         type: NutritionStampType,
     ) =
@@ -2053,40 +2096,79 @@ private fun TaskDashboard(
         }
 
         item {
-            GraphPlaceholder(
-                graph = state.categoryGraph,
-                modifier =
-                    Modifier.testTag(
-                        HistoryTags.CATEGORY_GRAPH
-                    ),
-            )
-        }
-
-        item {
-            Text(
-                text = "Pinned graphs",
-                style =
-                    MaterialTheme
-                        .typography.titleMedium,
-            )
-        }
-
-        items(
-            count = state.pinnedGraphs.size,
-            key = { index ->
-                state.pinnedGraphs[index].id
-            },
-        ) { index ->
-            GraphPlaceholder(
-                graph =
-                    state.pinnedGraphs[index],
-                modifier =
-                    Modifier.testTag(
-                        HistoryTags.PINNED_GRAPHS
-                    ),
+            HistoryStampCalendarCard(
+                state = state.stampCalendar,
+                tagPrefix =
+                    HistoryTags
+                        .TASK_STAMP_PREFIX,
+                title =
+                    "Task completion calendar",
+                emptyMessage =
+                    "Complete a recurring or " +
+                            "categorized task to " +
+                            "create calendar stamps.",
+                onPreviousMonth = {
+                    onAction(
+                        HistoryAction
+                            .PreviousTaskCalendarMonth
+                    )
+                },
+                onNextMonth = {
+                    onAction(
+                        HistoryAction
+                            .NextTaskCalendarMonth
+                    )
+                },
+                onToggleFilter = { key ->
+                    onAction(
+                        HistoryAction
+                            .ToggleTaskStampFilter(
+                                key
+                            )
+                    )
+                },
+                onSelectAll = {
+                    onAction(
+                        HistoryAction
+                            .SelectAllTaskStamps
+                    )
+                },
+                onOpenDay = { date ->
+                    onAction(
+                        HistoryAction
+                            .OpenTaskCalendarDay(
+                                date
+                            )
+                    )
+                },
+                onSetGroupSelected = {
+                        group,
+                        selected,
+                    ->
+                    onAction(
+                        HistoryAction
+                            .SetTaskStampGroupSelected(
+                                groupLabel = group,
+                                selected = selected,
+                            )
+                    )
+                },
             )
         }
     }
+
+    HistoryStampCalendarDayDialog(
+        state = state.stampCalendar,
+        tagPrefix =
+            HistoryTags.TASK_STAMP_PREFIX,
+        onDismiss = {
+            onAction(
+                HistoryAction
+                    .DismissTaskCalendarDay
+            )
+        },
+    )
+
 }
 
 @Composable

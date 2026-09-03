@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -223,6 +224,48 @@ class HistoryViewModel(
                     changingTaskIds = changing,
                 )
 
+            val currentDate =
+                time.appDay.date
+
+            val currentMonth =
+                YearMonth.from(currentDate)
+
+            val calendarMonth =
+                navigation
+                    .taskCalendarMonth
+                    ?.takeUnless {
+                        it.isAfter(currentMonth)
+                    }
+                    ?: currentMonth
+
+            val mappedStampCalendar =
+                mapper.stampCalendar(
+                    tasks = tasks,
+                    logs = logs,
+                    month = calendarMonth,
+                    currentDate = currentDate,
+                    weekStart = time.weekStart,
+                )
+
+            val availableFilterKeys =
+                mappedStampCalendar
+                    .availableFilters
+                    .mapTo(linkedSetOf()) {
+                        it.key
+                    }
+
+            val selectedFilterKeys =
+                navigation
+                    .selectedTaskStampFilterKeys
+                    ?.intersect(
+                        availableFilterKeys
+                    )
+                    ?.takeIf {
+                        it.isNotEmpty() ||
+                                availableFilterKeys.isEmpty()
+                    }
+                    ?: availableFilterKeys
+
             val deleteConfirmation =
                 navigation.deleteTaskId
                     ?.let { taskId ->
@@ -262,6 +305,14 @@ class HistoryViewModel(
                         navigation.showArchivedTasks,
                     deleteConfirmation =
                         deleteConfirmation,
+                    stampCalendar =
+                        mappedStampCalendar.copy(
+                            selectedFilterKeys =
+                                selectedFilterKeys,
+                            selectedDate =
+                                navigation
+                                    .selectedTaskCalendarDate,
+                        ),
                 ),
             )
         }
@@ -389,6 +440,7 @@ class HistoryViewModel(
                 TaskScheduleCalculator(
                     dayCalculator
                 ),
+            weekStart = settings.weekStart,
         )
     }
 
@@ -412,6 +464,7 @@ class HistoryViewModel(
                         showArchivedTasks = false,
                     ).clearOverlays()
                 }
+
             is HistoryAction.SetTaskCompletion ->
                 setTaskCompletion(
                     taskId = action.taskId,
@@ -419,6 +472,7 @@ class HistoryViewModel(
                         action.scheduledEpochDay,
                     completed = action.completed,
                 )
+
             is HistoryAction.SelectSection ->
                 nav.update {
                     it.copy(
@@ -427,6 +481,127 @@ class HistoryViewModel(
                             TaskHistoryPage
                                 .DASHBOARD,
                     ).clearOverlays()
+                }
+
+            is HistoryAction
+            .SetTaskStampGroupSelected -> {
+                val calendar =
+                    uiState.value
+                        .tasks
+                        .stampCalendar
+
+                val available =
+                    calendar.availableFilters
+                        .mapTo(linkedSetOf()) {
+                            it.key
+                        }
+
+                val groupKeys =
+                    calendar.availableFilters
+                        .filter {
+                            it.groupLabel ==
+                                    action.groupLabel
+                        }
+                        .mapTo(linkedSetOf()) {
+                            it.key
+                        }
+
+                if (groupKeys.isEmpty()) {
+                    return
+                }
+
+                val selected =
+                    calendar.selectedFilterKeys
+
+                val updated =
+                    if (action.selected) {
+                        selected + groupKeys
+                    } else {
+                        (selected - groupKeys)
+                            .takeIf {
+                                it.isNotEmpty()
+                            }
+                            ?: selected
+                    }
+
+                nav.update {
+                    it.copy(
+                        selectedTaskStampFilterKeys =
+                            updated.takeUnless {
+                                    keys ->
+                                keys == available
+                            }
+                    )
+                }
+            }
+
+            is HistoryAction.ToggleTaskStampFilter -> {
+                val calendar =
+                    uiState.value
+                        .tasks
+                        .stampCalendar
+
+                val available =
+                    calendar.availableFilters
+                        .mapTo(linkedSetOf()) {
+                            it.key
+                        }
+
+                if (action.key !in available) {
+                    return
+                }
+
+                val selected =
+                    calendar.selectedFilterKeys
+
+                val updated =
+                    if (action.key in selected) {
+                        if (selected.size == 1) {
+                            selected
+                        } else {
+                            selected - action.key
+                        }
+                    } else {
+                        selected + action.key
+                    }
+
+                nav.update {
+                    it.copy(
+                        /*
+                         * Returning to null restores dynamic
+                         * "select all" behavior.
+                         */
+                        selectedTaskStampFilterKeys =
+                            updated.takeUnless {
+                                    keys ->
+                                keys == available
+                            }
+                    )
+                }
+            }
+
+            HistoryAction.SelectAllTaskStamps ->
+                nav.update {
+                    it.copy(
+                        selectedTaskStampFilterKeys =
+                            null
+                    )
+                }
+
+            is HistoryAction.OpenTaskCalendarDay ->
+                nav.update {
+                    it.copy(
+                        selectedTaskCalendarDate =
+                            action.date
+                    )
+                }
+
+            HistoryAction.DismissTaskCalendarDay ->
+                nav.update {
+                    it.copy(
+                        selectedTaskCalendarDate =
+                            null
+                    )
                 }
 
             is HistoryAction.RequestDeleteTask ->
@@ -536,6 +711,50 @@ class HistoryViewModel(
                     }
                 }
             }
+
+            HistoryAction.PreviousTaskCalendarMonth ->
+                nav.update { current ->
+                    val currentMonth =
+                        YearMonth.from(
+                            timeState.value
+                                .appDay.date
+                        )
+
+                    current.copy(
+                        taskCalendarMonth =
+                            (
+                                    current
+                                        .taskCalendarMonth
+                                        ?: currentMonth
+                                    ).minusMonths(1),
+                        selectedTaskCalendarDate =
+                            null,
+                    )
+                }
+
+            HistoryAction.NextTaskCalendarMonth ->
+                nav.update { current ->
+                    val currentMonth =
+                        YearMonth.from(
+                            timeState.value
+                                .appDay.date
+                        )
+
+                    val displayed =
+                        current.taskCalendarMonth
+                            ?: currentMonth
+
+                    current.copy(
+                        taskCalendarMonth =
+                            displayed
+                                .plusMonths(1)
+                                .coerceAtMost(
+                                    currentMonth
+                                ),
+                        selectedTaskCalendarDate =
+                            null,
+                    )
+                }
 
             HistoryAction.PreviousNutritionMonth ->
                 nav.update { current ->
@@ -904,6 +1123,7 @@ private data class HistoryTimeState(
     AppDayCalculator,
     val calculator:
     TaskScheduleCalculator,
+    val weekStart: DayOfWeek,
 )
 
 private data class NutritionHistoryQuery(
@@ -941,6 +1161,9 @@ private data class HistoryNavState(
     val showNutritionCustomRangePicker: Boolean = false,
     val selectedNutritionStampTypes: Set<NutritionStampType> = NutritionStampType.entries.toSet(),
     val selectedNutritionCalendarDate: LocalDate? = null,
+    val taskCalendarMonth: YearMonth? = null,
+    val selectedTaskStampFilterKeys: Set<String>? = null,
+    val selectedTaskCalendarDate: LocalDate? = null,
 )
 
 private fun HistoryNavState.clearOverlays() =
@@ -950,6 +1173,8 @@ private fun HistoryNavState.clearOverlays() =
         deleteTaskName = null,
         operationError = null,
         showNutritionCustomRangePicker = false,
+        selectedNutritionCalendarDate = null,
+        selectedTaskCalendarDate = null,
     )
 
 class HistoryViewModelFactory(

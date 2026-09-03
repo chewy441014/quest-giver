@@ -132,6 +132,52 @@ data class HistoryDeleteUiState(
     val errorMessage: String? = null,
 )
 
+data class HistoryStampColorsUiState(
+    val left: Int,
+    val middle: Int,
+    val right: Int,
+) {
+    init {
+        require(left in 0 until COLOR_COUNT)
+        require(middle in 0 until COLOR_COUNT)
+        require(right in 0 until COLOR_COUNT)
+    }
+
+    companion object {
+        const val COLOR_COUNT = 21
+    }
+}
+
+data class HistoryStampFilterUiState(
+    val key: String,
+    val label: String,
+    val groupLabel: String,
+    val colors: HistoryStampColorsUiState,
+)
+
+data class HistoryStampCalendarDayUiState(
+    val date: LocalDate,
+    val stampKeys: List<String> =
+        emptyList(),
+    val isFuture: Boolean = false,
+)
+
+data class HistoryStampCalendarUiState(
+    val month: YearMonth? = null,
+    val currentDate: LocalDate? = null,
+    val weekStart:
+    DayOfWeek = DayOfWeek.MONDAY,
+    val availableFilters:
+    List<HistoryStampFilterUiState> =
+        emptyList(),
+    val selectedFilterKeys:
+    Set<String> = emptySet(),
+    val days:
+    List<HistoryStampCalendarDayUiState> =
+        emptyList(),
+    val selectedDate: LocalDate? = null,
+)
+
 data class HistoryGraphUiState(
     val id: String,
     val title: String,
@@ -176,6 +222,9 @@ data class TaskHistoryUiState(
         emptyList(),
     val deleteConfirmation:
     HistoryDeleteUiState? = null,
+    val stampCalendar:
+    HistoryStampCalendarUiState =
+        HistoryStampCalendarUiState(),
     val categoryGraph: HistoryGraphUiState =
         HistoryGraphUiState(
             id = "task_categories",
