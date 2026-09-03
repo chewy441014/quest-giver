@@ -286,13 +286,6 @@ class HistoryViewModel(
                 tasks = TaskHistoryUiState(
                     page = navigation.taskPage,
                     allTasks = mappedTasks,
-                    logDays =
-                        mapper.logs(
-                            logs = logs,
-                            tasks = tasks,
-                            changingTaskIds =
-                                changing,
-                        ),
                     inspectedTaskId =
                         navigation.inspectedTaskId,
                     operationError =

@@ -104,69 +104,6 @@ class TaskHistoryMapperTest {
     }
 
     @Test
-    fun groupsNewestFirst(): Unit {
-        val previousDay = DAY - 1L
-
-        val mapped =
-            mapper.logs(
-                listOf(
-                    log(
-                        id = 1L,
-                        day = previousDay,
-                        taskId = 1L,
-                        completedAt = 100L,
-                    ),
-                    log(
-                        id = 2L,
-                        day = DAY,
-                        taskId = 2L,
-                        completedAt = 200L,
-                    ),
-                    log(
-                        id = 3L,
-                        day = DAY,
-                        taskId = 3L,
-                        completedAt = 300L,
-                    ),
-                )
-            )
-
-        assertEquals(
-            listOf(
-                LocalDate.ofEpochDay(DAY),
-                LocalDate.ofEpochDay(previousDay),
-            ),
-            mapped.map { it.date },
-        )
-
-        assertEquals(
-            listOf(3L, 2L),
-            mapped.first().logs.map { it.id },
-        )
-    }
-
-    @Test
-    fun correctedLogsAreHidden(): Unit {
-        val mapped =
-            mapper.logs(
-                listOf(
-                    log(
-                        id = 10L,
-                        day = DAY,
-                    ),
-                    log(
-                        id = 11L,
-                        day = DAY,
-                        delta = -1,
-                        reversesLogId = 10L,
-                    ),
-                )
-            )
-
-        assertTrue(mapped.isEmpty())
-    }
-
-    @Test
     fun archivedTaskCannotChange(): Unit {
         val task =
             task(
@@ -184,29 +121,6 @@ class TaskHistoryMapperTest {
 
         assertFalse(
             row.canChangeCompletion
-        )
-    }
-
-    @Test
-    fun activeLogMapsTaskIdentity(): Unit {
-        val row =
-            mapper.logs(
-                listOf(
-                    log(
-                        id = 1L,
-                        day = DAY,
-                        taskId = 7L,
-                    )
-                )
-            )
-                .single()
-                .logs
-                .single()
-
-        assertEquals(7L, row.taskId)
-
-        assertFalse(
-            row.isTaskCompletionChanging
         )
     }
 
@@ -276,6 +190,8 @@ class TaskHistoryMapperTest {
         assertFalse(row.canChangeCompletion)
     }
 
+
+
     @Test
     fun hiddenDueTaskCanChange(): Unit {
         val task =
@@ -313,74 +229,6 @@ class TaskHistoryMapperTest {
                 .single()
 
         assertTrue(row.isChanging)
-    }
-
-    @Test
-    fun replacementIsCurrentLog(): Unit {
-        val rows =
-            mapper.logs(
-                listOf(
-                    log(
-                        id = 1L,
-                        day = DAY,
-                        taskId = 7L,
-                    ),
-                    log(
-                        id = 2L,
-                        day = DAY,
-                        taskId = 7L,
-                        delta = -1,
-                        reversesLogId = 1L,
-                    ),
-                    log(
-                        id = 3L,
-                        day = DAY,
-                        taskId = 7L,
-                    ),
-                )
-            )
-                .flatMap { it.logs }
-
-        assertEquals(
-            listOf(3L),
-            rows.map { it.id },
-        )
-    }
-
-    @Test
-    fun oneTimeUsesLatestLog(): Unit {
-        val oneTime =
-            task(
-                id = 7L,
-                type =
-                    TaskScheduleTypeDb.ONE_TIME,
-                scheduledDay = DAY,
-            )
-
-        val rows =
-            mapper.logs(
-                logs = listOf(
-                    log(
-                        id = 1L,
-                        day = DAY,
-                        taskId = oneTime.id,
-                        completedAt = 1_000L,
-                    ),
-                    log(
-                        id = 2L,
-                        day = DAY + 2L,
-                        taskId = oneTime.id,
-                        completedAt = 2_000L,
-                    ),
-                ),
-                tasks = listOf(oneTime),
-            )
-                .flatMap { it.logs }
-
-        assertEquals(
-            listOf(2L),
-            rows.map { it.id },
-        )
     }
 
     @Test
@@ -764,67 +612,73 @@ class TaskHistoryMapperTest {
     }
 
     @Test
-    fun recurringDaysStaySeparate(): Unit {
-        val daily =
+    fun oneTimeCalendarUsesLatestCompletion(): Unit {
+        val oneTime =
             task(
                 id = 7L,
                 type =
-                    TaskScheduleTypeDb.DAILY,
+                    TaskScheduleTypeDb.ONE_TIME,
+                category = "Current",
+                scheduledDay = DAY,
             )
 
-        val rows =
-            mapper.logs(
-                logs = listOf(
-                    log(
-                        id = 1L,
-                        day = DAY,
-                        taskId = daily.id,
-                        completedAt = 1_000L,
-                    ),
-                    log(
-                        id = 2L,
-                        day = DAY,
-                        taskId = daily.id,
-                        completedAt = 2_000L,
-                    ),
-                    log(
-                        id = 3L,
-                        day = DAY + 1L,
-                        taskId = daily.id,
-                        completedAt = 1_500L,
-                    ),
-                ),
-                tasks = listOf(daily),
-            )
-                .flatMap { it.logs }
+        val nextDay = DAY + 1L
 
-        assertEquals(
-            listOf(3L, 2L),
-            rows.map { it.id },
-        )
-    }
-
-    @Test
-    fun taskChangeMarksLog(): Unit {
-        val row =
-            mapper.logs(
-                logs = listOf(
-                    log(
-                        id = 1L,
-                        day = DAY,
-                        taskId = 7L,
-                    )
-                ),
-                changingTaskIds = setOf(7L),
+        val calendar =
+            mapCalendar(
+                tasks = listOf(oneTime),
+                logs =
+                    listOf(
+                        log(
+                            id = 1L,
+                            day = DAY,
+                            taskId = oneTime.id,
+                            completedAt = 1_000L,
+                            category = "Old",
+                        ),
+                        log(
+                            id = 2L,
+                            day = nextDay,
+                            taskId = oneTime.id,
+                            completedAt = 2_000L,
+                            category = "Current",
+                        ),
+                    ),
             )
-                .single()
-                .logs
-                .single()
 
         assertTrue(
-            row.isTaskCompletionChanging
+            calendar.days
+                .single {
+                    it.date ==
+                            LocalDate.ofEpochDay(DAY)
+                }
+                .stampKeys
+                .isEmpty()
+        )
+
+        assertEquals(
+            1,
+            calendar.days
+                .single {
+                    it.date ==
+                            LocalDate.ofEpochDay(
+                                nextDay
+                            )
+                }
+                .stampKeys
+                .size,
+        )
+
+        assertEquals(
+            listOf("Current"),
+            calendar.availableFilters
+                .map {
+                    it.label
+                },
         )
     }
+
+
 
     private fun mapCalendar(
         tasks: List<TaskEntity>,

@@ -429,53 +429,74 @@ class HistoryViewModelTest {
         }
 
     @Test
-    fun correctionHidesLog(): Unit =
+    fun correctionRemovesCalendarStamps(): Unit =
         runBlocking {
             val taskId = addTask()
 
             repository.complete(
                 taskId = taskId,
-                scheduledEpochDay = DAY,
+                scheduledEpochDay =
+                    CURRENT_DATE.toEpochDay(),
                 completionTimestampMillis =
                     COMPLETION_TIME,
             )
 
-            val active =
-                awaitState {
-                    it.tasks.logDays
-                        .flatMap { day ->
-                            day.logs
+            awaitState {
+                it.tasks
+                    .stampCalendar
+                    .days
+                    .any { day ->
+                        day.date == CURRENT_DATE &&
+                                day.stampKeys.isNotEmpty()
+                    }
+            }
+
+            val positive =
+                repository.observeLogs()
+                    .first { logs ->
+                        logs.any {
+                            it.taskId == taskId &&
+                                    it.delta == 1
                         }
-                        .any { log ->
-                            log.taskId == taskId
-                        }
-                }
-                    .tasks
-                    .logDays
-                    .flatMap { it.logs }
-                    .single()
+                    }
+                    .single {
+                        it.taskId == taskId &&
+                                it.delta == 1
+                    }
 
             repository.correctCompletion(
-                logId = active.id,
+                logId = positive.id,
                 recordedTimestampMillis =
                     COMPLETION_TIME + 1_000L,
             )
 
             val state =
                 awaitState {
-                    it.tasks.logDays
-                        .flatMap { day ->
-                            day.logs
-                        }
-                        .none { log ->
-                            log.id == active.id
+                    it.tasks
+                        .stampCalendar
+                        .days
+                        .any { day ->
+                            day.date == CURRENT_DATE &&
+                                    day.stampKeys.isEmpty()
                         }
                 }
 
+            assertEquals(
+                TaskCompletionResult.SUCCESS,
+                repository.complete(
+                    taskId = taskId,
+                    scheduledEpochDay =
+                        CURRENT_DATE.toEpochDay(),
+                    completionTimestampMillis =
+                        COMPLETION_TIME,
+                ),
+            )
+
             assertTrue(
-                state.tasks.logDays
-                    .flatMap { it.logs }
-                    .none { it.id == active.id }
+                state.tasks
+                    .stampCalendar
+                    .availableFilters
+                    .isEmpty()
             )
         }
 
@@ -548,7 +569,7 @@ class HistoryViewModelTest {
         }
 
     @Test
-    fun taskUncheckRemovesHistory(): Unit =
+    fun taskUncheckRemovesCalendarStamps(): Unit =
         runBlocking {
             val taskId = addTask()
 
@@ -556,12 +577,15 @@ class HistoryViewModelTest {
                 awaitState {
                     it.tasks.allTasks.any { row ->
                         row.id == taskId &&
-                                row.completionEpochDay != null
+                                row.completionEpochDay !=
+                                null
                     }
                 }
                     .tasks
                     .allTasks
-                    .single { it.id == taskId }
+                    .single {
+                        it.id == taskId
+                    }
 
             val day =
                 requireNotNull(
@@ -575,52 +599,60 @@ class HistoryViewModelTest {
                     COMPLETION_TIME,
             )
 
-            val log =
-                awaitState {
-                    it.tasks.logDays
-                        .flatMap { dayState ->
-                            dayState.logs
-                        }
-                        .any {
-                            it.taskId == taskId
-                        }
-                }
-                    .tasks
-                    .logDays
-                    .flatMap { it.logs }
-                    .single {
-                        it.taskId == taskId
+            val date =
+                LocalDate.ofEpochDay(day)
+
+            awaitState {
+                it.tasks
+                    .stampCalendar
+                    .days
+                    .single { calendarDay ->
+                        calendarDay.date == date
                     }
+                    .stampKeys
+                    .isNotEmpty()
+            }
 
             viewModel.onAction(
                 HistoryAction.SetTaskCompletion(
                     taskId = taskId,
-                    scheduledEpochDay =
-                        log.date.toEpochDay(),
+                    scheduledEpochDay = day,
                     completed = false,
                 )
             )
 
             val state =
                 awaitState {
-                    it.tasks.logDays
-                        .flatMap { dayState ->
-                            dayState.logs
+                    !it.tasks.allTasks
+                        .single { row ->
+                            row.id == taskId
                         }
-                        .none {
-                            it.id == log.id
-                        }
+                        .isCompleted &&
+                            it.tasks
+                                .stampCalendar
+                                .days
+                                .single {
+                                        calendarDay ->
+                                    calendarDay.date ==
+                                            date
+                                }
+                                .stampKeys
+                                .isEmpty()
                 }
 
             assertFalse(
                 state.tasks.allTasks
-                    .single { it.id == taskId }
+                    .single {
+                        it.id == taskId
+                    }
                     .isCompleted
             )
 
             val storedLogs =
                 repository.observeLogs()
-                    .first { it.size == 2 }
+                    .first {
+                        it.size == 2
+                    }
 
             assertEquals(
                 1,

@@ -178,12 +178,6 @@ data class HistoryStampCalendarUiState(
     val selectedDate: LocalDate? = null,
 )
 
-data class HistoryGraphUiState(
-    val id: String,
-    val title: String,
-    val message: String,
-)
-
 data class HistoryTaskUiState(
     val id: Long,
     val name: String,
@@ -196,51 +190,17 @@ data class HistoryTaskUiState(
     val isArchived: Boolean = false,
 )
 
-data class HistoryTaskLogUiState(
-    val id: Long,
-    val taskId: Long,
-    val taskName: String,
-    val category: String?,
-    val date: LocalDate,
-    val completedAtMillis: Long,
-    val isTaskCompletionChanging: Boolean =
-        false,
-)
-
-data class HistoryTaskDayUiState(
-    val date: LocalDate,
-    val logs: List<HistoryTaskLogUiState>,
-)
-
 data class TaskHistoryUiState(
     val page: TaskHistoryPage =
         TaskHistoryPage.DASHBOARD,
     val inspectedTaskId: Long? = null,
     val allTasks: List<HistoryTaskUiState> =
         emptyList(),
-    val logDays: List<HistoryTaskDayUiState> =
-        emptyList(),
     val deleteConfirmation:
     HistoryDeleteUiState? = null,
     val stampCalendar:
     HistoryStampCalendarUiState =
         HistoryStampCalendarUiState(),
-    val categoryGraph: HistoryGraphUiState =
-        HistoryGraphUiState(
-            id = "task_categories",
-            title = "Tasks completed by category",
-            message =
-                "Category graph placeholder",
-        ),
-    val pinnedGraphs: List<HistoryGraphUiState> =
-        listOf(
-            HistoryGraphUiState(
-                id = "pinned_preview",
-                title = "Pinned graph",
-                message =
-                    "Pinned category and task graphs will appear here.",
-            )
-        ),
     val operationError: String? = null,
     val showArchivedTasks: Boolean = false,
 ) {

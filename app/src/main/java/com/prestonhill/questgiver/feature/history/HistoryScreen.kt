@@ -75,10 +75,6 @@ object HistoryTags {
         "history_task_dashboard"
     const val ALL_TASKS =
         "history_all_tasks"
-    const val CATEGORY_GRAPH =
-        "history_category_graph"
-    const val PINNED_GRAPHS =
-        "history_pinned_graphs"
 
     const val TASK_HISTORY_PLACEHOLDER =
         "history_task_history_placeholder"
@@ -2169,44 +2165,6 @@ private fun TaskDashboard(
         },
     )
 
-}
-
-@Composable
-private fun GraphPlaceholder(
-    graph: HistoryGraphUiState,
-    modifier: Modifier = Modifier,
-) {
-    Card(
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement =
-                Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                text = graph.title,
-                style =
-                    MaterialTheme
-                        .typography.titleMedium,
-            )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp)
-                    .background(
-                        MaterialTheme
-                            .colorScheme
-                            .surfaceVariant
-                    ),
-                contentAlignment =
-                    Alignment.Center,
-            ) {
-                Text(graph.message)
-            }
-        }
-    }
 }
 
 @Composable

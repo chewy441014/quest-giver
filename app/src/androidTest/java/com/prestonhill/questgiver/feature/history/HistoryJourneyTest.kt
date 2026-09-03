@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -15,6 +16,9 @@ import androidx.room3.Room
 import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import com.prestonhill.questgiver.core.settings.AppSettings
 import com.prestonhill.questgiver.data.local.database.QuestGiverDatabase
 import com.prestonhill.questgiver.data.local.database.entity.TaskEntity
@@ -125,6 +129,225 @@ class HistoryJourneyTest {
         openArchivedTasks()
         deleteTask()
         verifyDeletion()
+    }
+
+    @Test
+    fun taskCalendarJourney(): Unit {
+        seedCalendarTask()
+        filterCalendarToRecurringTask()
+        inspectCalendarDay()
+        removeCompletionFromHistory()
+        verifyCalendarCleared()
+    }
+
+    private fun seedCalendarTask() {
+        runBlocking {
+            taskId =
+                repository.createTask(
+                    TaskEntity(
+                        name =
+                            CALENDAR_TASK_NAME,
+                        category =
+                            CALENDAR_CATEGORY,
+                        displayOrder = 0,
+                        scheduleType =
+                            TaskScheduleTypeDb.DAILY,
+                        recurrenceStartEpochDay =
+                            DAY,
+                        createdAtEpochMillis =
+                            CLOCK.millis(),
+                    )
+                )
+
+            assertEquals(
+                TaskCompletionResult.SUCCESS,
+                repository.complete(
+                    taskId = taskId,
+                    scheduledEpochDay = DAY,
+                    completionTimestampMillis =
+                        CLOCK.millis(),
+                    recordedTimestampMillis =
+                        CLOCK.millis(),
+                ),
+            )
+        }
+
+        waitForTag(
+            HistoryTags.taskStampFilter(
+                recurringStampKey
+            )
+        )
+
+        waitForTag(
+            HistoryTags.taskStampFilter(
+                CATEGORY_STAMP_KEY
+            )
+        )
+    }
+    private fun filterCalendarToRecurringTask() {
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.TASK_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags.taskStampGroup(
+                        "Categories"
+                    )
+                )
+            )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.taskStampGroup(
+                    "Categories"
+                )
+            )
+            .performClick()
+    }
+
+    private fun inspectCalendarDay() {
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.TASK_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags.taskStampDay(
+                        CALENDAR_DATE
+                    )
+                )
+            )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.taskStampDay(
+                    CALENDAR_DATE
+                )
+            )
+            .performClick()
+
+        waitForTag(
+            HistoryTags.taskDayStamp(
+                recurringStampKey
+            )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.taskDayStamp(
+                    recurringStampKey
+                )
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.taskDayStamp(
+                    CATEGORY_STAMP_KEY
+                )
+            )
+            .assertDoesNotExist()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.TASK_STAMP_DAY_CLOSE
+            )
+            .performClick()
+    }
+
+    private fun removeCompletionFromHistory() {
+        composeRule
+            .onNodeWithText("View all tasks")
+            .performScrollTo()
+            .performClick()
+
+        waitForTag(HistoryTags.ALL_TASKS)
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.task(taskId)
+            )
+            .performClick()
+
+        waitForTag(
+            HistoryTags.taskCompletion(
+                taskId
+            )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.taskCompletion(
+                    taskId
+                )
+            )
+            .performClick()
+
+        /*
+         * Wait for the repository operation rather
+         * than assuming Compose idleness means the
+         * ViewModel coroutine has completed.
+         */
+        runBlocking {
+            repository.observeLogs()
+                .first { logs ->
+                    logs.any {
+                        it.taskId == taskId &&
+                                it.delta == -1
+                    }
+                }
+        }
+
+        composeRule.waitForIdle()
+
+        composeRule
+            .onNodeWithText("Close")
+            .performClick()
+
+        composeRule
+            .onNodeWithText("Back")
+            .performClick()
+
+        waitForTag(
+            HistoryTags.TASK_STAMP_CALENDAR
+        )
+    }
+
+    private fun verifyCalendarCleared() {
+        waitForNoTag(
+            HistoryTags.taskStampFilter(
+                recurringStampKey
+            )
+        )
+
+        waitForNoTag(
+            HistoryTags.taskStampFilter(
+                CATEGORY_STAMP_KEY
+            )
+        )
+
+        runBlocking {
+            val logs =
+                repository.observeLogs()
+                    .first {
+                        it.size == 2
+                    }
+
+            assertEquals(
+                1,
+                logs.count {
+                    it.delta == 1
+                },
+            )
+
+            assertEquals(
+                1,
+                logs.count {
+                    it.delta == -1
+                },
+            )
+        }
     }
 
     private fun seedArchivedTask() {
@@ -270,6 +493,9 @@ class HistoryJourneyTest {
         }
     }
 
+    private val recurringStampKey: String
+        get() = "task:$taskId"
+
     private companion object {
         const val TASK_NAME =
             "Archived test task"
@@ -287,5 +513,17 @@ class HistoryJourneyTest {
                     "America/Chicago"
                 ),
             )
+
+        const val CALENDAR_TASK_NAME =
+            "Daily planning"
+
+        const val CALENDAR_CATEGORY =
+            "General"
+
+        const val CATEGORY_STAMP_KEY =
+            "category:general"
+
+        val CALENDAR_DATE: LocalDate =
+            LocalDate.ofEpochDay(DAY)
     }
 }

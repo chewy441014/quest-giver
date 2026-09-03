@@ -72,56 +72,6 @@ class TaskHistoryMapper {
             )
         }
 
-    fun logs(
-        logs: List<TaskLogEntity>,
-        tasks: List<TaskEntity> = emptyList(),
-        changingTaskIds: Set<Long> = emptySet(),
-    ): List<HistoryTaskDayUiState> {
-        val activeLogs =
-            activeLogs(
-                logs = logs,
-                tasks = tasks,
-            )
-
-        return activeLogs
-            .map { log ->
-                HistoryTaskLogUiState(
-                    id = log.id,
-                    taskId = log.taskId,
-                    taskName =
-                        log.taskNameSnapshot,
-                    category =
-                        log.categorySnapshot,
-                    date =
-                        LocalDate.ofEpochDay(
-                            log.scheduledEpochDay
-                        ),
-                    completedAtMillis =
-                        log.completionTimestampMillis,
-                    isTaskCompletionChanging =
-                        log.taskId in changingTaskIds,
-                )
-            }
-            .sortedWith(
-                compareByDescending<
-                        HistoryTaskLogUiState
-                        > { it.date }
-                    .thenByDescending {
-                        it.completedAtMillis
-                    }
-                    .thenByDescending {
-                        it.id
-                    }
-            )
-            .groupBy { it.date }
-            .map { (date, dayLogs) ->
-                HistoryTaskDayUiState(
-                    date = date,
-                    logs = dayLogs,
-                )
-            }
-    }
-
     fun stampCalendar(
         tasks: List<TaskEntity>,
         logs: List<TaskLogEntity>,
