@@ -13,6 +13,7 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performScrollToNode
 import java.time.YearMonth
 import java.time.LocalDate
@@ -92,6 +93,62 @@ class HistoryScreenTest {
 
         composeRule
             .onNodeWithText("60 g")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun nutritionChartsShowGoalRanges(): Unit {
+        showScreen(
+            state =
+                nutritionScreenState(
+                    nutrition =
+                        nutritionState().copy(
+                            calorieGoal =
+                                1_500.0,
+                            maximumCalorieGoal =
+                                2_200.0,
+                            proteinGoalGrams =
+                                40.0,
+                            maximumProteinGoalGrams =
+                                160.0,
+                        )
+                )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags
+                        .NUTRITION_CALORIE_CHART
+                )
+            )
+
+        composeRule
+            .onNodeWithText(
+                "Goal: 1500–2200 kcal"
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags
+                        .NUTRITION_PROTEIN_CHART
+                )
+            )
+
+        composeRule
+            .onNodeWithText(
+                "Goal: 40–160 g"
+            )
             .assertIsDisplayed()
     }
 
@@ -617,12 +674,94 @@ class HistoryScreenTest {
                 )
         )
 
+        val emptyNutrition =
+            nutritionState().copy(
+                selectedDays = emptyList(),
+                calorieStatistics =
+                    NutritionHistoryMetricUiState(),
+                proteinStatistics =
+                    NutritionHistoryMetricUiState(),
+            )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_CALORIE_CHART
+            )
+            .assertDoesNotExist()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_PROTEIN_CHART
+            )
+            .assertDoesNotExist()
+
         composeRule
             .onNodeWithText(
                 "No nutrition was logged " +
                         "during this range."
             )
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun nutritionChartSupportsOneLoggedDay(): Unit {
+        val day =
+            NutritionHistoryDayUiState(
+                date = CURRENT_DATE,
+                calories = 1_500.0,
+                proteinGrams = 40.0,
+                hasLogs = true,
+                calorieGoalMet = true,
+                proteinGoalMet = true,
+            )
+
+        showScreen(
+            state =
+                nutritionScreenState(
+                    nutrition =
+                        nutritionState().copy(
+                            selectedDays =
+                                listOf(day),
+                            calorieStatistics =
+                                NutritionHistoryMetricUiState(
+                                    loggedDays = 1,
+                                    average = 1_500.0,
+                                    minimumNonZero =
+                                        1_500.0,
+                                    maximum = 1_500.0,
+                                ),
+                            proteinStatistics =
+                                NutritionHistoryMetricUiState(
+                                    loggedDays = 1,
+                                    average = 40.0,
+                                    minimumNonZero =
+                                        40.0,
+                                    maximum = 40.0,
+                                ),
+                        )
+                )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags
+                        .NUTRITION_CALORIE_CHART
+                )
+            )
+
+        composeRule
+            .onNodeWithContentDescription(
+                "Daily calories chart with " +
+                        "1 logged days"
+            )
+            .assertExists()
     }
 
     @Test
@@ -670,6 +809,77 @@ class HistoryScreenTest {
             listOf(HistoryAction.DismissTask),
             actions,
         )
+    }
+
+    @Test
+    fun nutritionChartsAreDisplayed(): Unit {
+        showScreen(
+            state = nutritionScreenState()
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags
+                        .NUTRITION_CALORIE_CHART
+                )
+            )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_CALORIE_CHART
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithContentDescription(
+                "Daily calories chart with " +
+                        "2 logged days"
+            )
+            .assertExists()
+
+        composeRule
+            .onNodeWithText(
+                "Goal: 1500+ kcal"
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags
+                        .NUTRITION_PROTEIN_CHART
+                )
+            )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_PROTEIN_CHART
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithContentDescription(
+                "Daily protein chart with " +
+                        "2 logged days"
+            )
+            .assertExists()
+
+        composeRule
+            .onNodeWithText(
+                "Goal: 40+ g"
+            )
+            .assertIsDisplayed()
     }
 
     @Test
@@ -964,6 +1174,35 @@ class HistoryScreenTest {
             calendarMonth =
                 YearMonth.from(
                     CURRENT_DATE
+                ),
+            selectedDays =
+                listOf(
+                    NutritionHistoryDayUiState(
+                        date =
+                            CURRENT_DATE.minusDays(2),
+                        calories = 1_200.0,
+                        proteinGrams = 40.0,
+                        hasLogs = true,
+                        calorieGoalMet = false,
+                        proteinGoalMet = true,
+                    ),
+                    NutritionHistoryDayUiState(
+                        date =
+                            CURRENT_DATE.minusDays(1),
+                        calories = 0.0,
+                        proteinGrams = 0.0,
+                        hasLogs = false,
+                        calorieGoalMet = false,
+                        proteinGoalMet = false,
+                    ),
+                    NutritionHistoryDayUiState(
+                        date = CURRENT_DATE,
+                        calories = 1_800.0,
+                        proteinGrams = 60.0,
+                        hasLogs = true,
+                        calorieGoalMet = true,
+                        proteinGoalMet = true,
+                    ),
                 ),
         )
 

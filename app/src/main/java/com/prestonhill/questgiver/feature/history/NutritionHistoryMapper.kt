@@ -144,6 +144,17 @@ class NutritionHistoryMapper {
                 ),
             calendarMonth = calendarMonth,
             calendarDays = calendarDays,
+            calorieGoal =
+                settings.calorieGoal,
+
+            maximumCalorieGoal =
+                settings.maximumCalorieGoal,
+
+            proteinGoalGrams =
+                settings.proteinGoalGrams,
+
+            maximumProteinGoalGrams =
+                settings.maximumProteinGoalGrams,
         )
     }
 

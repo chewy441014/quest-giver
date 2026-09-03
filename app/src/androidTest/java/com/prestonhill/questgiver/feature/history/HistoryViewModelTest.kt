@@ -1125,6 +1125,37 @@ class HistoryViewModelTest {
                         }
                 }
 
+            assertEquals(
+                1_000.0,
+                outside.nutrition.calorieGoal,
+                0.0,
+            )
+
+            assertEquals(
+                1_400.0,
+                requireNotNull(
+                    outside.nutrition
+                        .maximumCalorieGoal
+                ),
+                0.0,
+            )
+
+            assertEquals(
+                20.0,
+                outside.nutrition
+                    .proteinGoalGrams,
+                0.0,
+            )
+
+            assertEquals(
+                35.0,
+                requireNotNull(
+                    outside.nutrition
+                        .maximumProteinGoalGrams
+                ),
+                0.0,
+            )
+
             val today =
                 outside.nutrition
                     .selectedDays

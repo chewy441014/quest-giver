@@ -43,6 +43,14 @@ import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.runtime.remember
 import com.prestonhill.questgiver.feature.nutrition.nutritionAmountText
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import kotlin.math.ceil
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -89,6 +97,12 @@ object HistoryTags {
 
     const val NUTRITION_RANGE_LIST =
         "history_nutrition_range_list"
+
+    const val NUTRITION_CALORIE_CHART =
+        "history_nutrition_calorie_chart"
+
+    const val NUTRITION_PROTEIN_CHART =
+        "history_nutrition_protein_chart"
 
     fun nutritionRange(
         preset: NutritionHistoryRangePreset,
@@ -394,6 +408,42 @@ private fun NutritionHistoryDashboard(
                             .NUTRITION_PROTEIN_STATS,
                 )
             }
+
+            item {
+                NutritionHistoryChart(
+                    title = "Daily calories",
+                    days = state.selectedDays,
+                    value = {
+                        it.calories
+                    },
+                    minimumGoal =
+                        state.calorieGoal,
+                    maximumGoal =
+                        state.maximumCalorieGoal,
+                    unit = "kcal",
+                    tag =
+                        HistoryTags
+                            .NUTRITION_CALORIE_CHART,
+                )
+            }
+
+            item {
+                NutritionHistoryChart(
+                    title = "Daily protein",
+                    days = state.selectedDays,
+                    value = {
+                        it.proteinGrams
+                    },
+                    minimumGoal =
+                        state.proteinGoalGrams,
+                    maximumGoal =
+                        state.maximumProteinGoalGrams,
+                    unit = "g",
+                    tag =
+                        HistoryTags
+                            .NUTRITION_PROTEIN_CHART,
+                )
+            }
         }
     }
 
@@ -402,6 +452,356 @@ private fun NutritionHistoryDashboard(
             state = state,
             onAction = onAction,
         )
+    }
+}
+
+@Composable
+private fun NutritionHistoryChart(
+    title: String,
+    days:
+    List<NutritionHistoryDayUiState>,
+    value:
+        (NutritionHistoryDayUiState) ->
+    Double,
+    minimumGoal: Double,
+    maximumGoal: Double?,
+    unit: String,
+    tag: String,
+) {
+    val loggedPoints =
+        days.mapIndexedNotNull {
+                index,
+                day,
+            ->
+            if (day.hasLogs) {
+                index to value(day)
+            } else {
+                null
+            }
+        }
+
+    val highestValue =
+        loggedPoints.maxOfOrNull {
+            it.second
+        } ?: 0.0
+
+    val chartMaximum =
+        nutritionChartMaximum(
+            maxOf(
+                highestValue,
+                minimumGoal,
+                maximumGoal ?: 0.0,
+            )
+        )
+
+    val lineColor =
+        MaterialTheme
+            .colorScheme.primary
+
+    val goalColor =
+        MaterialTheme
+            .colorScheme.tertiary
+
+    val axisColor =
+        MaterialTheme
+            .colorScheme.outlineVariant
+
+    val dateFormatter =
+        remember {
+            DateTimeFormatter.ofPattern(
+                "MMM d",
+                Locale.getDefault(),
+            )
+        }
+
+    Card(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .testTag(tag)
+                .semantics {
+                    contentDescription =
+                        "$title chart with " +
+                                "${loggedPoints.size} " +
+                                "logged days"
+                },
+    ) {
+        Column(
+            modifier =
+                Modifier.padding(16.dp),
+            verticalArrangement =
+                Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                title,
+                style =
+                    MaterialTheme
+                        .typography.titleMedium,
+            )
+
+            Text(
+                "Goal: " +
+                        historyGoalText(
+                            minimum =
+                                minimumGoal,
+                            maximum =
+                                maximumGoal,
+                            unit = unit,
+                        ),
+                style =
+                    MaterialTheme
+                        .typography.bodySmall,
+            )
+
+            Row(
+                modifier =
+                    Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier =
+                        Modifier
+                            .width(56.dp)
+                            .height(180.dp),
+                    verticalArrangement =
+                        Arrangement.SpaceBetween,
+                    horizontalAlignment =
+                        Alignment.End,
+                ) {
+                    Text(
+                        "${nutritionAmountText(chartMaximum)} $unit",
+                        style =
+                            MaterialTheme
+                                .typography.labelSmall,
+                    )
+
+                    Text(
+                        "0 $unit",
+                        style =
+                            MaterialTheme
+                                .typography.labelSmall,
+                    )
+                }
+
+                Canvas(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .height(180.dp)
+                            .padding(
+                                start = 8.dp
+                            )
+                ) {
+                    val horizontalPadding =
+                        6.dp.toPx()
+
+                    val verticalPadding =
+                        6.dp.toPx()
+
+                    val plotWidth =
+                        size.width -
+                                horizontalPadding * 2f
+
+                    val plotHeight =
+                        size.height -
+                                verticalPadding * 2f
+
+                    fun xFor(
+                        index: Int,
+                    ): Float =
+                        if (days.size <= 1) {
+                            size.width / 2f
+                        } else {
+                            horizontalPadding +
+                                    (
+                                            index.toFloat() /
+                                                    (
+                                                            days.size -
+                                                                    1
+                                                            ).toFloat()
+                                            ) *
+                                    plotWidth
+                        }
+
+                    fun yFor(
+                        amount: Double,
+                    ): Float {
+                        val fraction =
+                            (
+                                    amount /
+                                            chartMaximum
+                                    )
+                                .toFloat()
+                                .coerceIn(
+                                    0f,
+                                    1f,
+                                )
+
+                        return verticalPadding +
+                                (
+                                        1f - fraction
+                                        ) *
+                                plotHeight
+                    }
+
+                    drawLine(
+                        color = axisColor,
+                        start =
+                            Offset(
+                                horizontalPadding,
+                                yFor(0.0),
+                            ),
+                        end =
+                            Offset(
+                                size.width -
+                                        horizontalPadding,
+                                yFor(0.0),
+                            ),
+                        strokeWidth =
+                            1.dp.toPx(),
+                    )
+
+                    val dashed =
+                        PathEffect
+                            .dashPathEffect(
+                                floatArrayOf(
+                                    10.dp.toPx(),
+                                    6.dp.toPx(),
+                                )
+                            )
+
+                    drawLine(
+                        color = goalColor,
+                        start =
+                            Offset(
+                                horizontalPadding,
+                                yFor(
+                                    minimumGoal
+                                ),
+                            ),
+                        end =
+                            Offset(
+                                size.width -
+                                        horizontalPadding,
+                                yFor(
+                                    minimumGoal
+                                ),
+                            ),
+                        strokeWidth =
+                            2.dp.toPx(),
+                        pathEffect = dashed,
+                    )
+
+                    maximumGoal?.let {
+                            maximum,
+                        ->
+                        drawLine(
+                            color = goalColor,
+                            start =
+                                Offset(
+                                    horizontalPadding,
+                                    yFor(maximum),
+                                ),
+                            end =
+                                Offset(
+                                    size.width -
+                                            horizontalPadding,
+                                    yFor(maximum),
+                                ),
+                            strokeWidth =
+                                2.dp.toPx(),
+                            pathEffect =
+                                dashed,
+                        )
+                    }
+
+                    val offsets =
+                        loggedPoints.map {
+                                (index, amount),
+                            ->
+                            Offset(
+                                x = xFor(index),
+                                y = yFor(amount),
+                            )
+                        }
+
+                    if (offsets.size > 1) {
+                        val path =
+                            Path().apply {
+                                moveTo(
+                                    offsets.first().x,
+                                    offsets.first().y,
+                                )
+
+                                offsets
+                                    .drop(1)
+                                    .forEach {
+                                            point ->
+                                        lineTo(
+                                            point.x,
+                                            point.y,
+                                        )
+                                    }
+                            }
+
+                        drawPath(
+                            path = path,
+                            color = lineColor,
+                            style =
+                                Stroke(
+                                    width =
+                                        3.dp.toPx(),
+                                    cap =
+                                        StrokeCap.Round,
+                                ),
+                        )
+                    }
+
+                    offsets.forEach { point ->
+                        drawCircle(
+                            color = lineColor,
+                            radius =
+                                4.dp.toPx(),
+                            center = point,
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = 64.dp
+                        ),
+                horizontalArrangement =
+                    Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    days.firstOrNull()
+                        ?.date
+                        ?.format(
+                            dateFormatter
+                        )
+                        .orEmpty(),
+                    style =
+                        MaterialTheme
+                            .typography.labelSmall,
+                )
+
+                Text(
+                    days.lastOrNull()
+                        ?.date
+                        ?.format(
+                            dateFormatter
+                        )
+                        .orEmpty(),
+                    style =
+                        MaterialTheme
+                            .typography.labelSmall,
+                )
+            }
+        }
     }
 }
 
@@ -1192,6 +1592,47 @@ private fun EmptyHistory(
             Text(message)
         }
     }
+}
+
+private fun historyGoalText(
+    minimum: Double,
+    maximum: Double?,
+    unit: String,
+): String =
+    if (maximum == null) {
+        "${nutritionAmountText(minimum)}+ $unit"
+    } else {
+        "${nutritionAmountText(minimum)}–" +
+                "${nutritionAmountText(maximum)} $unit"
+    }
+
+private fun nutritionChartMaximum(
+    highestValue: Double,
+): Double {
+    if (
+        !highestValue.isFinite() ||
+        highestValue <= 0.0
+    ) {
+        return 1.0
+    }
+
+    val step =
+        when {
+            highestValue >= 1_000.0 ->
+                500.0
+
+            highestValue >= 100.0 ->
+                50.0
+
+            highestValue >= 10.0 ->
+                5.0
+
+            else -> 1.0
+        }
+
+    return ceil(
+        highestValue * 1.05 / step
+    ) * step
 }
 
 private fun LocalDate.utcMillis(): Long =

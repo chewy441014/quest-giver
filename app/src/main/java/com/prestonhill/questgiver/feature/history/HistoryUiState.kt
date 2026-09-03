@@ -1,5 +1,6 @@
 package com.prestonhill.questgiver.feature.history
 
+import com.prestonhill.questgiver.core.settings.AppSettings
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -97,6 +98,14 @@ data class NutritionHistoryUiState(
     val currentDate: LocalDate? = null,
     val showCustomRangePicker:
     Boolean = false,
+    val calorieGoal: Double =
+        AppSettings.DEFAULT_CALORIE_GOAL,
+    val maximumCalorieGoal: Double? =
+        null,
+    val proteinGoalGrams: Double =
+        AppSettings.DEFAULT_PROTEIN_GOAL_GRAMS,
+    val maximumProteinGoalGrams:
+    Double? = null,
 )
 
 data class HistoryDeleteUiState(

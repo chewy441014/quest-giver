@@ -266,6 +266,34 @@ class NutritionHistoryMapperTest {
             state.customRangeProtein
                 .totalDays,
         )
+
+        assertEquals(
+            1_500.0,
+            state.calorieGoal,
+            TOLERANCE,
+        )
+
+        assertEquals(
+            2_200.0,
+            requireNotNull(
+                state.maximumCalorieGoal
+            ),
+            TOLERANCE,
+        )
+
+        assertEquals(
+            40.0,
+            state.proteinGoalGrams,
+            TOLERANCE,
+        )
+
+        assertEquals(
+            160.0,
+            requireNotNull(
+                state.maximumProteinGoalGrams
+            ),
+            TOLERANCE,
+        )
     }
 
     @Test
