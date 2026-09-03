@@ -155,6 +155,8 @@ class NutritionHistoryMapper {
 
             maximumProteinGoalGrams =
                 settings.maximumProteinGoalGrams,
+            calendarWeekStart =
+                settings.weekStart,
         )
     }
 

@@ -3,6 +3,7 @@ package com.prestonhill.questgiver.feature.history
 import com.prestonhill.questgiver.core.settings.AppSettings
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.DayOfWeek
 
 enum class HistorySection(
     val label: String,
@@ -15,6 +16,13 @@ enum class HistorySection(
 enum class TaskHistoryPage {
     DASHBOARD,
     ALL_TASKS,
+}
+
+enum class NutritionStampType(
+    val label: String,
+) {
+    CALORIES("Calories"),
+    PROTEIN("Protein"),
 }
 
 enum class NutritionHistoryRangePreset(
@@ -106,6 +114,15 @@ data class NutritionHistoryUiState(
         AppSettings.DEFAULT_PROTEIN_GOAL_GRAMS,
     val maximumProteinGoalGrams:
     Double? = null,
+    val selectedStampTypes:
+    Set<NutritionStampType> =
+        NutritionStampType.entries.toSet(),
+
+    val selectedCalendarDate:
+    LocalDate? = null,
+
+    val calendarWeekStart:
+    DayOfWeek = DayOfWeek.MONDAY,
 )
 
 data class HistoryDeleteUiState(

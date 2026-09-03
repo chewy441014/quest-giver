@@ -20,6 +20,7 @@ import java.time.Clock
 import java.time.ZoneId
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.time.LocalDate
+import java.time.YearMonth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -879,7 +880,7 @@ class HistoryViewModelTest {
             )
 
             assertEquals(
-                java.time.YearMonth.of(
+                YearMonth.of(
                     2026,
                     9,
                 ),
@@ -965,7 +966,7 @@ class HistoryViewModelTest {
         runBlocking {
             awaitState {
                 it.nutrition.calendarMonth ==
-                        java.time.YearMonth.of(
+                        YearMonth.of(
                             2026,
                             9,
                         )
@@ -978,7 +979,7 @@ class HistoryViewModelTest {
 
             awaitState {
                 it.nutrition.calendarMonth ==
-                        java.time.YearMonth.of(
+                        YearMonth.of(
                             2026,
                             8,
                         )
@@ -990,7 +991,7 @@ class HistoryViewModelTest {
 
             awaitState {
                 it.nutrition.calendarMonth ==
-                        java.time.YearMonth.of(
+                        YearMonth.of(
                             2026,
                             9,
                         )
@@ -1003,14 +1004,14 @@ class HistoryViewModelTest {
             val clamped =
                 awaitState {
                     it.nutrition.calendarMonth ==
-                            java.time.YearMonth.of(
+                            YearMonth.of(
                                 2026,
                                 9,
                             )
                 }
 
             assertEquals(
-                java.time.YearMonth.of(
+                YearMonth.of(
                     2026,
                     9,
                 ),
@@ -1075,6 +1076,162 @@ class HistoryViewModelTest {
                 CURRENT_DATE.dayOfMonth,
                 state.currentMonthCalories
                     .totalDays,
+            )
+        }
+
+    @Test
+    fun nutritionStampFiltersAreMultiSelect(): Unit =
+        runBlocking {
+            awaitState {
+                it.nutrition.selectedStampTypes ==
+                        NutritionStampType
+                            .entries
+                            .toSet()
+            }
+
+            viewModel.onAction(
+                HistoryAction.ToggleNutritionStamp(
+                    NutritionStampType.CALORIES
+                )
+            )
+
+            awaitState {
+                it.nutrition.selectedStampTypes ==
+                        setOf(
+                            NutritionStampType.PROTEIN
+                        )
+            }
+
+            viewModel.onAction(
+                HistoryAction.ToggleNutritionStamp(
+                    NutritionStampType.CALORIES
+                )
+            )
+
+            awaitState {
+                it.nutrition.selectedStampTypes ==
+                        NutritionStampType
+                            .entries
+                            .toSet()
+            }
+
+            viewModel.onAction(
+                HistoryAction.ToggleNutritionStamp(
+                    NutritionStampType.PROTEIN
+                )
+            )
+
+            awaitState {
+                it.nutrition.selectedStampTypes ==
+                        setOf(
+                            NutritionStampType.CALORIES
+                        )
+            }
+
+            /*
+             * Attempting to remove the final filter
+             * must leave it selected.
+             */
+            viewModel.onAction(
+                HistoryAction.ToggleNutritionStamp(
+                    NutritionStampType.CALORIES
+                )
+            )
+
+            viewModel.onAction(
+                HistoryAction.OpenNutritionCalendarDay(
+                    CURRENT_DATE
+                )
+            )
+
+            val state =
+                awaitState {
+                    it.nutrition
+                        .selectedCalendarDate ==
+                            CURRENT_DATE
+                }
+
+            assertEquals(
+                setOf(
+                    NutritionStampType.CALORIES
+                ),
+                state.nutrition
+                    .selectedStampTypes,
+            )
+        }
+
+    @Test
+    fun selectAllNutritionStampsRestoresFilters(): Unit =
+        runBlocking {
+            viewModel.onAction(
+                HistoryAction.ToggleNutritionStamp(
+                    NutritionStampType.CALORIES
+                )
+            )
+
+            awaitState {
+                it.nutrition.selectedStampTypes ==
+                        setOf(
+                            NutritionStampType.PROTEIN
+                        )
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .SelectAllNutritionStamps
+            )
+
+            val state =
+                awaitState {
+                    it.nutrition.selectedStampTypes ==
+                            NutritionStampType
+                                .entries
+                                .toSet()
+                }
+
+            assertEquals(
+                NutritionStampType
+                    .entries
+                    .toSet(),
+                state.nutrition
+                    .selectedStampTypes,
+            )
+        }
+
+    @Test
+    fun changingNutritionMonthClosesDay(): Unit =
+        runBlocking {
+            viewModel.onAction(
+                HistoryAction
+                    .OpenNutritionCalendarDay(
+                        CURRENT_DATE
+                    )
+            )
+
+            awaitState {
+                it.nutrition
+                    .selectedCalendarDate ==
+                        CURRENT_DATE
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .PreviousNutritionMonth
+            )
+
+            val state =
+                awaitState {
+                    it.nutrition.calendarMonth ==
+                            YearMonth.of(2026, 8) &&
+                            it.nutrition
+                                .selectedCalendarDate ==
+                            null
+                }
+
+            assertEquals(
+                null,
+                state.nutrition
+                    .selectedCalendarDate,
             )
         }
 

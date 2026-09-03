@@ -1,5 +1,7 @@
 package com.prestonhill.questgiver.feature.history
 
+import java.time.LocalDate
+
 sealed interface HistoryAction {
     data class SelectSection(
         val section: HistorySection,
@@ -65,6 +67,20 @@ sealed interface HistoryAction {
         HistoryAction
 
     data object DismissNutritionCustomRange :
+        HistoryAction
+
+    data class ToggleNutritionStamp(
+        val type: NutritionStampType,
+    ) : HistoryAction
+
+    data object SelectAllNutritionStamps :
+        HistoryAction
+
+    data class OpenNutritionCalendarDay(
+        val date: LocalDate,
+    ) : HistoryAction
+
+    data object DismissNutritionCalendarDay :
         HistoryAction
 
 }

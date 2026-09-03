@@ -15,6 +15,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.DayOfWeek
 
 class NutritionHistoryMapperTest {
     private val mapper =
@@ -293,6 +294,29 @@ class NutritionHistoryMapperTest {
                 state.maximumProteinGoalGrams
             ),
             TOLERANCE,
+        )
+    }
+
+    @Test
+    fun calendarUsesConfiguredWeekStart(): Unit {
+        val state =
+            map(
+                entries = emptyList(),
+                customRange =
+                    NutritionHistoryDateRange(
+                        startDate = CURRENT_DATE,
+                        endDate = CURRENT_DATE,
+                    ),
+                settings =
+                    AppSettings(
+                        weekStart =
+                            DayOfWeek.SUNDAY
+                    ),
+            )
+
+        assertEquals(
+            DayOfWeek.SUNDAY,
+            state.calendarWeekStart,
         )
     }
 

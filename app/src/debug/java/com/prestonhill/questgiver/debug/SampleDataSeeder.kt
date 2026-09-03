@@ -78,11 +78,6 @@ class SampleDataSeeder(
                     )
                     .date
 
-            seedNutrition(
-                currentDate = currentDate,
-                calculator = calculator,
-            )
-
             val nutrition =
                 seedNutrition(
                     currentDate = currentDate,

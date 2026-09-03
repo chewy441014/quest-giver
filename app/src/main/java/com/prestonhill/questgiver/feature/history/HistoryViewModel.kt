@@ -290,7 +290,13 @@ class HistoryViewModel(
                     nutrition.copy(
                         showCustomRangePicker =
                             navigation
-                                .showNutritionCustomRangePicker
+                                .showNutritionCustomRangePicker,
+                        selectedStampTypes =
+                            navigation
+                                .selectedNutritionStampTypes,
+                        selectedCalendarDate =
+                            navigation
+                                .selectedNutritionCalendarDate,
                     )
             )
         }
@@ -428,6 +434,55 @@ class HistoryViewModel(
                     action.taskId
                 )
 
+            is HistoryAction.ToggleNutritionStamp ->
+                nav.update { current ->
+                    val selected =
+                        current
+                            .selectedNutritionStampTypes
+
+                    val updated =
+                        if (action.type in selected) {
+                            if (selected.size == 1) {
+                                selected
+                            } else {
+                                selected - action.type
+                            }
+                        } else {
+                            selected + action.type
+                        }
+
+                    current.copy(
+                        selectedNutritionStampTypes =
+                            updated
+                    )
+                }
+
+            HistoryAction.SelectAllNutritionStamps ->
+                nav.update {
+                    it.copy(
+                        selectedNutritionStampTypes =
+                            NutritionStampType
+                                .entries
+                                .toSet()
+                    )
+                }
+
+            is HistoryAction.OpenNutritionCalendarDay ->
+                nav.update {
+                    it.copy(
+                        selectedNutritionCalendarDate =
+                            action.date
+                    )
+                }
+
+            HistoryAction.DismissNutritionCalendarDay ->
+                nav.update {
+                    it.copy(
+                        selectedNutritionCalendarDate =
+                            null
+                    )
+                }
+
             HistoryAction.ConfirmDelete ->
                 confirmDelete()
 
@@ -496,7 +551,8 @@ class HistoryViewModel(
                                         .nutritionCalendarMonth
                                         ?: currentMonth
                                     )
-                                .minusMonths(1)
+                                .minusMonths(1),
+                        selectedNutritionCalendarDate = null,
                     )
                 }
 
@@ -518,7 +574,8 @@ class HistoryViewModel(
                                 .plusMonths(1)
                                 .coerceAtMost(
                                     currentMonth
-                                )
+                                ),
+                        selectedNutritionCalendarDate = null,
                     )
                 }
 
@@ -882,6 +939,8 @@ private data class HistoryNavState(
     val nutritionCustomRange: NutritionHistoryDateRange? = null,
     val nutritionCalendarMonth: YearMonth? = null,
     val showNutritionCustomRangePicker: Boolean = false,
+    val selectedNutritionStampTypes: Set<NutritionStampType> = NutritionStampType.entries.toSet(),
+    val selectedNutritionCalendarDate: LocalDate? = null,
 )
 
 private fun HistoryNavState.clearOverlays() =

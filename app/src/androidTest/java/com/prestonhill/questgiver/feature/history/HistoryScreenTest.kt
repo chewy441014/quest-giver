@@ -78,6 +78,17 @@ class HistoryScreenTest {
 
         composeRule
             .onNodeWithTag(
+                HistoryTags.NUTRITION_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags
+                        .NUTRITION_PROTEIN_STATS
+                )
+            )
+
+        composeRule
+            .onNodeWithTag(
                 HistoryTags
                     .NUTRITION_PROTEIN_STATS
             )
@@ -1065,6 +1076,316 @@ class HistoryScreenTest {
     }
 
     @Test
+    fun nutritionGoalProgressIsDisplayed(): Unit {
+        showScreen(
+            state = nutritionScreenState()
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.NUTRITION_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags
+                        .NUTRITION_GOAL_PROGRESS
+                )
+            )
+
+        composeRule
+            .onNodeWithText("1/2 · 50%")
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("10/31 · 32%")
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("2/2 · 100%")
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("20/31 · 65%")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun previousNutritionMonthSendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = nutritionScreenState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.NUTRITION_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags
+                        .NUTRITION_CALENDAR
+                )
+            )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_CALENDAR_PREVIOUS
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .PreviousNutritionMonth
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun currentNutritionMonthDisablesNext(): Unit {
+        showScreen(
+            state = nutritionScreenState()
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.NUTRITION_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags
+                        .NUTRITION_CALENDAR
+                )
+            )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_CALENDAR_NEXT
+            )
+            .assertIsNotEnabled()
+    }
+
+    @Test
+    fun earlierNutritionMonthCanMoveNext(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state =
+                nutritionScreenState(
+                    nutrition =
+                        nutritionState().copy(
+                            calendarMonth =
+                                YearMonth.from(
+                                    CURRENT_DATE
+                                ).minusMonths(1)
+                        )
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.NUTRITION_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags
+                        .NUTRITION_CALENDAR
+                )
+            )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .NUTRITION_CALENDAR_NEXT
+            )
+            .assertIsEnabled()
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.NextNutritionMonth
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun nutritionStampFiltersSendActions(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = nutritionScreenState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.NUTRITION_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags
+                        .NUTRITION_CALENDAR
+                )
+            )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.nutritionStampFilter(
+                    NutritionStampType.CALORIES
+                )
+            )
+            .assertIsSelected()
+            .performClick()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.NUTRITION_STAMP_ALL
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.ToggleNutritionStamp(
+                    NutritionStampType.CALORIES
+                ),
+                HistoryAction
+                    .SelectAllNutritionStamps,
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun stampedNutritionDaySendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = nutritionScreenState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.NUTRITION_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags
+                        .NUTRITION_CALENDAR
+                )
+            )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .nutritionCalendarDay(
+                        CURRENT_DATE
+                    )
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .OpenNutritionCalendarDay(
+                        CURRENT_DATE
+                    )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun nutritionDayDialogUsesSelectedFilters(): Unit {
+        showScreen(
+            state =
+                nutritionScreenState(
+                    nutrition =
+                        nutritionState().copy(
+                            selectedStampTypes =
+                                setOf(
+                                    NutritionStampType
+                                        .CALORIES
+                                ),
+                            selectedCalendarDate =
+                                CURRENT_DATE,
+                        )
+                )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.NUTRITION_DAY_DIALOG
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.nutritionDayStamp(
+                    NutritionStampType.CALORIES
+                )
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText(
+                "Calories goal met"
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.nutritionDayStamp(
+                    NutritionStampType.PROTEIN
+                )
+            )
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun nutritionDayDialogCanClose(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state =
+                nutritionScreenState(
+                    nutrition =
+                        nutritionState().copy(
+                            selectedCalendarDate =
+                                CURRENT_DATE
+                        )
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.NUTRITION_DAY_CLOSE
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .DismissNutritionCalendarDay
+            ),
+            actions,
+        )
+    }
+
+    @Test
     fun archivedTaskCanRestore(): Unit {
         val actions =
             mutableListOf<HistoryAction>()
@@ -1202,6 +1523,68 @@ class HistoryScreenTest {
                         hasLogs = true,
                         calorieGoalMet = true,
                         proteinGoalMet = true,
+                    ),
+                ),
+            currentMonthCalories =
+                NutritionGoalCompletionUiState(
+                    metDays = 1,
+                    totalDays = 2,
+                    progress = 0.5f,
+                ),
+
+            customRangeCalories =
+                NutritionGoalCompletionUiState(
+                    metDays = 10,
+                    totalDays = 31,
+                    progress = 10f / 31f,
+                ),
+
+            currentMonthProtein =
+                NutritionGoalCompletionUiState(
+                    metDays = 2,
+                    totalDays = 2,
+                    progress = 1f,
+                ),
+
+            customRangeProtein =
+                NutritionGoalCompletionUiState(
+                    metDays = 20,
+                    totalDays = 31,
+                    progress = 20f / 31f,
+                ),
+
+            calendarDays =
+                listOf(
+                    NutritionHistoryDayUiState(
+                        date =
+                            LocalDate.of(
+                                2026,
+                                9,
+                                1,
+                            ),
+                        calories = 1_200.0,
+                        proteinGrams = 50.0,
+                        hasLogs = true,
+                        calorieGoalMet = false,
+                        proteinGoalMet = true,
+                    ),
+                    NutritionHistoryDayUiState(
+                        date = CURRENT_DATE,
+                        calories = 1_800.0,
+                        proteinGrams = 60.0,
+                        hasLogs = true,
+                        calorieGoalMet = true,
+                        proteinGoalMet = true,
+                    ),
+                    NutritionHistoryDayUiState(
+                        date =
+                            CURRENT_DATE.plusDays(1),
+                        calories = 0.0,
+                        proteinGrams = 0.0,
+                        hasLogs = false,
+                        calorieGoalMet = false,
+                        proteinGoalMet = false,
+                        isFuture = true,
                     ),
                 ),
         )

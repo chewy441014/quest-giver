@@ -50,6 +50,17 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.graphics.Color
+import java.time.YearMonth
+import kotlin.math.roundToInt
+import kotlin.random.Random
 import kotlin.math.ceil
 import java.time.Instant
 import java.time.LocalDate
@@ -57,6 +68,7 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
+import androidx.compose.ui.platform.LocalLocale
 
 object HistoryTags {
     const val TASK_DASHBOARD =
@@ -103,6 +115,42 @@ object HistoryTags {
 
     const val NUTRITION_PROTEIN_CHART =
         "history_nutrition_protein_chart"
+
+    const val NUTRITION_GOAL_PROGRESS =
+        "history_nutrition_goal_progress"
+
+    const val NUTRITION_CALENDAR =
+        "history_nutrition_calendar"
+
+    const val NUTRITION_CALENDAR_PREVIOUS =
+        "history_nutrition_calendar_previous"
+
+    const val NUTRITION_CALENDAR_NEXT =
+        "history_nutrition_calendar_next"
+
+    const val NUTRITION_STAMP_ALL =
+        "history_nutrition_stamp_all"
+
+    const val NUTRITION_DAY_DIALOG =
+        "history_nutrition_day_dialog"
+
+    const val NUTRITION_DAY_CLOSE =
+        "history_nutrition_day_close"
+
+    fun nutritionStampFilter(
+        type: NutritionStampType,
+    ) =
+        "history_nutrition_stamp_${type.name}"
+
+    fun nutritionCalendarDay(
+        date: LocalDate,
+    ) =
+        "history_nutrition_day_$date"
+
+    fun nutritionDayStamp(
+        type: NutritionStampType,
+    ) =
+        "history_nutrition_day_stamp_${type.name}"
 
     fun nutritionRange(
         preset: NutritionHistoryRangePreset,
@@ -296,6 +344,17 @@ private fun NutritionHistoryDashboard(
         }
 
         item {
+            NutritionGoalProgressCard(state)
+        }
+
+        item {
+            NutritionGoalCalendar(
+                state = state,
+                onAction = onAction,
+            )
+        }
+
+        item {
             LazyRow(
                 modifier =
                     Modifier.testTag(
@@ -349,6 +408,27 @@ private fun NutritionHistoryDashboard(
                     )
                 }
             }
+
+            state.selectedCalendarDate
+                ?.let { selectedDate ->
+                    state.calendarDays
+                        .firstOrNull {
+                            it.date == selectedDate
+                        }
+                }
+                ?.let { day ->
+                    NutritionCalendarDayDialog(
+                        day = day,
+                        selectedTypes =
+                            state.selectedStampTypes,
+                        onDismiss = {
+                            onAction(
+                                HistoryAction
+                                    .DismissNutritionCalendarDay
+                            )
+                        },
+                    )
+                }
         }
 
         item {
@@ -454,6 +534,648 @@ private fun NutritionHistoryDashboard(
         )
     }
 }
+
+@Composable
+private fun NutritionGoalProgressCard(
+    state: NutritionHistoryUiState,
+) {
+    Card(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .testTag(
+                    HistoryTags
+                        .NUTRITION_GOAL_PROGRESS
+                )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement =
+                Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "Goal completion",
+                style =
+                    MaterialTheme
+                        .typography.titleMedium,
+            )
+
+            NutritionGoalProgress(
+                label = "Calories · current month",
+                completion =
+                    state.currentMonthCalories,
+                color = CALORIE_STAMP_COLOR,
+            )
+
+            NutritionGoalProgress(
+                label = "Calories · custom range",
+                completion =
+                    state.customRangeCalories,
+                color = CALORIE_STAMP_COLOR,
+            )
+
+            NutritionGoalProgress(
+                label = "Protein · current month",
+                completion =
+                    state.currentMonthProtein,
+                color = PROTEIN_STAMP_COLOR,
+            )
+
+            NutritionGoalProgress(
+                label = "Protein · custom range",
+                completion =
+                    state.customRangeProtein,
+                color = PROTEIN_STAMP_COLOR,
+            )
+        }
+    }
+}
+
+@Composable
+private fun NutritionGoalProgress(
+    label: String,
+    completion:
+    NutritionGoalCompletionUiState,
+    color: Color,
+) {
+    Column(
+        verticalArrangement =
+            Arrangement.spacedBy(4.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement =
+                Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = label,
+                style =
+                    MaterialTheme
+                        .typography.labelLarge,
+            )
+
+            Text(
+                "${completion.metDays}/" +
+                        "${completion.totalDays} · " +
+                        "${(completion.progress * 100f).roundToInt()}%"
+            )
+        }
+
+        LinearProgressIndicator(
+            progress = {
+                completion.progress
+            },
+            modifier =
+                Modifier.fillMaxWidth(),
+            color = color,
+        )
+    }
+}
+
+@Composable
+private fun NutritionGoalCalendar(
+    state: NutritionHistoryUiState,
+    onAction: (HistoryAction) -> Unit,
+) {
+    val month =
+        state.calendarMonth ?: return
+
+    val currentDate =
+        state.currentDate ?: return
+
+    val firstDay =
+        month.atDay(1)
+
+    val leadingEmptyDays =
+        (
+                firstDay.dayOfWeek.value -
+                        state.calendarWeekStart.value +
+                        7
+                ) % 7
+
+    val cells =
+        buildList<
+                NutritionHistoryDayUiState?
+                > {
+            repeat(leadingEmptyDays) {
+                add(null)
+            }
+
+            addAll(
+                state.calendarDays
+                    .sortedBy {
+                        it.date
+                    }
+            )
+
+            while (size % 7 != 0) {
+                add(null)
+            }
+        }
+
+    val weekdays =
+        (0L..6L).map {
+            state.calendarWeekStart.plus(it)
+        }
+
+    Card(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .testTag(
+                    HistoryTags
+                        .NUTRITION_CALENDAR
+                )
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement =
+                Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment =
+                    Alignment.CenterVertically,
+                horizontalArrangement =
+                    Arrangement.SpaceBetween,
+            ) {
+                TextButton(
+                    modifier =
+                        Modifier.testTag(
+                            HistoryTags
+                                .NUTRITION_CALENDAR_PREVIOUS
+                        ),
+                    onClick = {
+                        onAction(
+                            HistoryAction
+                                .PreviousNutritionMonth
+                        )
+                    },
+                ) {
+                    Text("Previous")
+                }
+
+                Text(
+                    text =
+                        month.format(
+                            DateTimeFormatter
+                                .ofPattern(
+                                    "MMMM yyyy",
+                                    LocalLocale.current.platformLocale,
+                                )
+                        ),
+                    style =
+                        MaterialTheme
+                            .typography.titleMedium,
+                )
+
+                TextButton(
+                    modifier =
+                        Modifier.testTag(
+                            HistoryTags
+                                .NUTRITION_CALENDAR_NEXT
+                        ),
+                    enabled =
+                        month.isBefore(
+                            YearMonth.from(
+                                currentDate
+                            )
+                        ),
+                    onClick = {
+                        onAction(
+                            HistoryAction
+                                .NextNutritionMonth
+                        )
+                    },
+                ) {
+                    Text("Next")
+                }
+            }
+
+            LazyRow(
+                horizontalArrangement =
+                    Arrangement.spacedBy(8.dp),
+            ) {
+                item {
+                    FilterChip(
+                        modifier =
+                            Modifier.testTag(
+                                HistoryTags
+                                    .NUTRITION_STAMP_ALL
+                            ),
+                        selected =
+                            state.selectedStampTypes
+                                .size ==
+                                    NutritionStampType
+                                        .entries.size,
+                        onClick = {
+                            onAction(
+                                HistoryAction
+                                    .SelectAllNutritionStamps
+                            )
+                        },
+                        label = {
+                            Text("All")
+                        },
+                    )
+                }
+
+                items(
+                    items =
+                        NutritionStampType.entries,
+                    key = {
+                        it.name
+                    },
+                ) { type ->
+                    FilterChip(
+                        modifier =
+                            Modifier.testTag(
+                                HistoryTags
+                                    .nutritionStampFilter(
+                                        type
+                                    )
+                            ),
+                        selected =
+                            type in
+                                    state.selectedStampTypes,
+                        onClick = {
+                            onAction(
+                                HistoryAction
+                                    .ToggleNutritionStamp(
+                                        type
+                                    )
+                            )
+                        },
+                        label = {
+                            Row(
+                                verticalAlignment =
+                                    Alignment.CenterVertically,
+                                horizontalArrangement =
+                                    Arrangement.spacedBy(
+                                        6.dp
+                                    ),
+                            ) {
+                                StampCircle(
+                                    color =
+                                        type.stampColor()
+                                )
+
+                                Text(type.label)
+                            }
+                        },
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                weekdays.forEach { weekday ->
+                    Text(
+                        text =
+                            weekday.getDisplayName(
+                                java.time.format
+                                    .TextStyle.SHORT,
+                                LocalLocale.current.platformLocale,
+                            ),
+                        modifier =
+                            Modifier.weight(1f),
+                        style =
+                            MaterialTheme
+                                .typography.labelSmall,
+                    )
+                }
+            }
+
+            cells.chunked(7)
+                .forEach { week ->
+                    Row(
+                        modifier =
+                            Modifier.fillMaxWidth()
+                    ) {
+                        week.forEach { day ->
+                            if (day == null) {
+                                Spacer(
+                                    modifier =
+                                        Modifier
+                                            .weight(1f)
+                                            .aspectRatio(1f)
+                                )
+                            } else {
+                                NutritionCalendarDayCell(
+                                    modifier =
+                                        Modifier.weight(1f),
+                                    day = day,
+                                    selectedTypes =
+                                        state
+                                            .selectedStampTypes,
+                                    onClick = {
+                                        onAction(
+                                            HistoryAction
+                                                .OpenNutritionCalendarDay(
+                                                    day.date
+                                                )
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.NutritionCalendarDayCell(
+    modifier: Modifier,
+    day: NutritionHistoryDayUiState,
+    selectedTypes:
+    Set<NutritionStampType>,
+    onClick: () -> Unit,
+) {
+    val stamps =
+        day.visibleStamps(selectedTypes)
+
+    val clickableModifier =
+        if (stamps.isEmpty()) {
+            Modifier
+        } else {
+            Modifier.clickable(
+                onClick = onClick
+            )
+        }
+
+    Box(
+        modifier =
+            modifier
+                .aspectRatio(1f)
+                .padding(2.dp)
+                .background(
+                    MaterialTheme
+                        .colorScheme
+                        .surfaceVariant
+                        .copy(
+                            alpha =
+                                if (day.isFuture) {
+                                    0.25f
+                                } else {
+                                    0.55f
+                                }
+                        )
+                )
+                .testTag(
+                    HistoryTags
+                        .nutritionCalendarDay(
+                            day.date
+                        )
+                )
+                .then(clickableModifier)
+    ) {
+        Canvas(
+            modifier =
+                Modifier
+                    .matchParentSize()
+                    .padding(
+                        start = 3.dp,
+                        top = 18.dp,
+                        end = 3.dp,
+                        bottom = 3.dp,
+                    )
+        ) {
+            val radius =
+                STAMP_RADIUS.toPx()
+
+            stamps.forEachIndexed {
+                    index,
+                    type,
+                ->
+                val random =
+                    Random(
+                        stampSeed(
+                            date = day.date,
+                            type = type,
+                            index = index,
+                        )
+                    )
+
+                val availableWidth =
+                    (
+                            size.width -
+                                    radius * 2f
+                            ).coerceAtLeast(0f)
+
+                val availableHeight =
+                    (
+                            size.height -
+                                    radius * 2f
+                            ).coerceAtLeast(0f)
+
+                drawCircle(
+                    color = type.stampColor(),
+                    radius = radius,
+                    center =
+                        Offset(
+                            x =
+                                radius +
+                                        random.nextFloat() *
+                                        availableWidth,
+                            y =
+                                radius +
+                                        random.nextFloat() *
+                                        availableHeight,
+                        ),
+                )
+            }
+        }
+
+        Text(
+            text =
+                day.date.dayOfMonth.toString(),
+            modifier =
+                Modifier.padding(4.dp),
+            style =
+                MaterialTheme
+                    .typography.labelMedium,
+            color =
+                if (day.isFuture) {
+                    MaterialTheme
+                        .colorScheme
+                        .onSurfaceVariant
+                        .copy(alpha = 0.4f)
+                } else {
+                    MaterialTheme
+                        .colorScheme
+                        .onSurfaceVariant
+                },
+        )
+    }
+}
+
+private fun NutritionHistoryDayUiState
+        .visibleStamps(
+    selectedTypes:
+    Set<NutritionStampType>,
+): List<NutritionStampType> =
+    buildList {
+        if (
+            calorieGoalMet &&
+            NutritionStampType.CALORIES in
+            selectedTypes
+        ) {
+            add(NutritionStampType.CALORIES)
+        }
+
+        if (
+            proteinGoalMet &&
+            NutritionStampType.PROTEIN in
+            selectedTypes
+        ) {
+            add(NutritionStampType.PROTEIN)
+        }
+    }
+
+private fun stampSeed(
+    date: LocalDate,
+    type: NutritionStampType,
+    index: Int,
+): Int {
+    var result =
+        date.toEpochDay().hashCode()
+
+    result =
+        31 * result +
+                type.name.hashCode()
+
+    result =
+        31 * result + index
+
+    return result
+}
+
+@Composable
+private fun NutritionCalendarDayDialog(
+    day: NutritionHistoryDayUiState,
+    selectedTypes:
+    Set<NutritionStampType>,
+    onDismiss: () -> Unit,
+) {
+    val stamps =
+        day.visibleStamps(selectedTypes)
+
+    val formatter =
+        remember {
+            DateTimeFormatter
+                .ofLocalizedDate(
+                    FormatStyle.FULL
+                )
+                .withLocale(
+                    Locale.getDefault()
+                )
+        }
+
+    AlertDialog(
+        modifier =
+            Modifier.testTag(
+                HistoryTags
+                    .NUTRITION_DAY_DIALOG
+            ),
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                day.date.format(formatter)
+            )
+        },
+        text = {
+            LazyColumn(
+                modifier =
+                    Modifier.heightIn(
+                        max = 320.dp
+                    ),
+                verticalArrangement =
+                    Arrangement.spacedBy(12.dp),
+            ) {
+                items(
+                    items = stamps,
+                    key = {
+                        it.name
+                    },
+                ) { type ->
+                    Row(
+                        modifier =
+                            Modifier.testTag(
+                                HistoryTags
+                                    .nutritionDayStamp(
+                                        type
+                                    )
+                            ),
+                        verticalAlignment =
+                            Alignment.CenterVertically,
+                        horizontalArrangement =
+                            Arrangement.spacedBy(
+                                10.dp
+                            ),
+                    ) {
+                        StampCircle(
+                            color =
+                                type.stampColor()
+                        )
+
+                        Text(
+                            "${type.label} goal met"
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                modifier =
+                    Modifier.testTag(
+                        HistoryTags
+                            .NUTRITION_DAY_CLOSE
+                    ),
+                onClick = onDismiss,
+            ) {
+                Text("Close")
+            }
+        },
+    )
+}
+
+@Composable
+private fun StampCircle(
+    color: Color,
+) {
+    Box(
+        modifier =
+            Modifier
+                .size(STAMP_DIAMETER)
+                .background(
+                    color = color,
+                    shape = CircleShape,
+                )
+    )
+}
+
+private fun NutritionStampType.stampColor():
+        Color =
+    when (this) {
+        NutritionStampType.CALORIES ->
+            CALORIE_STAMP_COLOR
+
+        NutritionStampType.PROTEIN ->
+            PROTEIN_STAMP_COLOR
+    }
+
+private val CALORIE_STAMP_COLOR =
+    Color(0xFF1976D2)
+
+private val PROTEIN_STAMP_COLOR =
+    Color(0xFF2E7D32)
+
+private val STAMP_DIAMETER = 16.dp
+private val STAMP_RADIUS = 8.dp
 
 @Composable
 private fun NutritionHistoryChart(
