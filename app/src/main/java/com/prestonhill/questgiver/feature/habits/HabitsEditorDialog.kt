@@ -68,9 +68,6 @@ fun HabitEditorDialog(
                         .fillMaxWidth()
                         .testTag(HabitTags.NAME)
                 )
-
-                SectionLabel("Category")
-
                 SectionLabel("Display section")
 
                 sections.forEach { section ->

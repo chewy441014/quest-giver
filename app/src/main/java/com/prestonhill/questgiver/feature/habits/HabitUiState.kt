@@ -1,11 +1,5 @@
 package com.prestonhill.questgiver.feature.habits
 
-enum class HabitCategory {
-    MORNING,
-    ANYTIME,
-    BEFORE_BED
-}
-
 enum class HabitDueStatus {
     DUE,
     COMPLETED,

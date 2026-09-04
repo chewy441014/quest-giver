@@ -30,9 +30,6 @@ object HabitTags {
     fun restore(habitId: Long) =
         "habit_restore_$habitId"
 
-    fun hidden(category: HabitCategory) =
-        "habit_hidden_${category.name}"
-
     fun visibility(visibility: HabitScheduleVisibility) =
         "habit_visibility_${visibility.name}"
 }
