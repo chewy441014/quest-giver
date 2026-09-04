@@ -17,6 +17,7 @@ import androidx.lifecycle.ViewModelStore
 import androidx.room3.Room
 import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
+import androidx.compose.ui.test.onAllNodesWithTag
 import com.prestonhill.questgiver.data.local.database.QuestGiverDatabase
 import com.prestonhill.questgiver.data.repository.HabitRepository
 import java.time.ZoneId
@@ -31,6 +32,8 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import com.prestonhill.questgiver.core.settings.AppSettings
+import com.prestonhill.questgiver.data.local.database.entity.DefaultHabitDisplaySections
+import com.prestonhill.questgiver.data.local.database.HABIT_DISPLAY_SECTION_CALLBACK
 import kotlinx.coroutines.flow.flowOf
 
 class HabitJourneyTest {
@@ -41,6 +44,8 @@ class HabitJourneyTest {
     private lateinit var repository: HabitRepository
     private lateinit var viewModel: HabitViewModel
     private lateinit var viewModelStore: ViewModelStore
+
+    private lateinit var habitSectionId: String
 
     private var habitId = 0L
 
@@ -56,11 +61,18 @@ class HabitJourneyTest {
             )
 
         database =
-            Room.inMemoryDatabaseBuilder<QuestGiverDatabase>(
-                context
-            )
-                .setDriver(AndroidSQLiteDriver())
-                .setQueryCoroutineContext(Dispatchers.IO)
+            Room.inMemoryDatabaseBuilder<
+                    QuestGiverDatabase
+                    >(context)
+                .setDriver(
+                    AndroidSQLiteDriver()
+                )
+                .setQueryCoroutineContext(
+                    Dispatchers.IO
+                )
+                .addCallback(
+                    HABIT_DISPLAY_SECTION_CALLBACK
+                )
                 .build()
 
         repository = HabitRepository(database)
@@ -129,6 +141,19 @@ class HabitJourneyTest {
         }
     }
 
+    private fun waitForTag(
+        tag: String,
+    ) {
+        composeRule.waitUntil(
+            timeoutMillis = 5_000
+        ) {
+            composeRule
+                .onAllNodesWithTag(tag)
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+    }
+
     private fun createHabit() {
         composeRule
             .onNodeWithTag(HabitTags.ADD)
@@ -144,12 +169,17 @@ class HabitJourneyTest {
 
         waitForText(ORIGINAL_NAME)
 
-        habitId = runBlocking {
-            repository.observeActiveHabits()
-                .first()
-                .single()
-                .id
-        }
+        val habit =
+            runBlocking {
+                repository
+                    .observeActiveHabits()
+                    .first()
+                    .single()
+            }
+
+        habitId = habit.id
+        habitSectionId =
+            habit.displaySectionId
     }
 
     private fun completeAndReverse() {
@@ -212,9 +242,15 @@ class HabitJourneyTest {
     }
 
     private fun revealHiddenHabit() {
+        val hiddenTag =
+            HabitTags.hidden(
+                habitSectionId
+            )
+
         composeRule
             .onNodeWithTag(
-                HabitTags.hidden(HabitCategory.ANYTIME)
+                hiddenTag,
+                useUnmergedTree = true,
             )
             .performClick()
 

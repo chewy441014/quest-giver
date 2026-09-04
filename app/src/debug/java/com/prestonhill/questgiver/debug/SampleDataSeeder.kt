@@ -2,6 +2,7 @@ package com.prestonhill.questgiver.debug
 
 import com.prestonhill.questgiver.core.time.AppDayCalculator
 import com.prestonhill.questgiver.data.local.database.QuestGiverDatabase
+import com.prestonhill.questgiver.data.local.database.entity.DefaultHabitDisplaySections
 import com.prestonhill.questgiver.data.repository.AppSettingsRepository
 import com.prestonhill.questgiver.data.repository.ComposedNutritionItemDraft
 import com.prestonhill.questgiver.data.repository.FoodLogDraft
@@ -40,6 +41,12 @@ class SampleDataSeeder(
             SampleDataResult =
         withContext(Dispatchers.IO) {
             database.clearAllTables()
+
+            DefaultHabitDisplaySections.all
+                .forEach { section ->
+                    database.habitDao()
+                        .insertDisplaySection(section)
+                }
 
             settingsRepository
                 .setNutritionGoals(

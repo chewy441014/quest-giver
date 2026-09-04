@@ -6,6 +6,8 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performTextReplacement
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -138,6 +140,134 @@ class HabitScreenTest {
     }
 
     @Test
+    fun sectionHeaderSendsToggle(): Unit {
+        val actions =
+            mutableListOf<HabitAction>()
+
+        showScreen(
+            state =
+                HabitScreenUiState(
+                    sections =
+                        listOf(
+                            HabitDisplaySectionUiState(
+                                id = "TRAINING",
+                                name = "Training",
+                            )
+                        )
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithText("Training")
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HabitAction.ToggleSection(
+                    "TRAINING"
+                )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun editorSectionSelectionSendsChange(): Unit {
+        val actions =
+            mutableListOf<HabitAction>()
+
+        val editor =
+            HabitEditorUiState(
+                name = "Lift",
+                displaySectionId = "ANYTIME",
+            )
+
+        showScreen(
+            state =
+                HabitScreenUiState(
+                    sections =
+                        listOf(
+                            HabitDisplaySectionUiState(
+                                id = "ANYTIME",
+                                name = "Anytime",
+                            ),
+                            HabitDisplaySectionUiState(
+                                id = "TRAINING",
+                                name = "Training",
+                            ),
+                        ),
+                    editor = editor,
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.editorSection(
+                    "TRAINING"
+                )
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HabitAction.UpdateHabitEditor(
+                    editor.copy(
+                        displaySectionId =
+                            "TRAINING"
+                    )
+                )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun historyCategorySendsChange(): Unit {
+        val actions =
+            mutableListOf<HabitAction>()
+
+        val editor =
+            HabitEditorUiState(
+                name = "Lift",
+                displaySectionId = "ANYTIME",
+            )
+
+        showScreen(
+            state =
+                HabitScreenUiState(
+                    sections =
+                        listOf(
+                            HabitDisplaySectionUiState(
+                                id = "ANYTIME",
+                                name = "Anytime",
+                            )
+                        ),
+                    editor = editor,
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.HISTORY_CATEGORY
+            )
+            .performTextReplacement("Gym")
+
+        assertEquals(
+            listOf(
+                HabitAction.UpdateHabitEditor(
+                    editor.copy(
+                        historyCategory = "Gym"
+                    )
+                )
+            ),
+            actions,
+        )
+    }
+
+    @Test
     fun operationErrorCanBeDismissed() {
         val actions = mutableListOf<HabitAction>()
 
@@ -175,17 +305,20 @@ class HabitScreenTest {
         }
     }
 
-    private fun detailState(): HabitScreenUiState =
+    private fun detailState():
+            HabitScreenUiState =
         HabitScreenUiState(
-            categories = listOf(
-                HabitCategoryUiState(
-                    category = HabitCategory.ANYTIME,
-                    habits = listOf(testHabit())
-                )
-            ),
-            inspectedHabitId = HABIT_ID
+            sections =
+                listOf(
+                    HabitDisplaySectionUiState(
+                        id = "ANYTIME",
+                        name = "Anytime",
+                        habits =
+                            listOf(testHabit()),
+                    )
+                ),
+            inspectedHabitId = HABIT_ID,
         )
-
     private fun confirmationState(
         isDeleting: Boolean = false,
         errorMessage: String? = null

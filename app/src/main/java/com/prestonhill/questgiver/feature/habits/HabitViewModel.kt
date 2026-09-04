@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.prestonhill.questgiver.core.time.AppDay
 import com.prestonhill.questgiver.core.time.AppDayCalculator
-import com.prestonhill.questgiver.data.local.database.entity.HabitCategoryDb
 import com.prestonhill.questgiver.data.local.database.entity.HabitEntity
 import com.prestonhill.questgiver.data.local.database.entity.HabitIntervalBasisDb
 import com.prestonhill.questgiver.data.local.database.entity.HabitLogEntity
@@ -24,6 +23,8 @@ import kotlinx.coroutines.flow.Flow
 import java.time.Clock
 import com.prestonhill.questgiver.core.time.BoundaryTimer
 import com.prestonhill.questgiver.core.time.RealBoundaryTimer
+import com.prestonhill.questgiver.data.local.database.entity.HabitDisplaySectionEntity
+import com.prestonhill.questgiver.data.local.database.entity.DefaultHabitDisplaySections
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -69,8 +70,17 @@ class HabitViewModel(
                 ),
         )
 
-    private val expandedCategories =
-        MutableStateFlow(HabitCategory.entries.toSet())
+    private val collapsedSectionIds =
+        MutableStateFlow<Set<String>>(emptySet())
+
+    private val displaySections =
+        repository.observeDisplaySections()
+            .stateIn(
+                scope = viewModelScope,
+                started =
+                    SharingStarted.Eagerly,
+                initialValue = emptyList(),
+            )
 
     private val inspectedHabitId =
         MutableStateFlow<Long?>(null)
@@ -134,17 +144,20 @@ class HabitViewModel(
         )
     }
 
-    private val categoriesShowingHidden =
-        MutableStateFlow<Set<HabitCategory>>(emptySet())
+    private val sectionsShowingHidden =
+        MutableStateFlow<Set<String>>(emptySet())
 
     private val displayState =
         combine(
-            expandedCategories,
-            categoriesShowingHidden
-        ) { expanded, showingHidden ->
+            displaySections,
+            collapsedSectionIds,
+            sectionsShowingHidden,
+        ) { sections, collapsed, showingHidden ->
             HabitDisplayState(
-                expandedCategories = expanded,
-                categoriesShowingHidden = showingHidden
+                sections = sections,
+                collapsedSectionIds = collapsed,
+                sectionsShowingHidden =
+                    showingHidden,
             )
         }
 
@@ -261,27 +274,51 @@ class HabitViewModel(
             HabitAction.DismissHabitDetails ->
                 inspectedHabitId.value = null
 
-            is HabitAction.ToggleCategory ->
-                expandedCategories.update { expanded ->
-                    if (action.category in expanded) {
-                        expanded - action.category
+            is HabitAction.ToggleSection ->
+                collapsedSectionIds.update { collapsed ->
+                    if (action.sectionId in collapsed) {
+                        collapsed - action.sectionId
                     } else {
-                        expanded + action.category
+                        collapsed + action.sectionId
                     }
                 }
 
             is HabitAction.ToggleHiddenHabits ->
-                categoriesShowingHidden.update { categories ->
-                    if (action.category in categories) {
-                        categories - action.category
+                sectionsShowingHidden.update {
+                        sectionIds ->
+                    if (
+                        action.sectionId in sectionIds
+                    ) {
+                        sectionIds - action.sectionId
                     } else {
-                        categories + action.category
+                        sectionIds + action.sectionId
                     }
                 }
 
             HabitAction.AddHabit -> {
                 inspectedHabitId.value = null
-                editorState.value = HabitEditorUiState()
+
+                val sections =
+                    displaySections.value
+
+                val sectionId =
+                    sections
+                        .firstOrNull {
+                            it.id ==
+                                    DefaultHabitDisplaySections
+                                        .ANYTIME_ID
+                        }
+                        ?.id
+                        ?: sections
+                            .firstOrNull()
+                            ?.id
+                        ?: DefaultHabitDisplaySections
+                            .ANYTIME_ID
+
+                editorState.value =
+                    HabitEditorUiState(
+                        displaySectionId = sectionId
+                    )
             }
 
             is HabitAction.EditHabit ->
@@ -476,12 +513,17 @@ class HabitViewModel(
         editor: HabitEditorUiState,
         timestampMillis: Long
     ): HabitEntity {
-        val category = editor.category.toDb()
+        val sectionId =
+            editor.displaySectionId
 
         return HabitEntity(
             name = editor.name.trim(),
-            category = category,
-            displayOrder = nextOrder(category),
+            displaySectionId = sectionId,
+            historyCategory =
+                editor.historyCategory
+                    .trim()
+                    .ifEmpty { null },
+            displayOrder = nextOrder(sectionId),
             allowsMultipleCompletions =
                 editor.allowsMultipleCompletions,
             scheduleType = editor.scheduleType.toDb(),
@@ -502,14 +544,8 @@ class HabitViewModel(
         existing: HabitEntity,
         editor: HabitEditorUiState
     ): HabitEntity {
-        val newCategory = editor.category.toDb()
-
-        val newOrder =
-            if (newCategory == existing.category) {
-                existing.displayOrder
-            } else {
-                nextOrder(newCategory)
-            }
+        val newSectionId =
+            editor.displaySectionId
 
         val preserveAnchor =
             existing.scheduleType ==
@@ -521,9 +557,23 @@ class HabitViewModel(
                     editor.intervalBasis ==
                     HabitIntervalBasis.FIXED_SCHEDULE
 
+        val newOrder =
+            if (
+                newSectionId ==
+                existing.displaySectionId
+            ) {
+                existing.displayOrder
+            } else {
+                nextOrder(newSectionId)
+            }
+
         return existing.copy(
             name = editor.name.trim(),
-            category = newCategory,
+            displaySectionId = newSectionId,
+            historyCategory =
+                editor.historyCategory
+                    .trim()
+                    .ifEmpty { null },
             displayOrder = newOrder,
             scheduleType = editor.scheduleType.toDb(),
             scheduleTarget = editor.targetValue(),
@@ -542,15 +592,19 @@ class HabitViewModel(
         )
     }
 
-    private fun nextOrder(category: HabitCategoryDb): Int =
+    private fun nextOrder(
+        sectionId: String,
+    ): Int =
         (
                 activeHabits.value
-                    .filter { habit ->
-                        habit.category == category
+                    .filter {
+                        it.displaySectionId ==
+                                sectionId
                     }
-                    .maxOfOrNull { habit ->
-                        habit.displayOrder
-                    } ?: -1
+                    .maxOfOrNull {
+                        it.displayOrder
+                    }
+                    ?: -1
                 ) + 1
 
     private fun HabitEditorUiState.targetValue(): Int =
@@ -638,24 +692,27 @@ class HabitViewModel(
         overlay: OverlayState,
         scheduleCalculator: HabitScheduleCalculator,
     ): HabitScreenUiState {
-        val rowsByCategory =
-            habits.groupBy { habit ->
-                habit.category.toUiCategory()
+        val rowsBySection =
+            habits.groupBy {
+                it.displaySectionId
             }
 
         return HabitScreenUiState(
             operationError = overlay.operationError,
-            categories = HabitCategory.entries.map { category ->
-                val evaluatedHabits =
-                    rowsByCategory[category]
-                        .orEmpty()
-                        .map { habit ->
-                            habit to scheduleCalculator.evaluate(
-                                habit = habit,
-                                logs = logs,
-                                appDay = appDay
-                            )
-                        }
+            sections =
+                display.sections.map { section ->
+                    val evaluatedHabits =
+                        rowsBySection[section.id]
+                            .orEmpty()
+                            .map { habit ->
+                                habit to
+                                        scheduleCalculator
+                                            .evaluate(
+                                                habit = habit,
+                                                logs = logs,
+                                                appDay = appDay,
+                                            )
+                            }
 
                 val normallyVisible =
                     evaluatedHabits.filter { (habit, evaluation) ->
@@ -670,8 +727,8 @@ class HabitViewModel(
 
                 val showHiddenHabits =
                     hasHiddenHabits &&
-                            category in
-                            display.categoriesShowingHidden
+                            section.id in
+                            display.sectionsShowingHidden
 
                 val displayedHabits =
                     if (showHiddenHabits) {
@@ -680,14 +737,20 @@ class HabitViewModel(
                         normallyVisible
                     }
 
-                HabitCategoryUiState(
-                    category = category,
-                    isExpanded =
-                        category in display.expandedCategories,
-                    hasHiddenHabits = hasHiddenHabits,
-                    showHiddenHabits = showHiddenHabits,
-                    habits = displayedHabits.map {
-                            (habit, evaluation) ->
+                    HabitDisplaySectionUiState(
+                        id = section.id,
+                        name = section.name,
+                        isExpanded =
+                            section.id !in
+                                    display
+                                        .collapsedSectionIds,
+                        hasHiddenHabits =
+                            hasHiddenHabits,
+                        showHiddenHabits =
+                            showHiddenHabits,
+                        habits =
+                            displayedHabits.map {
+                                    (habit, evaluation) ->
                         HabitRowUiState(
                             id = habit.id,
                             name = habit.name,
@@ -713,7 +776,6 @@ class HabitViewModel(
                 ArchivedHabitUiState(
                     id = habit.id,
                     name = habit.name,
-                    category = habit.category.toUiCategory()
                 )
             },
             showArchivedHabits = overlay.showArchivedHabits,
@@ -722,11 +784,7 @@ class HabitViewModel(
     }
 
     private fun emptyUiState() =
-        HabitScreenUiState(
-            categories = HabitCategory.entries.map { category ->
-                HabitCategoryUiState(category = category)
-            }
-        )
+        HabitScreenUiState()
 
     private fun archiveHabit(habitId: Long) {
         operationError.value = null
@@ -855,8 +913,11 @@ private data class OverlayState(
     val operationError: String?,
 )
 private data class HabitDisplayState(
-    val expandedCategories: Set<HabitCategory>,
-    val categoriesShowingHidden: Set<HabitCategory>
+    val sections:
+    List<HabitDisplaySectionEntity>,
+    val collapsedSectionIds: Set<String>,
+    val sectionsShowingHidden:
+    Set<String>,
 )
 
 private data class HabitTimeState(
@@ -869,7 +930,9 @@ private fun HabitEntity.toEditorState() =
     HabitEditorUiState(
         habitId = id,
         name = name,
-        category = category.toUiCategory(),
+        displaySectionId = displaySectionId,
+        historyCategory =
+            historyCategory.orEmpty(),
         allowsMultipleCompletions =
             allowsMultipleCompletions,
         scheduleType = scheduleType.toUi(),
@@ -883,30 +946,6 @@ private fun HabitEntity.toEditorState() =
         scheduleVisibility =
             scheduleVisibility.toUi()
     )
-
-private fun HabitCategoryDb.toUiCategory(): HabitCategory =
-    when (this) {
-        HabitCategoryDb.MORNING ->
-            HabitCategory.MORNING
-
-        HabitCategoryDb.ANYTIME ->
-            HabitCategory.ANYTIME
-
-        HabitCategoryDb.BEFORE_BED ->
-            HabitCategory.BEFORE_BED
-    }
-
-private fun HabitCategory.toDb(): HabitCategoryDb =
-    when (this) {
-        HabitCategory.MORNING ->
-            HabitCategoryDb.MORNING
-
-        HabitCategory.ANYTIME ->
-            HabitCategoryDb.ANYTIME
-
-        HabitCategory.BEFORE_BED ->
-            HabitCategoryDb.BEFORE_BED
-    }
 
 private fun HabitScheduleType.toDb(): HabitScheduleTypeDb =
     when (this) {

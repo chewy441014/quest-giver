@@ -35,7 +35,7 @@ fun HabitScreen(
     onAction: (HabitAction) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val inspectedHabit = uiState.categories
+    val inspectedHabit = uiState.sections
         .asSequence()
         .flatMap { it.habits.asSequence() }
         .firstOrNull { it.id == uiState.inspectedHabitId }
@@ -48,30 +48,30 @@ fun HabitScreen(
         LazyColumn(
             modifier = Modifier.weight(1f)
         ) {
-            uiState.categories.forEach { categoryState ->
-                item(key = categoryState.category) {
-                    CategoryHeader(
-                        categoryState = categoryState,
+            uiState.sections.forEach { sectionState ->
+                item(key = sectionState.id) {
+                    SectionHeader(
+                        uiState = sectionState,
                         onClick = {
                             onAction(
-                                HabitAction.ToggleCategory(
-                                    categoryState.category
+                                HabitAction.ToggleSection(
+                                    sectionState.id
                                 )
                             )
                         },
                         onToggleHidden = {
                             onAction(
                                 HabitAction.ToggleHiddenHabits(
-                                    categoryState.category
+                                    sectionState.id
                                 )
                             )
                         }
                     )
                 }
 
-                if (categoryState.isExpanded) {
+                if (sectionState.isExpanded) {
                     items(
-                        items = categoryState.habits,
+                        items = sectionState.habits,
                         key = { habit -> habit.id }
                     ) { habit ->
                         HabitRow(
@@ -140,7 +140,8 @@ fun HabitScreen(
             },
             onDismiss = {
                 onAction(HabitAction.DismissHabitEditor)
-            }
+            },
+            sections = uiState.sections,
         )
     }
 
@@ -184,8 +185,8 @@ fun HabitScreen(
 }
 
 @Composable
-private fun CategoryHeader(
-    categoryState: HabitCategoryUiState,
+private fun SectionHeader(
+    uiState: HabitDisplaySectionUiState,
     onClick: () -> Unit,
     onToggleHidden: () -> Unit
 ) {
@@ -197,34 +198,39 @@ private fun CategoryHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = categoryState.category.displayName(),
-            style = MaterialTheme.typography.titleMedium
+            text = uiState.name,
+            style =
+                MaterialTheme.typography
+                    .titleMedium,
         )
 
-        if (categoryState.hasHiddenHabits) {
+        if (uiState.hasHiddenHabits) {
             Switch(
-                checked = categoryState.showHiddenHabits,
+                checked =
+                    uiState.showHiddenHabits,
                 onCheckedChange = {
                     onToggleHidden()
                 },
-                modifier = Modifier
-                    .padding(start = 12.dp)
-                    .semantics {
-                        contentDescription =
-                            "Show hidden " +
-                                    categoryState.category
-                                        .displayName() +
-                                    " habits"
-                    }
-                    .testTag(
-                        HabitTags.hidden(categoryState.category)
-                    )
+                modifier =
+                    Modifier
+                        .padding(start = 12.dp)
+                        .testTag(
+                            HabitTags.hidden(
+                                uiState.id
+                            )
+                        )
+                        .semantics {
+                            contentDescription =
+                                "Show hidden " +
+                                        uiState.name +
+                                        " habits"
+                        },
             )
         }
 
         Spacer(modifier = Modifier.weight(1f))
 
-        Text(if (categoryState.isExpanded) "▾" else "▸")
+        Text(if (uiState.isExpanded) "▾" else "▸")
     }
 }
 
@@ -565,10 +571,3 @@ private fun OperationErrorDialog(
         },
     )
 }
-
-private fun HabitCategory.displayName(): String =
-    when (this) {
-        HabitCategory.MORNING -> "Morning"
-        HabitCategory.ANYTIME -> "Anytime"
-        HabitCategory.BEFORE_BED -> "Before bed"
-    }

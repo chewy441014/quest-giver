@@ -9,6 +9,14 @@ object HabitTags {
     const val ARCHIVED = "habit_archived"
     const val CONFIRM_DELETE = "habit_confirm_delete"
     const val CANCEL_DELETE = "habit_cancel_delete"
+    const val HISTORY_CATEGORY =
+        "habit_history_category"
+
+    fun editorSection(sectionId: String) =
+        "habit_editor_section_$sectionId"
+
+    fun hidden(sectionId: String) =
+        "habit_hidden_$sectionId"
 
     fun row(habitId: Long) =
         "habit_row_$habitId"

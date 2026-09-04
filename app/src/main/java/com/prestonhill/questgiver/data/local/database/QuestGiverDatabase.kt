@@ -13,6 +13,7 @@ import com.prestonhill.questgiver.data.local.database.dao.NutritionDao
 import com.prestonhill.questgiver.data.local.database.entity.FoodLogEntity
 import com.prestonhill.questgiver.data.local.database.entity.NutritionComponentEntity
 import com.prestonhill.questgiver.data.local.database.entity.NutritionItemEntity
+import com.prestonhill.questgiver.data.local.database.entity.HabitDisplaySectionEntity
 
 @Database(
     entities = [
@@ -23,8 +24,9 @@ import com.prestonhill.questgiver.data.local.database.entity.NutritionItemEntity
         NutritionItemEntity::class,
         NutritionComponentEntity::class,
         FoodLogEntity::class,
+        HabitDisplaySectionEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(

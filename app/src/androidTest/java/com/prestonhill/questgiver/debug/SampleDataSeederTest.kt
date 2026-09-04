@@ -141,6 +141,11 @@ class SampleDataSeederTest {
         val habitRepository =
             HabitRepository(database)
 
+        val displaySections =
+            habitRepository
+                .observeDisplaySections()
+                .first()
+
         val items =
             nutritionRepository
                 .observeAllItems()
@@ -184,6 +189,26 @@ class SampleDataSeederTest {
             habitRepository
                 .observeAllHabitLogs()
                 .first()
+
+        assertEquals(
+            listOf(
+                "Morning",
+                "Anytime",
+                "Before bed",
+            ),
+            displaySections.map { it.name },
+        )
+
+        val sectionIds =
+            displaySections
+                .map { it.id }
+                .toSet()
+
+        assertTrue(
+            habits.all {
+                it.displaySectionId in sectionIds
+            }
+        )
 
         assertEquals(
             result.nutritionItems,
@@ -324,6 +349,19 @@ class SampleDataSeederTest {
                 settings.maximumProteinGoalGrams
             ),
             TOLERANCE,
+        )
+
+        assertEquals(
+            setOf(
+                "Gym",
+                "Recovery session",
+            ),
+            habits
+                .filter {
+                    it.historyCategory == "Gym"
+                }
+                .map { it.name }
+                .toSet(),
         )
     }
 

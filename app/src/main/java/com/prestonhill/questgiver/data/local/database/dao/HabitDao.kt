@@ -5,6 +5,7 @@ import androidx.room3.Insert
 import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
 import androidx.room3.Update
+import com.prestonhill.questgiver.data.local.database.entity.HabitDisplaySectionEntity
 import com.prestonhill.questgiver.data.local.database.entity.HabitEntity
 import com.prestonhill.questgiver.data.local.database.entity.HabitLogEntity
 import kotlinx.coroutines.flow.Flow
@@ -13,18 +14,96 @@ import kotlinx.coroutines.flow.Flow
 interface HabitDao {
     @Query(
         """
-        SELECT * FROM habits
-        WHERE archivedAtEpochMillis IS NULL
-        ORDER BY
-            CASE category
-                WHEN 'MORNING' THEN 0
-                WHEN 'ANYTIME' THEN 1
-                WHEN 'BEFORE_BED' THEN 2
-            END,
-            displayOrder
-        """
+    SELECT habits.*
+    FROM habits
+    INNER JOIN habit_display_sections AS sections
+        ON sections.id = habits.category
+    WHERE habits.archivedAtEpochMillis IS NULL
+    ORDER BY
+        sections.displayOrder,
+        habits.displayOrder,
+        habits.createdAtEpochMillis,
+        habits.id
+    """
     )
-    fun observeActiveHabits(): Flow<List<HabitEntity>>
+    fun observeActiveHabits():
+            Flow<List<HabitEntity>>
+
+    @Query(
+        """
+    SELECT * FROM habits
+    ORDER BY createdAtEpochMillis, id
+    """
+    )
+    fun observeAllHabits():
+            Flow<List<HabitEntity>>
+
+    @Query(
+        """
+    SELECT * FROM habit_display_sections
+    ORDER BY displayOrder, id
+    """
+    )
+    fun observeDisplaySections():
+            Flow<List<HabitDisplaySectionEntity>>
+
+    @Query(
+        """
+    SELECT * FROM habit_display_sections
+    WHERE id = :sectionId
+    LIMIT 1
+    """
+    )
+    suspend fun getDisplaySection(
+        sectionId: String,
+    ): HabitDisplaySectionEntity?
+
+    @Query(
+        """
+    SELECT * FROM habit_display_sections
+    WHERE name = :name COLLATE NOCASE
+    LIMIT 1
+    """
+    )
+    suspend fun findDisplaySectionByName(
+        name: String,
+    ): HabitDisplaySectionEntity?
+
+    @Query(
+        """
+    SELECT COALESCE(MAX(displayOrder), -1) + 1
+    FROM habit_display_sections
+    """
+    )
+    suspend fun nextDisplaySectionOrder(): Int
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertDisplaySection(
+        section: HabitDisplaySectionEntity,
+    )
+
+    @Update
+    suspend fun updateDisplaySection(
+        section: HabitDisplaySectionEntity,
+    ): Int
+
+    @Query(
+        """
+    DELETE FROM habit_display_sections
+    WHERE id = :sectionId
+      AND NOT EXISTS (
+          SELECT 1 FROM habits
+          WHERE category = :sectionId
+      )
+      AND (
+          SELECT COUNT(*)
+          FROM habit_display_sections
+      ) > 1
+    """
+    )
+    suspend fun deleteEmptyDisplaySection(
+        sectionId: String,
+    ): Int
 
     @Query("SELECT * FROM habits WHERE id = :habitId LIMIT 1")
     suspend fun getHabit(habitId: Long): HabitEntity?

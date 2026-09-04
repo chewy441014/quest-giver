@@ -32,7 +32,8 @@ enum class HabitScheduleVisibility {
 data class HabitEditorUiState(
     val habitId: Long? = null,
     val name: String = "",
-    val category: HabitCategory = HabitCategory.ANYTIME,
+    val displaySectionId: String = "ANYTIME",
+    val historyCategory: String = "",
     val allowsMultipleCompletions: Boolean = false,
     val scheduleType: HabitScheduleType =
         HabitScheduleType.DAILY,
@@ -62,7 +63,8 @@ data class HabitEditorUiState(
             return name.isNotBlank() &&
                     validTarget &&
                     validInterval &&
-                    !isSaving
+                    !isSaving &&
+                    displaySectionId.isNotBlank()
         }
 }
 data class HabitRowUiState(
@@ -82,16 +84,18 @@ data class HabitRowUiState(
         get() = allowsMultipleCompletions && isCompleted
 }
 
-data class HabitCategoryUiState(
-    val category: HabitCategory,
+data class HabitDisplaySectionUiState(
+    val id: String,
+    val name: String,
     val isExpanded: Boolean = true,
-    val habits: List<HabitRowUiState> = emptyList(),
+    val habits: List<HabitRowUiState> =
+        emptyList(),
     val hasHiddenHabits: Boolean = false,
-    val showHiddenHabits: Boolean = false
+    val showHiddenHabits: Boolean = false,
 )
 
 data class HabitScreenUiState(
-    val categories: List<HabitCategoryUiState> = emptyList(),
+    val sections: List<HabitDisplaySectionUiState> = emptyList(),
     val archivedHabits: List<ArchivedHabitUiState> = emptyList(),
     val inspectedHabitId: Long? = null,
     val editor: HabitEditorUiState? = null,
@@ -103,7 +107,6 @@ data class HabitScreenUiState(
 data class ArchivedHabitUiState(
     val id: Long,
     val name: String,
-    val category: HabitCategory,
 )
 
 

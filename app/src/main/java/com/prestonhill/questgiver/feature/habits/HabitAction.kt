@@ -5,8 +5,9 @@ sealed interface HabitAction {
     data class RemoveCompletion(val habitId: Long) : HabitAction
     data class InspectHabit(val habitId: Long) : HabitAction
     data class EditHabit(val habitId: Long) : HabitAction
-    data class ToggleCategory(val category: HabitCategory) : HabitAction
-
+    data class ToggleSection(
+        val sectionId: String,
+    ) : HabitAction
     data object DismissHabitDetails : HabitAction
     data object AddHabit : HabitAction
     data class UpdateHabitEditor(
@@ -17,7 +18,7 @@ sealed interface HabitAction {
     data object DismissHabitEditor : HabitAction
 
     data class ToggleHiddenHabits(
-        val category: HabitCategory
+        val sectionId: String,
     ) : HabitAction
 
     data class ArchiveHabit(

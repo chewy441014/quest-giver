@@ -1,7 +1,7 @@
 package com.prestonhill.questgiver.feature.habits
 
 import com.prestonhill.questgiver.core.time.AppDayCalculator
-import com.prestonhill.questgiver.data.local.database.entity.HabitCategoryDb
+import com.prestonhill.questgiver.data.local.database.entity.DefaultHabitDisplaySections
 import com.prestonhill.questgiver.data.local.database.entity.HabitEntity
 import com.prestonhill.questgiver.data.local.database.entity.HabitIntervalBasisDb
 import com.prestonhill.questgiver.data.local.database.entity.HabitLogEntity
@@ -193,7 +193,8 @@ class HabitScheduleCalculatorTest {
         HabitEntity(
             id = 1,
             name = "Test habit",
-            category = HabitCategoryDb.ANYTIME,
+            displaySectionId =
+                DefaultHabitDisplaySections.ANYTIME_ID,
             displayOrder = 0,
             scheduleType = scheduleType,
             scheduleTarget = target,

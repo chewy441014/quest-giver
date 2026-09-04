@@ -19,6 +19,10 @@ object DatabaseProvider {
             )
                 .setDriver(AndroidSQLiteDriver())
                 .setQueryCoroutineContext(Dispatchers.IO)
+                .addMigrations(MIGRATION_5_6)
+                .addCallback(
+                    HABIT_DISPLAY_SECTION_CALLBACK
+                )
                 .build()
                 .also { database ->
                     instance = database

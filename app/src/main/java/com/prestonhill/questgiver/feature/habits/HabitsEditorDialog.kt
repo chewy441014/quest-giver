@@ -30,7 +30,8 @@ fun HabitEditorDialog(
     editor: HabitEditorUiState,
     onChange: (HabitEditorUiState) -> Unit,
     onSave: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    sections: List<HabitDisplaySectionUiState>,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -70,17 +71,52 @@ fun HabitEditorDialog(
 
                 SectionLabel("Category")
 
-                HabitCategory.entries.forEach { category ->
+                SectionLabel("Display section")
+
+                sections.forEach { section ->
                     ChoiceRow(
-                        selected = editor.category == category,
-                        label = category.displayName(),
+                        modifier =
+                            Modifier.testTag(
+                                HabitTags.editorSection(
+                                    section.id
+                                )
+                            ),
+                        selected =
+                            editor.displaySectionId ==
+                                    section.id,
+                        label = section.name,
                         onClick = {
                             onChange(
-                                editor.copy(category = category)
+                                editor.copy(
+                                    displaySectionId =
+                                        section.id
+                                )
                             )
-                        }
+                        },
                     )
                 }
+
+                OutlinedTextField(
+                    value = editor.historyCategory,
+                    onValueChange = { value ->
+                        onChange(
+                            editor.copy(
+                                historyCategory = value,
+                                errorMessage = null,
+                            )
+                        )
+                    },
+                    label = {
+                        Text("Category (optional)")
+                    },
+                    singleLine = true,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag(
+                                HabitTags.HISTORY_CATEGORY
+                            ),
+                )
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically
@@ -313,13 +349,6 @@ private fun ChoiceRow(
         Text(label)
     }
 }
-
-private fun HabitCategory.displayName(): String =
-    when (this) {
-        HabitCategory.MORNING -> "Morning"
-        HabitCategory.ANYTIME -> "Anytime"
-        HabitCategory.BEFORE_BED -> "Before bed"
-    }
 
 private fun HabitScheduleType.displayName(): String =
     when (this) {

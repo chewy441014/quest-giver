@@ -8,7 +8,8 @@ import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.prestonhill.questgiver.data.local.database.QuestGiverDatabase
-import com.prestonhill.questgiver.data.local.database.entity.HabitCategoryDb
+import com.prestonhill.questgiver.data.local.database.HABIT_DISPLAY_SECTION_CALLBACK
+import com.prestonhill.questgiver.data.local.database.entity.DefaultHabitDisplaySections
 import com.prestonhill.questgiver.data.local.database.entity.HabitEntity
 import com.prestonhill.questgiver.data.local.database.entity.HabitScheduleTypeDb
 import com.prestonhill.questgiver.data.repository.HabitRepository
@@ -71,6 +72,9 @@ class HabitViewModelTest {
             Room.inMemoryDatabaseBuilder<QuestGiverDatabase>(
                 context
             )
+                .addCallback(
+                    HABIT_DISPLAY_SECTION_CALLBACK
+                )
                 .setDriver(AndroidSQLiteDriver())
                 .setQueryCoroutineContext(Dispatchers.IO)
                 .build()
@@ -459,6 +463,158 @@ class HabitViewModelTest {
     }
 
     @Test
+    fun newHabitDefaultsToAnytimeSection() =
+        runBlocking {
+            awaitState {
+                it.sections.any { section ->
+                    section.id ==
+                            DefaultHabitDisplaySections
+                                .ANYTIME_ID
+                }
+            }
+
+            viewModel.onAction(
+                HabitAction.AddHabit
+            )
+
+            val editor =
+                awaitState {
+                    it.editor != null
+                }.editor
+
+            assertEquals(
+                DefaultHabitDisplaySections
+                    .ANYTIME_ID,
+                editor?.displaySectionId,
+            )
+        }
+
+    @Test
+    fun habitCanUseDynamicSectionAndCategory() =
+        runBlocking {
+            val sectionId =
+                repository.createDisplaySection(
+                    "Training"
+                )
+
+            awaitState {
+                it.sections.any { section ->
+                    section.id == sectionId
+                }
+            }
+
+            viewModel.onAction(
+                HabitAction.AddHabit
+            )
+
+            val editor =
+                requireNotNull(
+                    awaitState {
+                        it.editor != null
+                    }.editor
+                )
+
+            viewModel.onAction(
+                HabitAction.UpdateHabitEditor(
+                    editor.copy(
+                        name = "Lift",
+                        displaySectionId =
+                            sectionId,
+                        historyCategory =
+                            "  Gym  ",
+                    )
+                )
+            )
+
+            viewModel.onAction(
+                HabitAction.SaveHabit
+            )
+
+            val saved =
+                withTimeout(
+                    5_000.milliseconds
+                ) {
+                    repository
+                        .observeActiveHabits()
+                        .first { habits ->
+                            habits.any {
+                                it.name == "Lift"
+                            }
+                        }
+                        .single {
+                            it.name == "Lift"
+                        }
+                }
+
+            assertEquals(
+                sectionId,
+                saved.displaySectionId,
+            )
+
+            assertEquals(
+                "Gym",
+                saved.historyCategory,
+            )
+
+            val state =
+                awaitState {
+                    it.sections
+                        .singleOrNull {
+                                section ->
+                            section.id == sectionId
+                        }
+                        ?.habits
+                        ?.any {
+                            it.id == saved.id
+                        } == true
+                }
+
+            assertEquals(
+                "Training",
+                state.sections
+                    .single {
+                        it.id == sectionId
+                    }
+                    .name,
+            )
+        }
+
+    @Test
+    fun displaySectionCanBeCollapsed() =
+        runBlocking {
+            val section =
+                awaitState {
+                    it.sections.isNotEmpty()
+                }.sections.first()
+
+            viewModel.onAction(
+                HabitAction.ToggleSection(
+                    section.id
+                )
+            )
+
+            val collapsed =
+                awaitState {
+                    it.sections
+                        .single {
+                                candidate ->
+                            candidate.id ==
+                                    section.id
+                        }
+                        .isExpanded
+                        .not()
+                }
+
+            assertFalse(
+                collapsed.sections
+                    .single {
+                        it.id == section.id
+                    }
+                    .isExpanded
+            )
+        }
+
+    @Test
     fun boundaryTimerRefreshesDay() = runBlocking {
         val habitId = addHabit()
 
@@ -527,17 +683,24 @@ class HabitViewModelTest {
         scheduleType: HabitScheduleTypeDb =
             HabitScheduleTypeDb.DAILY,
         createdAt: Long = clock.millis(),
+        displaySectionId: String =
+            DefaultHabitDisplaySections
+                .ANYTIME_ID,
+        historyCategory: String? = null,
     ): Long =
         repository.createHabit(
             HabitEntity(
                 name = "Test habit",
-                category = HabitCategoryDb.ANYTIME,
+                displaySectionId =
+                    displaySectionId,
+                historyCategory =
+                    historyCategory,
                 displayOrder = 0,
                 allowsMultipleCompletions = false,
                 scheduleType = scheduleType,
                 scheduleTarget = 1,
                 createdAtEpochMillis = createdAt,
-            ),
+            )
         )
 
     private fun timestamp(
@@ -552,29 +715,29 @@ class HabitViewModelTest {
     private fun HabitScreenUiState.habit(
         habitId: Long,
     ): HabitRowUiState? =
-        categories
+        sections
             .asSequence()
-            .flatMap { category ->
-                category.habits.asSequence()
+            .flatMap { section ->
+                section.habits.asSequence()
             }
             .firstOrNull { habit ->
                 habit.id == habitId
             }
+
+    private fun HabitScreenUiState.hasHabit(
+        habitId: Long,
+    ): Boolean =
+        sections.any { section ->
+            section.habits.any { habit ->
+                habit.id == habitId
+            }
+        }
 
     private suspend fun awaitState(
         condition: (HabitScreenUiState) -> Boolean
     ): HabitScreenUiState =
         withTimeout(5_000.milliseconds) {
             viewModel.uiState.first(condition)
-        }
-
-    private fun HabitScreenUiState.hasHabit(
-        habitId: Long
-    ): Boolean =
-        categories.any { category ->
-            category.habits.any { habit ->
-                habit.id == habitId
-            }
         }
 
     companion object {

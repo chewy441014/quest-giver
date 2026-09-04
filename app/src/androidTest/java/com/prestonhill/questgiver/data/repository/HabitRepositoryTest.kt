@@ -7,10 +7,11 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.prestonhill.questgiver.data.local.database.QuestGiverDatabase
 import com.prestonhill.questgiver.data.local.database.dao.HabitDao
-import com.prestonhill.questgiver.data.local.database.entity.HabitCategoryDb
 import com.prestonhill.questgiver.data.local.database.entity.HabitEntity
 import com.prestonhill.questgiver.data.local.database.entity.HabitLogEntity
 import com.prestonhill.questgiver.data.local.database.entity.HabitScheduleTypeDb
+import com.prestonhill.questgiver.data.local.database.HABIT_DISPLAY_SECTION_CALLBACK
+import com.prestonhill.questgiver.data.local.database.entity.DefaultHabitDisplaySections
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -38,9 +39,13 @@ class HabitRepositoryTest {
             Room.inMemoryDatabaseBuilder<QuestGiverDatabase>(
                 context
             )
+                .addCallback(
+                    HABIT_DISPLAY_SECTION_CALLBACK
+                )
                 .setDriver(AndroidSQLiteDriver())
                 .setQueryCoroutineContext(Dispatchers.IO)
                 .build()
+
 
         dao = database.habitDao()
         repository = HabitRepository(database)
@@ -133,6 +138,154 @@ class HabitRepositoryTest {
     }
 
     @Test
+    fun defaultDisplaySectionsAreAvailable() =
+        runBlocking {
+            val sections =
+                repository
+                    .observeDisplaySections()
+                    .first()
+
+            assertEquals(
+                listOf(
+                    "Morning",
+                    "Anytime",
+                    "Before bed",
+                ),
+                sections.map { it.name },
+            )
+        }
+
+    @Test
+    fun displaySectionCanBeRenamedAndDeleted() =
+        runBlocking {
+            val sectionId =
+                repository.createDisplaySection(
+                    "Training"
+                )
+
+            assertTrue(
+                repository.renameDisplaySection(
+                    sectionId = sectionId,
+                    name = "Exercise",
+                )
+            )
+
+            val renamed =
+                repository
+                    .observeDisplaySections()
+                    .first()
+                    .single {
+                        it.id == sectionId
+                    }
+
+            assertEquals(
+                "Exercise",
+                renamed.name,
+            )
+
+            assertTrue(
+                repository.deleteDisplaySection(
+                    sectionId
+                )
+            )
+
+            assertFalse(
+                repository
+                    .observeDisplaySections()
+                    .first()
+                    .any { it.id == sectionId }
+            )
+        }
+
+    @Test
+    fun referencedDisplaySectionCannotBeDeleted() =
+        runBlocking {
+            val sectionId =
+                repository.createDisplaySection(
+                    "Training"
+                )
+
+            val habitId =
+                addHabit(
+                    displaySectionId =
+                        sectionId
+                )
+
+            assertFalse(
+                repository.deleteDisplaySection(
+                    sectionId
+                )
+            )
+
+            repository.archiveHabit(habitId)
+
+            // Archived habits still reference their
+            // display section.
+            assertFalse(
+                repository.deleteDisplaySection(
+                    sectionId
+                )
+            )
+
+            repository.deleteHabit(habitId)
+
+            assertTrue(
+                repository.deleteDisplaySection(
+                    sectionId
+                )
+            )
+        }
+
+    @Test
+    fun duplicateDisplaySectionNameIsRejected() =
+        runBlocking {
+            repository.createDisplaySection(
+                "Training"
+            )
+
+            val result =
+                runCatching {
+                    repository.createDisplaySection(
+                        "  training  "
+                    )
+                }
+
+            assertTrue(
+                result.exceptionOrNull()
+                        is IllegalArgumentException
+            )
+        }
+
+    @Test
+    fun historyCategoryIsNormalized() =
+        runBlocking {
+            val categorizedId =
+                addHabit(
+                    name = "Lift",
+                    historyCategory = "  Gym  ",
+                )
+
+            val uncategorizedId =
+                addHabit(
+                    name = "Walk",
+                    historyCategory = "   ",
+                )
+
+            assertEquals(
+                "Gym",
+                repository
+                    .getHabit(categorizedId)
+                    ?.historyCategory,
+            )
+
+            assertNull(
+                repository
+                    .getHabit(uncategorizedId)
+                    ?.historyCategory
+            )
+        }
+
+    @Test
     fun deleteArchivedHabit() = runBlocking {
         val habitId = addHabit()
         addLogs(habitId, 3)
@@ -151,17 +304,24 @@ class HabitRepositoryTest {
     }
 
     private suspend fun addHabit(
-        name: String = "Test habit"
+        name: String = "Test habit",
+        displaySectionId: String =
+            DefaultHabitDisplaySections.ANYTIME_ID,
+        historyCategory: String? = null,
     ): Long =
         repository.createHabit(
             HabitEntity(
                 name = name,
-                category = HabitCategoryDb.ANYTIME,
+                displaySectionId =
+                    displaySectionId,
+                historyCategory =
+                    historyCategory,
                 displayOrder = 0,
                 allowsMultipleCompletions = true,
-                scheduleType = HabitScheduleTypeDb.DAILY,
+                scheduleType =
+                    HabitScheduleTypeDb.DAILY,
                 scheduleTarget = 1,
-                createdAtEpochMillis = TEST_TIME
+                createdAtEpochMillis = TEST_TIME,
             )
         )
 

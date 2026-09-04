@@ -2,13 +2,16 @@ package com.prestonhill.questgiver.data.local.database.entity
 
 import androidx.room3.Entity
 import androidx.room3.PrimaryKey
+import androidx.room3.ColumnInfo
 
 @Entity(tableName = "habits")
 data class HabitEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val name: String,
-    val category: HabitCategoryDb,
+    @ColumnInfo(name = "category")
+    val displaySectionId: String,
+    val historyCategory: String? = null,
     val displayOrder: Int,
     val isVisibleInHistory: Boolean = true,
     val allowsMultipleCompletions: Boolean = false,
@@ -21,16 +24,9 @@ data class HabitEntity(
     val extraCompletionsMoveNextDueDate: Boolean = false,
     val scheduleVisibility: HabitScheduleVisibilityDb =
         HabitScheduleVisibilityDb.ALWAYS,
-
     val createdAtEpochMillis: Long,
-    val archivedAtEpochMillis: Long? = null
+    val archivedAtEpochMillis: Long? = null,
 )
-
-enum class HabitCategoryDb {
-    MORNING,
-    ANYTIME,
-    BEFORE_BED
-}
 
 enum class HabitScheduleTypeDb {
     DAILY,

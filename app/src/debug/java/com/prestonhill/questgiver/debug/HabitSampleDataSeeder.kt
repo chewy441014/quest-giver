@@ -2,7 +2,7 @@ package com.prestonhill.questgiver.debug
 
 import com.prestonhill.questgiver.core.time.AppDayCalculator
 import com.prestonhill.questgiver.data.local.database.QuestGiverDatabase
-import com.prestonhill.questgiver.data.local.database.entity.HabitCategoryDb
+import com.prestonhill.questgiver.data.local.database.entity.DefaultHabitDisplaySections
 import com.prestonhill.questgiver.data.local.database.entity.HabitEntity
 import com.prestonhill.questgiver.data.local.database.entity.HabitIntervalBasisDb
 import com.prestonhill.questgiver.data.local.database.entity.HabitScheduleTypeDb
@@ -43,48 +43,39 @@ class HabitSampleDataSeeder(
 
         suspend fun create(
             name: String,
-            category: HabitCategoryDb,
-            scheduleType:
-            HabitScheduleTypeDb,
+            displaySectionId: String,
+            historyCategory: String? = null,
+            scheduleType: HabitScheduleTypeDb,
             scheduleTarget: Int = 1,
-            allowsMultiple:
-            Boolean = false,
+            allowsMultiple: Boolean = false,
             intervalDays: Int? = null,
-            intervalBasis:
-            HabitIntervalBasisDb? = null,
-            fixedAnchor:
-            LocalDate? = null,
-            visibility:
-            HabitScheduleVisibilityDb =
-                HabitScheduleVisibilityDb
-                    .ALWAYS,
+            intervalBasis: HabitIntervalBasisDb? = null,
+            fixedAnchor: LocalDate? = null,
+            visibility: HabitScheduleVisibilityDb =
+                HabitScheduleVisibilityDb.ALWAYS,
         ): Long {
             val id =
                 repository.createHabit(
                     HabitEntity(
                         name = name,
-                        category = category,
-                        displayOrder =
-                            habitCount,
+                        displaySectionId =
+                            displaySectionId,
+                        historyCategory =
+                            historyCategory,
+                        displayOrder = habitCount,
                         allowsMultipleCompletions =
                             allowsMultiple,
-                        scheduleType =
-                            scheduleType,
-                        scheduleTarget =
-                            scheduleTarget,
-                        intervalDays =
-                            intervalDays,
-                        intervalBasis =
-                            intervalBasis,
+                        scheduleType = scheduleType,
+                        scheduleTarget = scheduleTarget,
+                        intervalDays = intervalDays,
+                        intervalBasis = intervalBasis,
                         fixedScheduleAnchorEpochDay =
-                            fixedAnchor
-                                ?.toEpochDay(),
+                            fixedAnchor?.toEpochDay(),
                         scheduleVisibility =
                             visibility,
                         createdAtEpochMillis =
                             createdAt +
-                                    habitCount *
-                                    1_000L,
+                                    habitCount * 1_000L,
                     )
                 )
 
@@ -164,8 +155,8 @@ class HabitSampleDataSeeder(
         val morningWalk =
             create(
                 name = "Morning walk",
-                category =
-                    HabitCategoryDb.MORNING,
+                displaySectionId =
+                    DefaultHabitDisplaySections.MORNING_ID,
                 scheduleType =
                     HabitScheduleTypeDb.DAILY,
             )
@@ -173,8 +164,8 @@ class HabitSampleDataSeeder(
         val water =
             create(
                 name = "Drink water",
-                category =
-                    HabitCategoryDb.ANYTIME,
+                displaySectionId =
+                    DefaultHabitDisplaySections.ANYTIME_ID,
                 scheduleType =
                     HabitScheduleTypeDb.DAILY,
                 scheduleTarget = 3,
@@ -187,8 +178,10 @@ class HabitSampleDataSeeder(
         val gym =
             create(
                 name = "Gym",
-                category =
-                    HabitCategoryDb.ANYTIME,
+                displaySectionId =
+                    DefaultHabitDisplaySections
+                        .ANYTIME_ID,
+                historyCategory = "Gym",
                 scheduleType =
                     HabitScheduleTypeDb
                         .WEEKLY_TARGET,
@@ -198,8 +191,8 @@ class HabitSampleDataSeeder(
         val stretch =
             create(
                 name = "Stretch",
-                category =
-                    HabitCategoryDb.MORNING,
+                displaySectionId =
+                    DefaultHabitDisplaySections.MORNING_ID,
                 scheduleType =
                     HabitScheduleTypeDb.DAILY,
                 visibility =
@@ -210,8 +203,8 @@ class HabitSampleDataSeeder(
         val shave =
             create(
                 name = "Shave",
-                category =
-                    HabitCategoryDb.ANYTIME,
+                displaySectionId =
+                    DefaultHabitDisplaySections.ANYTIME_ID,
                 scheduleType =
                     HabitScheduleTypeDb.INTERVAL,
                 intervalDays = 3,
@@ -227,8 +220,10 @@ class HabitSampleDataSeeder(
         val recovery =
             create(
                 name = "Recovery session",
-                category =
-                    HabitCategoryDb.ANYTIME,
+                displaySectionId =
+                    DefaultHabitDisplaySections
+                        .ANYTIME_ID,
+                historyCategory = "Gym",
                 scheduleType =
                     HabitScheduleTypeDb
                         .WEEKLY_TARGET,
@@ -238,8 +233,8 @@ class HabitSampleDataSeeder(
         val oldJournal =
             create(
                 name = "Old evening journal",
-                category =
-                    HabitCategoryDb.BEFORE_BED,
+                displaySectionId =
+                    DefaultHabitDisplaySections.BEFORE_BED_ID,
                 scheduleType =
                     HabitScheduleTypeDb.DAILY,
             )
