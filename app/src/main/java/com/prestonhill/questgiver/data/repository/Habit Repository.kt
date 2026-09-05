@@ -39,15 +39,25 @@ class HabitRepository(
 
     suspend fun createHabit(
         habit: HabitEntity,
+        newDisplaySectionName: String? = null,
     ): Long =
         database.withWriteTransaction {
-            requireNotNull(
-                habitDao.getDisplaySection(
+            val sectionId =
+                if (newDisplaySectionName != null) {
+                    insertDisplaySection(
+                        newDisplaySectionName
+                    )
+                } else {
+                    requireNotNull(
+                        habitDao.getDisplaySection(
+                            habit.displaySectionId
+                        )
+                    ) {
+                        "Display section does not exist."
+                    }
+
                     habit.displaySectionId
-                )
-            ) {
-                "Display section does not exist."
-            }
+                }
 
             val cleaned =
                 habit.copy(
@@ -58,24 +68,43 @@ class HabitRepository(
                             ?.trim()
                             ?.takeIf(String::isNotEmpty),
                     archivedAtEpochMillis = null,
+                    displaySectionId = sectionId,
+                    displayOrder =
+                        if (newDisplaySectionName != null) {
+                            0
+                        } else {
+                            habit.displayOrder
+                        },
                 )
 
             validateHabit(cleaned)
             habitDao.insertHabit(cleaned)
         }
 
-    suspend fun updateHabit(habit: HabitEntity): Boolean =
+    suspend fun updateHabit(
+        habit: HabitEntity,
+        newDisplaySectionName: String? = null,
+    ): Boolean =
         database.withWriteTransaction {
             val existing = habitDao.getHabit(habit.id)
                 ?: return@withWriteTransaction false
 
-            requireNotNull(
-                habitDao.getDisplaySection(
+            val sectionId =
+                if (newDisplaySectionName != null) {
+                    insertDisplaySection(
+                        newDisplaySectionName
+                    )
+                } else {
+                    requireNotNull(
+                        habitDao.getDisplaySection(
+                            habit.displaySectionId
+                        )
+                    ) {
+                        "Display section does not exist."
+                    }
+
                     habit.displaySectionId
-                )
-            ) {
-                "Display section does not exist."
-            }
+                }
 
             val updated =
                 habit.copy(
@@ -84,16 +113,23 @@ class HabitRepository(
                         habit.historyCategory
                             ?.trim()
                             ?.takeIf(String::isNotEmpty),
+                    displaySectionId = sectionId,
+                    displayOrder =
+                        if (newDisplaySectionName != null) {
+                            0
+                        } else {
+                            habit.displayOrder
+                        },
 
                 // These properties cannot change after creation.
                 allowsMultipleCompletions =
                     existing.allowsMultipleCompletions,
                 createdAtEpochMillis =
                     existing.createdAtEpochMillis,
-
                 // Archiving uses a separate operation.
                 archivedAtEpochMillis =
-                    existing.archivedAtEpochMillis
+                    existing.archivedAtEpochMillis,
+
             )
 
             validateHabit(updated)
@@ -104,33 +140,38 @@ class HabitRepository(
         name: String,
     ): String =
         database.withWriteTransaction {
-            val cleaned = name.trim()
-            require(cleaned.isNotEmpty())
-
-            require(
-                habitDao.findDisplaySectionByName(
-                    cleaned
-                ) == null
-            ) {
-                "A section with that name already exists."
-            }
-
-            val id =
-                java.util.UUID.randomUUID()
-                    .toString()
-
-            habitDao.insertDisplaySection(
-                HabitDisplaySectionEntity(
-                    id = id,
-                    name = cleaned,
-                    displayOrder =
-                        habitDao
-                            .nextDisplaySectionOrder(),
-                )
-            )
-
-            id
+            insertDisplaySection(name)
         }
+
+    private suspend fun insertDisplaySection(
+        name: String,
+    ): String {
+        val cleaned = name.trim()
+        require(cleaned.isNotEmpty())
+
+        require(
+            habitDao.findDisplaySectionByName(
+                cleaned
+            ) == null
+        ) {
+            "A section with that name already exists."
+        }
+
+        val id =
+            java.util.UUID.randomUUID()
+                .toString()
+
+        habitDao.insertDisplaySection(
+            HabitDisplaySectionEntity(
+                id = id,
+                name = cleaned,
+                displayOrder =
+                    habitDao.nextDisplaySectionOrder(),
+            )
+        )
+
+        return id
+    }
 
     suspend fun renameDisplaySection(
         sectionId: String,
@@ -171,6 +212,79 @@ class HabitRepository(
                 existing.copy(name = cleaned)
             ) == 1
         }
+
+    suspend fun moveDisplaySectionUp(
+        sectionId: String,
+    ): Boolean =
+        moveDisplaySection(
+            sectionId = sectionId,
+            offset = -1,
+        )
+
+    suspend fun moveDisplaySectionDown(
+        sectionId: String,
+    ): Boolean =
+        moveDisplaySection(
+            sectionId = sectionId,
+            offset = 1,
+        )
+
+    private suspend fun moveDisplaySection(
+        sectionId: String,
+        offset: Int,
+    ): Boolean {
+        require(offset == -1 || offset == 1)
+
+        return database.withWriteTransaction {
+            val sections =
+                habitDao.getDisplaySections()
+
+            val currentIndex =
+                sections.indexOfFirst {
+                    it.id == sectionId
+                }
+
+            if (currentIndex == -1) {
+                return@withWriteTransaction false
+            }
+
+            val targetIndex =
+                currentIndex + offset
+
+            if (targetIndex !in sections.indices) {
+                return@withWriteTransaction false
+            }
+
+            val reordered =
+                sections.toMutableList()
+
+            val moved =
+                reordered.removeAt(currentIndex)
+
+            reordered.add(
+                targetIndex,
+                moved,
+            )
+
+            val normalized =
+                reordered.mapIndexed {
+                        index,
+                        section,
+                    ->
+                    section.copy(
+                        displayOrder = index
+                    )
+                }
+
+            check(
+                habitDao.updateDisplaySections(
+                    normalized
+                ) == normalized.size
+            )
+
+            true
+        }
+    }
 
     suspend fun deleteDisplaySection(
         sectionId: String,

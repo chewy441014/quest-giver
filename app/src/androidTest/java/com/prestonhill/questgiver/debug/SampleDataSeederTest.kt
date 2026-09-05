@@ -195,6 +195,7 @@ class SampleDataSeederTest {
                 "Morning",
                 "Anytime",
                 "Before bed",
+                "Uncategorized",
             ),
             displaySections.map { it.name },
         )

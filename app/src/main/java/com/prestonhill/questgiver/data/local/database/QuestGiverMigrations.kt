@@ -92,7 +92,7 @@ private suspend fun ensureUncategorizedDisplaySection(
             'Uncategorized',
             COALESCE(MAX(`displayOrder`), -1) + 1
         FROM `habit_display_sections`
-        WHERE NOT EXISTS (
+        HAVING NOT EXISTS (
             SELECT 1
             FROM `habit_display_sections`
             WHERE `name` =

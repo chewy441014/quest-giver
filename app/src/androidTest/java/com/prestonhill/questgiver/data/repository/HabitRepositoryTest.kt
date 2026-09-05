@@ -138,6 +138,88 @@ class HabitRepositoryTest {
     }
 
     @Test
+    fun displaySectionsCanBeReordered() =
+        runBlocking {
+            val sectionId =
+                repository.createDisplaySection(
+                    "Training"
+                )
+
+            assertTrue(
+                repository.moveDisplaySectionUp(
+                    sectionId
+                )
+            )
+
+            var sections =
+                repository
+                    .observeDisplaySections()
+                    .first()
+
+            assertEquals(
+                listOf(
+                    "Morning",
+                    "Anytime",
+                    "Before bed",
+                    "Training",
+                    "Uncategorized",
+                ),
+                sections.map { it.name },
+            )
+
+            assertTrue(
+                repository.moveDisplaySectionDown(
+                    sectionId
+                )
+            )
+
+            sections =
+                repository
+                    .observeDisplaySections()
+                    .first()
+
+            assertEquals(
+                listOf(
+                    "Morning",
+                    "Anytime",
+                    "Before bed",
+                    "Uncategorized",
+                    "Training",
+                ),
+                sections.map { it.name },
+            )
+
+            assertEquals(
+                sections.indices.toList(),
+                sections.map { it.displayOrder },
+            )
+        }
+
+    @Test
+    fun displaySectionCannotMovePastBoundary() =
+        runBlocking {
+            assertFalse(
+                repository.moveDisplaySectionUp(
+                    DefaultHabitDisplaySections
+                        .MORNING_ID
+                )
+            )
+
+            assertFalse(
+                repository.moveDisplaySectionDown(
+                    DefaultHabitDisplaySections
+                        .UNCATEGORIZED_ID
+                )
+            )
+
+            assertFalse(
+                repository.moveDisplaySectionUp(
+                    "missing"
+                )
+            )
+        }
+
+    @Test
     fun defaultDisplaySectionsAreAvailable() =
         runBlocking {
             val sections =
@@ -150,6 +232,7 @@ class HabitRepositoryTest {
                     "Morning",
                     "Anytime",
                     "Before bed",
+                    "Uncategorized",
                 ),
                 sections.map { it.name },
             )
@@ -183,10 +266,11 @@ class HabitRepositoryTest {
                 renamed.name,
             )
 
-            assertTrue(
+            assertEquals(
+                DisplaySectionDeleteResult.SUCCESS,
                 repository.deleteDisplaySection(
                     sectionId
-                )
+                ),
             )
 
             assertFalse(
@@ -198,41 +282,75 @@ class HabitRepositoryTest {
         }
 
     @Test
-    fun referencedDisplaySectionCannotBeDeleted() =
+    fun deletingSectionMovesReferencedHabits() =
         runBlocking {
             val sectionId =
                 repository.createDisplaySection(
                     "Training"
                 )
 
-            val habitId =
+            val activeId =
                 addHabit(
-                    displaySectionId =
-                        sectionId
+                    name = "Active",
+                    displaySectionId = sectionId,
+                    displayOrder = 1,
                 )
 
-            assertFalse(
-                repository.deleteDisplaySection(
-                    sectionId
+            val archivedId =
+                addHabit(
+                    name = "Archived",
+                    displaySectionId = sectionId,
+                    displayOrder = 0,
                 )
-            )
-
-            repository.archiveHabit(habitId)
-
-            // Archived habits still reference their
-            // display section.
-            assertFalse(
-                repository.deleteDisplaySection(
-                    sectionId
-                )
-            )
-
-            repository.deleteHabit(habitId)
 
             assertTrue(
+                repository.archiveHabit(
+                    archivedId
+                )
+            )
+
+            assertEquals(
+                DisplaySectionDeleteResult.SUCCESS,
                 repository.deleteDisplaySection(
                     sectionId
+                ),
+            )
+
+            val active =
+                requireNotNull(
+                    repository.getHabit(activeId)
                 )
+
+            val archived =
+                requireNotNull(
+                    repository.getHabit(archivedId)
+                )
+
+            assertEquals(
+                DefaultHabitDisplaySections
+                    .UNCATEGORIZED_ID,
+                active.displaySectionId,
+            )
+
+            assertEquals(
+                DefaultHabitDisplaySections
+                    .UNCATEGORIZED_ID,
+                archived.displaySectionId,
+            )
+
+            assertNull(
+                active.archivedAtEpochMillis
+            )
+
+            assertTrue(
+                archived.archivedAtEpochMillis != null
+            )
+
+            assertFalse(
+                repository
+                    .observeDisplaySections()
+                    .first()
+                    .any { it.id == sectionId }
             )
         }
 
@@ -286,6 +404,208 @@ class HabitRepositoryTest {
         }
 
     @Test
+    fun habitCanCreateDisplaySectionAtomically() =
+        runBlocking {
+            val habitId =
+                addHabit(
+                    name = "Lift",
+                    newDisplaySectionName =
+                        "  Training  ",
+                )
+
+            val habit =
+                requireNotNull(
+                    repository.getHabit(habitId)
+                )
+
+            val section =
+                repository
+                    .observeDisplaySections()
+                    .first()
+                    .single {
+                        it.name == "Training"
+                    }
+
+            assertEquals(
+                section.id,
+                habit.displaySectionId,
+            )
+
+            assertEquals(
+                0,
+                habit.displayOrder,
+            )
+        }
+
+    @Test
+    fun habitUpdateCanCreateDisplaySection() =
+        runBlocking {
+            val habitId = addHabit()
+
+            val existing =
+                requireNotNull(
+                    repository.getHabit(habitId)
+                )
+
+            assertTrue(
+                repository.updateHabit(
+                    habit =
+                        existing.copy(
+                            name = "Updated"
+                        ),
+                    newDisplaySectionName =
+                        "Training",
+                )
+            )
+
+            val updated =
+                requireNotNull(
+                    repository.getHabit(habitId)
+                )
+
+            val section =
+                repository
+                    .observeDisplaySections()
+                    .first()
+                    .single {
+                        it.name == "Training"
+                    }
+
+            assertEquals(
+                section.id,
+                updated.displaySectionId,
+            )
+
+            assertEquals(0, updated.displayOrder)
+            assertEquals("Updated", updated.name)
+        }
+
+    @Test
+    fun invalidHabitDoesNotCreateDisplaySection() =
+        runBlocking {
+            val result =
+                runCatching {
+                    addHabit(
+                        name = "   ",
+                        newDisplaySectionName =
+                            "Temporary",
+                    )
+                }
+
+            assertTrue(
+                result.exceptionOrNull()
+                        is IllegalArgumentException
+            )
+
+            assertFalse(
+                repository
+                    .observeDisplaySections()
+                    .first()
+                    .any {
+                        it.name == "Temporary"
+                    }
+            )
+
+            assertTrue(
+                repository
+                    .observeAllHabits()
+                    .first()
+                    .isEmpty()
+            )
+        }
+
+    @Test
+    fun missingHabitUpdateDoesNotCreateSection() =
+        runBlocking {
+            val existingId = addHabit()
+
+            val missing =
+                requireNotNull(
+                    repository.getHabit(existingId)
+                )
+                    .copy(id = Long.MAX_VALUE)
+
+            assertFalse(
+                repository.updateHabit(
+                    habit = missing,
+                    newDisplaySectionName =
+                        "Temporary",
+                )
+            )
+
+            assertFalse(
+                repository
+                    .observeDisplaySections()
+                    .first()
+                    .any {
+                        it.name == "Temporary"
+                    }
+            )
+        }
+
+    @Test
+    fun deletionNormalizesSectionOrder() =
+        runBlocking {
+            val first =
+                repository.createDisplaySection(
+                    "First custom"
+                )
+
+            repository.createDisplaySection(
+                "Second custom"
+            )
+
+            assertEquals(
+                DisplaySectionDeleteResult.SUCCESS,
+                repository.deleteDisplaySection(
+                    first
+                ),
+            )
+
+            val sections =
+                repository
+                    .observeDisplaySections()
+                    .first()
+
+            assertEquals(
+                sections.indices.toList(),
+                sections.map { it.displayOrder },
+            )
+        }
+
+    @Test
+    fun missingDisplaySectionCannotBeDeleted() =
+        runBlocking {
+            assertEquals(
+                DisplaySectionDeleteResult.NOT_FOUND,
+                repository.deleteDisplaySection(
+                    "missing"
+                ),
+            )
+        }
+
+    @Test
+    fun uncategorizedSectionIsProtected() =
+        runBlocking {
+            assertFalse(
+                repository.renameDisplaySection(
+                    sectionId =
+                        DefaultHabitDisplaySections
+                            .UNCATEGORIZED_ID,
+                    name = "Other",
+                )
+            )
+
+            assertEquals(
+                DisplaySectionDeleteResult.PROTECTED,
+                repository.deleteDisplaySection(
+                    DefaultHabitDisplaySections
+                        .UNCATEGORIZED_ID
+                ),
+            )
+        }
+
+    @Test
     fun deleteArchivedHabit() = runBlocking {
         val habitId = addHabit()
         addLogs(habitId, 3)
@@ -308,21 +628,26 @@ class HabitRepositoryTest {
         displaySectionId: String =
             DefaultHabitDisplaySections.ANYTIME_ID,
         historyCategory: String? = null,
+        displayOrder: Int = 0,
+        newDisplaySectionName: String? = null,
     ): Long =
         repository.createHabit(
-            HabitEntity(
-                name = name,
-                displaySectionId =
-                    displaySectionId,
-                historyCategory =
-                    historyCategory,
-                displayOrder = 0,
-                allowsMultipleCompletions = true,
-                scheduleType =
-                    HabitScheduleTypeDb.DAILY,
-                scheduleTarget = 1,
-                createdAtEpochMillis = TEST_TIME,
-            )
+            habit =
+                HabitEntity(
+                    name = name,
+                    displaySectionId =
+                        displaySectionId,
+                    historyCategory =
+                        historyCategory,
+                    displayOrder = displayOrder,
+                    allowsMultipleCompletions = true,
+                    scheduleType =
+                        HabitScheduleTypeDb.DAILY,
+                    scheduleTarget = 1,
+                    createdAtEpochMillis = TEST_TIME,
+                ),
+            newDisplaySectionName =
+                newDisplaySectionName,
         )
 
     private suspend fun addLogs(
