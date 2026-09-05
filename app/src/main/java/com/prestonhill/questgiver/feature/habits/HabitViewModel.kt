@@ -10,6 +10,7 @@ import com.prestonhill.questgiver.data.local.database.entity.HabitIntervalBasisD
 import com.prestonhill.questgiver.data.local.database.entity.HabitLogEntity
 import com.prestonhill.questgiver.data.local.database.entity.HabitScheduleTypeDb
 import com.prestonhill.questgiver.data.local.database.entity.HabitScheduleVisibilityDb
+import com.prestonhill.questgiver.data.repository.DisplaySectionDeleteResult
 import com.prestonhill.questgiver.data.repository.HabitRepository
 import java.util.concurrent.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,6 +50,16 @@ class HabitViewModel(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
             initialValue = AppSettings(),
+        )
+
+    private val sectionManagerState =
+        MutableStateFlow<
+                HabitSectionManagerUiState?
+                >(null)
+
+    private val changingSectionIds =
+        MutableStateFlow<Set<String>>(
+            emptySet()
         )
 
     private val timeState =
@@ -94,6 +105,7 @@ class HabitViewModel(
     private data class HabitDialogState(
         val confirmation: HabitConfirmationUiState?,
         val operationError: String?,
+        val sectionManagerState: HabitSectionManagerUiState?,
     )
 
     private val confirmationState =
@@ -102,11 +114,13 @@ class HabitViewModel(
     private val dialogState =
         combine(
             confirmationState,
-            operationError
-        ) { confirmation, error ->
+            operationError,
+            sectionManagerState,
+        ) { confirmation, error, sectionManagerState ->
             HabitDialogState(
                 confirmation = confirmation,
-                operationError = error
+                operationError = error,
+                sectionManagerState = sectionManagerState,
             )
         }
 
@@ -133,7 +147,7 @@ class HabitViewModel(
         showArchivedHabits,
         dialogState,
         archivedHabits,
-    ) { inspectedId, editor, showArchived, dialogs, archived ->
+    ) { inspectedId, editor, showArchived, dialogs, archived  ->
         OverlayState(
             inspectedHabitId = inspectedId,
             editor = editor,
@@ -141,6 +155,7 @@ class HabitViewModel(
             confirmation = dialogs.confirmation,
             operationError = dialogs.operationError,
             archivedHabits = archived,
+            sectionManager = dialogs.sectionManagerState,
         )
     }
 
@@ -152,12 +167,14 @@ class HabitViewModel(
             displaySections,
             collapsedSectionIds,
             sectionsShowingHidden,
-        ) { sections, collapsed, showingHidden ->
+            changingSectionIds,
+        ) { sections, collapsed, showingHidden, changingSectionIds ->
             HabitDisplayState(
                 sections = sections,
                 collapsedSectionIds = collapsed,
                 sectionsShowingHidden =
                     showingHidden,
+                changingSectionIds = changingSectionIds,
             )
         }
 
@@ -295,6 +312,59 @@ class HabitViewModel(
                     }
                 }
 
+            HabitAction.ShowSectionManager ->
+                sectionManagerState.value =
+                    HabitSectionManagerUiState()
+
+            HabitAction.DismissSectionManager ->
+                sectionManagerState.value = null
+
+            HabitAction.AddDisplaySection ->
+                openDisplaySectionEditor(null)
+
+            is HabitAction.EditDisplaySection ->
+                openDisplaySectionEditor(
+                    action.sectionId
+                )
+
+            is HabitAction.ChangeDisplaySectionName ->
+                changeDisplaySectionName(
+                    action.name
+                )
+
+            HabitAction.SaveDisplaySection ->
+                saveDisplaySection()
+
+            HabitAction.DismissDisplaySectionEditor ->
+                sectionManagerState.update {
+                    it?.copy(editor = null)
+                }
+
+            is HabitAction.MoveDisplaySectionUp ->
+                moveDisplaySection(
+                    sectionId = action.sectionId,
+                    up = true,
+                )
+
+            is HabitAction.MoveDisplaySectionDown ->
+                moveDisplaySection(
+                    sectionId = action.sectionId,
+                    up = false,
+                )
+
+            is HabitAction.RequestDeleteDisplaySection ->
+                requestDeleteDisplaySection(
+                    action.sectionId
+                )
+
+            HabitAction.ConfirmDeleteDisplaySection ->
+                confirmDeleteDisplaySection()
+
+            HabitAction.DismissDeleteDisplaySection ->
+                sectionManagerState.update {
+                    it?.copy(confirmation = null)
+                }
+
             HabitAction.AddHabit -> {
                 inspectedHabitId.value = null
 
@@ -367,6 +437,120 @@ class HabitViewModel(
         }
     }
 
+    private fun requestDeleteDisplaySection(
+        sectionId: String,
+    ) {
+        val manager =
+            sectionManagerState.value ?: return
+
+        val section =
+            displaySections.value
+                .firstOrNull {
+                    it.id == sectionId
+                }
+                ?: return
+
+        if (
+            section.name.equals(
+                DefaultHabitDisplaySections
+                    .UNCATEGORIZED_NAME,
+                ignoreCase = true,
+            )
+        ) {
+            return
+        }
+
+        sectionManagerState.value =
+            manager.copy(
+                confirmation =
+                    HabitSectionDeleteUiState(
+                        sectionId = section.id,
+                        sectionName = section.name,
+                    )
+            )
+    }
+
+    private fun confirmDeleteDisplaySection() {
+        val confirmation =
+            sectionManagerState.value
+                ?.confirmation
+                ?: return
+
+        if (confirmation.isDeleting) {
+            return
+        }
+
+        sectionManagerState.update { manager ->
+            manager?.copy(
+                confirmation =
+                    confirmation.copy(
+                        isDeleting = true,
+                        errorMessage = null,
+                    )
+            )
+        }
+
+        viewModelScope.launch {
+            try {
+                when (
+                    repository.deleteDisplaySection(
+                        confirmation.sectionId
+                    )
+                ) {
+                    DisplaySectionDeleteResult.SUCCESS ->
+                        sectionManagerState.update {
+                            it?.copy(
+                                editor = null,
+                                confirmation = null,
+                            )
+                        }
+
+                    DisplaySectionDeleteResult.NOT_FOUND ->
+                        updateSectionDeleteError(
+                            confirmation.sectionId,
+                            "Section no longer exists.",
+                        )
+
+                    DisplaySectionDeleteResult.PROTECTED ->
+                        updateSectionDeleteError(
+                            confirmation.sectionId,
+                            "Uncategorized cannot be deleted.",
+                        )
+                }
+            } catch (error: Exception) {
+                if (error is CancellationException) {
+                    throw error
+                }
+
+                updateSectionDeleteError(
+                    confirmation.sectionId,
+                    "Section could not be deleted.",
+                )
+            }
+        }
+    }
+
+    private fun updateSectionDeleteError(
+        sectionId: String,
+        message: String,
+    ) {
+        sectionManagerState.update { manager ->
+            val current =
+                manager?.confirmation
+
+            if (current?.sectionId != sectionId) {
+                manager
+            } else {
+                manager.copy(
+                    confirmation =
+                        current.copy(
+                            isDeleting = false,
+                            errorMessage = message,
+                        )
+                )
+            }
+        }
+    }
     fun refreshAppDay() {
         currentTimestamp.value =
             clock.millis()
@@ -472,8 +656,9 @@ class HabitViewModel(
                     repository.createHabit(
                         createHabitEntity(
                             editor = editor,
-                            timestampMillis = now
-                        )
+                            timestampMillis = now,
+                        ),
+                        newDisplaySectionName = editor.newDisplaySectionName,
                     )
                 } else {
                     val existing =
@@ -486,7 +671,10 @@ class HabitViewModel(
                             editor = editor
                         )
 
-                    check(repository.updateHabit(updated)) {
+                    check(repository.updateHabit(
+                        updated,
+                        newDisplaySectionName = editor.newDisplaySectionName,)
+                    ) {
                         "Habit could not be updated."
                     }
                 }
@@ -523,7 +711,14 @@ class HabitViewModel(
                 editor.historyCategory
                     .trim()
                     .ifEmpty { null },
-            displayOrder = nextOrder(sectionId),
+            displayOrder =
+                if (
+                    editor.newDisplaySectionName != null
+                ) {
+                    0
+                } else {
+                    nextOrder(sectionId)
+                },
             allowsMultipleCompletions =
                 editor.allowsMultipleCompletions,
             scheduleType = editor.scheduleType.toDb(),
@@ -559,10 +754,9 @@ class HabitViewModel(
 
         val newOrder =
             if (
-                newSectionId ==
-                existing.displaySectionId
+                editor.newDisplaySectionName != null
             ) {
-                existing.displayOrder
+                0
             } else {
                 nextOrder(newSectionId)
             }
@@ -682,6 +876,167 @@ class HabitViewModel(
         }
     }
 
+    private fun openDisplaySectionEditor(
+        sectionId: String?,
+    ) {
+        val manager =
+            sectionManagerState.value ?: return
+
+        val editor =
+            if (sectionId == null) {
+                HabitSectionEditorUiState()
+            } else {
+                val section =
+                    displaySections.value
+                        .firstOrNull {
+                            it.id == sectionId
+                        }
+                        ?: return
+
+                val isUncategorized =
+                    section.name.equals(
+                        DefaultHabitDisplaySections
+                            .UNCATEGORIZED_NAME,
+                        ignoreCase = true,
+                    )
+
+                if (isUncategorized) {
+                    return
+                }
+
+                HabitSectionEditorUiState(
+                    sectionId = section.id,
+                    name = section.name,
+                )
+            }
+
+        sectionManagerState.value =
+            manager.copy(editor = editor)
+    }
+
+    private fun changeDisplaySectionName(
+        name: String,
+    ) {
+        sectionManagerState.update { manager ->
+            val editor =
+                manager?.editor
+                    ?: return@update manager
+
+            manager.copy(
+                editor =
+                    editor.copy(
+                        name = name,
+                        errorMessage = null,
+                    )
+            )
+        }
+    }
+
+    private fun saveDisplaySection() {
+        val editor =
+            sectionManagerState.value
+                ?.editor
+                ?: return
+
+        if (!editor.canSave) {
+            return
+        }
+
+        sectionManagerState.update {
+            it?.copy(
+                editor =
+                    editor.copy(
+                        isSaving = true,
+                        errorMessage = null,
+                    )
+            )
+        }
+
+        viewModelScope.launch {
+            try {
+                if (editor.sectionId == null) {
+                    repository.createDisplaySection(
+                        editor.name
+                    )
+                } else {
+                    check(
+                        repository.renameDisplaySection(
+                            sectionId =
+                                editor.sectionId,
+                            name = editor.name,
+                        )
+                    ) {
+                        "Section could not be renamed."
+                    }
+                }
+
+                sectionManagerState.update {
+                    it?.copy(editor = null)
+                }
+            } catch (error: Exception) {
+                if (error is CancellationException) {
+                    throw error
+                }
+
+                sectionManagerState.update { manager ->
+                    manager?.copy(
+                        editor =
+                            manager.editor?.copy(
+                                isSaving = false,
+                                errorMessage =
+                                    error.message
+                                        ?: "Section could not be saved.",
+                            )
+                    )
+                }
+            }
+        }
+    }
+
+    private fun moveDisplaySection(
+        sectionId: String,
+        up: Boolean,
+    ) {
+        if (sectionId in changingSectionIds.value) {
+            return
+        }
+
+        operationError.value = null
+        changingSectionIds.value += sectionId
+
+        viewModelScope.launch {
+            try {
+                val moved =
+                    if (up) {
+                        repository
+                            .moveDisplaySectionUp(
+                                sectionId
+                            )
+                    } else {
+                        repository
+                            .moveDisplaySectionDown(
+                                sectionId
+                            )
+                    }
+
+                if (!moved) {
+                    operationError.value =
+                        "Section could not be moved."
+                }
+            } catch (error: Exception) {
+                if (error is CancellationException) {
+                    throw error
+                }
+
+                operationError.value =
+                    "Section could not be moved."
+            } finally {
+                changingSectionIds.value -=
+                    sectionId
+            }
+        }
+    }
+
     private fun createUiState(
         habits: List<HabitEntity>,
         logs: List<HabitLogEntity>,
@@ -697,10 +1052,22 @@ class HabitViewModel(
                 it.displaySectionId
             }
 
+        val uncategorizedId =
+            display.sections
+                .firstOrNull {
+                    it.name.equals(
+                        DefaultHabitDisplaySections
+                            .UNCATEGORIZED_NAME,
+                        ignoreCase = true,
+                    )
+                }
+                ?.id
+
         return HabitScreenUiState(
             operationError = overlay.operationError,
+            sectionManager = overlay.sectionManager,
             sections =
-                display.sections.map { section ->
+                display.sections.mapIndexed { index, section ->
                     val evaluatedHabits =
                         rowsBySection[section.id]
                             .orEmpty()
@@ -740,6 +1107,14 @@ class HabitViewModel(
                     HabitDisplaySectionUiState(
                         id = section.id,
                         name = section.name,
+                        canMoveUp = index > 0,
+                        canMoveDown =
+                            index < display.sections.lastIndex,
+                        canEdit =
+                            section.id != uncategorizedId,
+                        isChanging =
+                            section.id in
+                                    display.changingSectionIds,
                         isExpanded =
                             section.id !in
                                     display
@@ -911,6 +1286,7 @@ private data class OverlayState(
     val confirmation: HabitConfirmationUiState?,
     val archivedHabits: List<HabitEntity>,
     val operationError: String?,
+    val sectionManager: HabitSectionManagerUiState?,
 )
 private data class HabitDisplayState(
     val sections:
@@ -918,6 +1294,7 @@ private data class HabitDisplayState(
     val collapsedSectionIds: Set<String>,
     val sectionsShowingHidden:
     Set<String>,
+    val changingSectionIds: Set<String>,
 )
 
 private data class HabitTimeState(

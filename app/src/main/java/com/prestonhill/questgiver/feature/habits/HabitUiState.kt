@@ -39,7 +39,8 @@ data class HabitEditorUiState(
     val scheduleVisibility: HabitScheduleVisibility =
         HabitScheduleVisibility.ALWAYS,
     val isSaving: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val newDisplaySectionName: String? = null,
 ) {
     val isEditing: Boolean
         get() = habitId != null
@@ -54,11 +55,14 @@ data class HabitEditorUiState(
                         intervalDays.toIntOrNull()
                             ?.let { it > 0 } == true
 
+            val validSection =
+                newDisplaySectionName?.isNotBlank() ?: displaySectionId.isNotBlank()
+
             return name.isNotBlank() &&
                     validTarget &&
                     validInterval &&
-                    !isSaving &&
-                    displaySectionId.isNotBlank()
+                    validSection &&
+                    !isSaving
         }
 }
 data class HabitRowUiState(
@@ -86,6 +90,39 @@ data class HabitDisplaySectionUiState(
         emptyList(),
     val hasHiddenHabits: Boolean = false,
     val showHiddenHabits: Boolean = false,
+    val canMoveUp: Boolean = false,
+    val canMoveDown: Boolean = false,
+    val canEdit: Boolean = true,
+    val isChanging: Boolean = false,
+)
+
+data class HabitSectionManagerUiState(
+    val editor:
+    HabitSectionEditorUiState? = null,
+    val confirmation:
+    HabitSectionDeleteUiState? = null,
+)
+
+data class HabitSectionEditorUiState(
+    val sectionId: String? = null,
+    val name: String = "",
+    val isSaving: Boolean = false,
+    val errorMessage: String? = null,
+) {
+    val isCreating: Boolean
+        get() = sectionId == null
+
+    val canSave: Boolean
+        get() =
+            name.isNotBlank() &&
+                    !isSaving
+}
+
+data class HabitSectionDeleteUiState(
+    val sectionId: String,
+    val sectionName: String,
+    val isDeleting: Boolean = false,
+    val errorMessage: String? = null,
 )
 
 data class HabitScreenUiState(
@@ -96,6 +133,7 @@ data class HabitScreenUiState(
     val showArchivedHabits: Boolean = false,
     val confirmation: HabitConfirmationUiState? = null,
     val operationError: String? = null,
+    val sectionManager: HabitSectionManagerUiState? = null,
 )
 
 data class ArchivedHabitUiState(

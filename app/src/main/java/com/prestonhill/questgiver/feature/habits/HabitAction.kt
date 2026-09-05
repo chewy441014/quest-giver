@@ -41,4 +41,46 @@ sealed interface HabitAction {
     data object DismissConfirmation : HabitAction
 
     data object DismissOperationError : HabitAction
+
+    data object ShowSectionManager :
+        HabitAction
+
+    data object DismissSectionManager :
+        HabitAction
+
+    data object AddDisplaySection :
+        HabitAction
+
+    data class EditDisplaySection(
+        val sectionId: String,
+    ) : HabitAction
+
+    data class ChangeDisplaySectionName(
+        val name: String,
+    ) : HabitAction
+
+    data object SaveDisplaySection :
+        HabitAction
+
+    data object DismissDisplaySectionEditor :
+        HabitAction
+
+    data class MoveDisplaySectionUp(
+        val sectionId: String,
+    ) : HabitAction
+
+    data class MoveDisplaySectionDown(
+        val sectionId: String,
+    ) : HabitAction
+
+    data class RequestDeleteDisplaySection(
+        val sectionId: String,
+    ) : HabitAction
+
+    data object ConfirmDeleteDisplaySection :
+        HabitAction
+
+    data object DismissDeleteDisplaySection :
+        HabitAction
+
 }
