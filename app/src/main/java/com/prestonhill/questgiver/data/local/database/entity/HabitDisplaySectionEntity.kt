@@ -24,6 +24,11 @@ object DefaultHabitDisplaySections {
     const val MORNING_ID = "MORNING"
     const val ANYTIME_ID = "ANYTIME"
     const val BEFORE_BED_ID = "BEFORE_BED"
+    const val UNCATEGORIZED_ID =
+        "UNCATEGORIZED"
+
+    const val UNCATEGORIZED_NAME =
+        "Uncategorized"
 
     val all =
         listOf(
@@ -41,6 +46,11 @@ object DefaultHabitDisplaySections {
                 id = BEFORE_BED_ID,
                 name = "Before bed",
                 displayOrder = 2,
+            ),
+            HabitDisplaySectionEntity(
+                id = UNCATEGORIZED_ID,
+                name = UNCATEGORIZED_NAME,
+                displayOrder = 3,
             ),
         )
 }

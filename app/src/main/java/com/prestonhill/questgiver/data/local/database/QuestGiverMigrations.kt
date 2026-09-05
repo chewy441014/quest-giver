@@ -51,6 +51,14 @@ val HABIT_DISPLAY_SECTION_CALLBACK =
                 connection
             )
         }
+
+        override suspend fun onOpen(
+            connection: SQLiteConnection,
+        ) {
+            ensureUncategorizedDisplaySection(
+                connection
+            )
+        }
     }
 
 private suspend fun insertDefaultHabitDisplaySections(
@@ -65,6 +73,31 @@ private suspend fun insertDefaultHabitDisplaySections(
             ('MORNING', 'Morning', 0),
             ('ANYTIME', 'Anytime', 1),
             ('BEFORE_BED', 'Before bed', 2)
+        """.trimIndent()
+    )
+    ensureUncategorizedDisplaySection(
+        connection
+    )
+}
+private suspend fun ensureUncategorizedDisplaySection(
+    connection: SQLiteConnection,
+) {
+    connection.execSQL(
+        """
+        INSERT OR IGNORE INTO
+            `habit_display_sections`
+            (`id`, `name`, `displayOrder`)
+        SELECT
+            'UNCATEGORIZED',
+            'Uncategorized',
+            COALESCE(MAX(`displayOrder`), -1) + 1
+        FROM `habit_display_sections`
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM `habit_display_sections`
+            WHERE `name` =
+                'Uncategorized' COLLATE NOCASE
+        )
         """.trimIndent()
     )
 }

@@ -87,24 +87,6 @@ interface HabitDao {
         section: HabitDisplaySectionEntity,
     ): Int
 
-    @Query(
-        """
-    DELETE FROM habit_display_sections
-    WHERE id = :sectionId
-      AND NOT EXISTS (
-          SELECT 1 FROM habits
-          WHERE category = :sectionId
-      )
-      AND (
-          SELECT COUNT(*)
-          FROM habit_display_sections
-      ) > 1
-    """
-    )
-    suspend fun deleteEmptyDisplaySection(
-        sectionId: String,
-    ): Int
-
     @Query("SELECT * FROM habits WHERE id = :habitId LIMIT 1")
     suspend fun getHabit(habitId: Long): HabitEntity?
 
@@ -115,6 +97,70 @@ interface HabitDao {
     """
     )
     fun observeAllHabitLogs(): Flow<List<HabitLogEntity>>
+
+    @Query(
+        """
+    SELECT * FROM habit_display_sections
+    ORDER BY displayOrder, id
+    """
+    )
+    suspend fun getDisplaySections():
+            List<HabitDisplaySectionEntity>
+
+    @Query(
+        """
+    SELECT * FROM habits
+    WHERE category = :sectionId
+    ORDER BY
+        displayOrder,
+        createdAtEpochMillis,
+        id
+    """
+    )
+    suspend fun getHabitsInDisplaySection(
+        sectionId: String,
+    ): List<HabitEntity>
+
+    @Query(
+        """
+    SELECT COALESCE(MAX(displayOrder), -1)
+    FROM habits
+    WHERE category = :sectionId
+    """
+    )
+    suspend fun maximumHabitDisplayOrder(
+        sectionId: String,
+    ): Int
+
+    @Query(
+        """
+    UPDATE habits
+    SET category = :targetSectionId,
+        displayOrder = :displayOrder
+    WHERE id = :habitId
+    """
+    )
+    suspend fun moveHabitToDisplaySection(
+        habitId: Long,
+        targetSectionId: String,
+        displayOrder: Int,
+    ): Int
+
+    @Update
+    suspend fun updateDisplaySections(
+        sections:
+        List<HabitDisplaySectionEntity>,
+    ): Int
+
+    @Query(
+        """
+    DELETE FROM habit_display_sections
+    WHERE id = :sectionId
+    """
+    )
+    suspend fun deleteDisplaySection(
+        sectionId: String,
+    ): Int
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertHabit(habit: HabitEntity): Long

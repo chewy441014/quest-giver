@@ -2,6 +2,7 @@ package com.prestonhill.questgiver.data.repository
 
 import androidx.room3.withWriteTransaction
 import com.prestonhill.questgiver.data.local.database.QuestGiverDatabase
+import com.prestonhill.questgiver.data.local.database.entity.DefaultHabitDisplaySections
 import com.prestonhill.questgiver.data.local.database.entity.HabitDisplaySectionEntity
 import com.prestonhill.questgiver.data.local.database.entity.HabitEntity
 import com.prestonhill.questgiver.data.local.database.entity.HabitLogEntity
@@ -144,6 +145,16 @@ class HabitRepository(
                 habitDao.getDisplaySection(sectionId)
                     ?: return@withWriteTransaction false
 
+            val uncategorized =
+                habitDao.findDisplaySectionByName(
+                    DefaultHabitDisplaySections
+                        .UNCATEGORIZED_NAME
+                )
+
+            if (existing.id == uncategorized?.id) {
+                return@withWriteTransaction false
+            }
+
             val duplicate =
                 habitDao.findDisplaySectionByName(
                     cleaned
@@ -163,10 +174,60 @@ class HabitRepository(
 
     suspend fun deleteDisplaySection(
         sectionId: String,
-    ): Boolean =
-        habitDao.deleteEmptyDisplaySection(
-            sectionId
-        ) == 1
+    ): DisplaySectionDeleteResult =
+        database.withWriteTransaction {
+            val source =
+                habitDao.getDisplaySection(
+                    sectionId
+                )
+                    ?: return@withWriteTransaction DisplaySectionDeleteResult.NOT_FOUND
+
+            val uncategorized =
+                requireNotNull(
+                    habitDao.findDisplaySectionByName(
+                        DefaultHabitDisplaySections
+                            .UNCATEGORIZED_NAME
+                    )
+                ) {
+                    "Uncategorized section does not exist."
+                }
+
+            if (source.id == uncategorized.id) {
+                return@withWriteTransaction DisplaySectionDeleteResult.PROTECTED
+            }
+
+            val habits =
+                habitDao.getHabitsInDisplaySection(
+                    source.id
+                )
+
+            val firstOrder =
+                habitDao.maximumHabitDisplayOrder(
+                    uncategorized.id
+                ) + 1
+
+            habits.forEachIndexed { index, habit ->
+                check(
+                    habitDao.moveHabitToDisplaySection(
+                        habitId = habit.id,
+                        targetSectionId =
+                            uncategorized.id,
+                        displayOrder =
+                            firstOrder + index,
+                    ) == 1
+                )
+            }
+
+            check(
+                habitDao.deleteDisplaySection(
+                    source.id
+                ) == 1
+            )
+
+            normalizeDisplaySectionOrder()
+
+            DisplaySectionDeleteResult.SUCCESS
+        }
 
     suspend fun addCompletion(
         habitId: Long,
@@ -308,6 +369,26 @@ class HabitRepository(
         }
     }
 
+    private suspend fun normalizeDisplaySectionOrder() {
+        val sections =
+            habitDao.getDisplaySections()
+
+        val normalized =
+            sections.mapIndexed { index, section ->
+                section.copy(
+                    displayOrder = index
+                )
+            }
+
+        if (normalized != sections) {
+            check(
+                habitDao.updateDisplaySections(
+                    normalized
+                ) == normalized.size
+            )
+        }
+    }
+
     private companion object {
         const val MAXIMUM_DAILY_COMPLETIONS = 100L
     }
@@ -328,4 +409,10 @@ enum class CompletionChangeResult {
     HABIT_ARCHIVED,
     LIMIT_REACHED,
     NOTHING_TO_REMOVE
+}
+
+enum class DisplaySectionDeleteResult {
+    SUCCESS,
+    NOT_FOUND,
+    PROTECTED,
 }
