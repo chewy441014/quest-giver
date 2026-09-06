@@ -557,7 +557,7 @@ class HabitViewModelTest {
             )
 
             val state =
-                awaitState {
+                awaitState { it ->
                     it.sections
                         .singleOrNull {
                                 section ->
@@ -576,6 +576,494 @@ class HabitViewModelTest {
                         it.id == sectionId
                     }
                     .name,
+            )
+        }
+
+    @Test
+    fun displaySectionCapabilitiesAreMapped(): Unit =
+        runBlocking {
+            val state =
+                awaitState {
+                    it.sections.size == 4
+                }
+
+            assertFalse(
+                state.sections.first()
+                    .canMoveUp
+            )
+
+            assertFalse(
+                state.sections.last()
+                    .canMoveDown
+            )
+
+            val uncategorized =
+                state.sections.single {
+                    it.id ==
+                            DefaultHabitDisplaySections
+                                .UNCATEGORIZED_ID
+                }
+
+            assertFalse(
+                uncategorized.canEdit
+            )
+
+            assertTrue(
+                uncategorized.canMoveUp
+            )
+        }
+
+    @Test
+    fun displaySectionCanBeMoved(): Unit =
+        runBlocking {
+            val sectionId =
+                repository.createDisplaySection(
+                    "Training"
+                )
+
+            awaitState {
+                it.sections.any {
+                        section -> section.id == sectionId
+                }
+            }
+
+            viewModel.onAction(
+                HabitAction.MoveDisplaySectionUp(
+                    sectionId
+                )
+            )
+
+            val state =
+                awaitState {
+                    it.sections.map { section ->
+                        section.name
+                    } ==
+                            listOf(
+                                "Morning",
+                                "Anytime",
+                                "Before bed",
+                                "Training",
+                                "Uncategorized",
+                            )
+                }
+
+            assertFalse(
+                state.sections
+                    .single {
+                        it.id == sectionId
+                    }
+                    .isChanging
+            )
+        }
+
+    @Test
+    fun displaySectionDeletionMovesHabit(): Unit =
+        runBlocking {
+            val sectionId =
+                repository.createDisplaySection(
+                    "Training"
+                )
+
+            awaitState {
+                it.sections.any { section ->
+                    section.id == sectionId
+                }
+            }
+
+            viewModel.onAction(
+                HabitAction.ShowSectionManager
+            )
+
+            awaitState {
+                it.sectionManager != null
+            }
+
+            viewModel.onAction(
+                HabitAction.EditDisplaySection(
+                    sectionId
+                )
+            )
+
+            awaitState {
+                it.sectionManager
+                    ?.editor
+                    ?.sectionId == sectionId
+            }
+
+            val habitId =
+                addHabit(
+                    displaySectionId =
+                        sectionId
+                )
+
+            awaitState {
+                it.hasHabit(habitId)
+            }
+
+            viewModel.onAction(
+                HabitAction.ShowSectionManager
+            )
+
+            viewModel.onAction(
+                HabitAction.EditDisplaySection(
+                    sectionId
+                )
+            )
+
+            awaitState {
+                it.sectionManager
+                    ?.editor
+                    ?.sectionId == sectionId
+            }
+
+            viewModel.onAction(
+                HabitAction.RequestDeleteDisplaySection(
+                    sectionId
+                )
+            )
+
+            awaitState {
+                it.sectionManager
+                    ?.confirmation
+                    ?.sectionId == sectionId
+            }
+
+            viewModel.onAction(
+                HabitAction.ConfirmDeleteDisplaySection
+            )
+
+            val state =
+                awaitState {
+                    it.sections
+                        .singleOrNull { section ->
+                            section.id ==
+                                    DefaultHabitDisplaySections
+                                        .UNCATEGORIZED_ID
+                        }
+                        ?.habits
+                        ?.any { habit ->
+                            habit.id == habitId
+                        } == true
+                }
+
+            val moved =
+                requireNotNull(
+                    repository.getHabit(habitId)
+                )
+
+            assertEquals(
+                DefaultHabitDisplaySections
+                    .UNCATEGORIZED_ID,
+                moved.displaySectionId,
+            )
+
+            assertTrue(
+                state.sections
+                    .single {
+                        it.id ==
+                                DefaultHabitDisplaySections
+                                    .UNCATEGORIZED_ID
+                    }
+                    .habits
+                    .any {
+                        it.id == habitId
+                    }
+            )
+        }
+
+    @Test
+    fun duplicateDisplaySectionShowsError(): Unit =
+        runBlocking {
+            repository.createDisplaySection(
+                "Training"
+            )
+
+            awaitState {
+                it.sections.any { section ->
+                    section.name == "Training"
+                }
+            }
+
+            viewModel.onAction(
+                HabitAction.ShowSectionManager
+            )
+
+            awaitState {
+                it.sectionManager != null
+            }
+
+            viewModel.onAction(
+                HabitAction.AddDisplaySection
+            )
+
+            awaitState {
+                it.sectionManager
+                    ?.editor
+                    ?.isCreating == true
+            }
+
+            viewModel.onAction(
+                HabitAction.ChangeDisplaySectionName(
+                    "  training  "
+                )
+            )
+
+            awaitState {
+                it.sectionManager
+                    ?.editor
+                    ?.name == "  training  "
+            }
+
+            viewModel.onAction(
+                HabitAction.SaveDisplaySection
+            )
+
+            val editor =
+                awaitState {
+                    it.sectionManager
+                        ?.editor
+                        ?.errorMessage != null
+                }
+                    .sectionManager
+                    ?.editor
+
+            assertFalse(
+                editor?.isSaving ?: true
+            )
+
+            assertEquals(
+                "A section with that name already exists.",
+                editor?.errorMessage,
+            )
+        }
+
+    @Test
+    fun sectionManagerOpensAndDismisses(): Unit =
+        runBlocking {
+            viewModel.onAction(
+                HabitAction.ShowSectionManager
+            )
+
+            awaitState {
+                it.sectionManager != null
+            }
+
+            viewModel.onAction(
+                HabitAction.DismissSectionManager
+            )
+
+            awaitState {
+                it.sectionManager == null
+            }
+        }
+
+    @Test
+    fun displaySectionCanBeCreatedFromManager() =
+        runBlocking {
+            viewModel.onAction(
+                HabitAction.ShowSectionManager
+            )
+
+            awaitState {
+                it.sectionManager != null
+            }
+
+            viewModel.onAction(
+                HabitAction.AddDisplaySection
+            )
+
+            awaitState {
+                it.sectionManager
+                    ?.editor
+                    ?.isCreating == true
+            }
+
+            viewModel.onAction(
+                HabitAction.ChangeDisplaySectionName(
+                    "Training"
+                )
+            )
+
+            viewModel.onAction(
+                HabitAction.SaveDisplaySection
+            )
+
+            val state =
+                awaitState {
+                    it.sectionManager?.editor == null &&
+                            it.sections.any { section ->
+                                section.name == "Training"
+                            }
+                }
+
+            assertNotNull(state.sectionManager)
+        }
+
+    @Test
+    fun displaySectionCanBeRenamedFromManager(): Unit =
+        runBlocking {
+            val sectionId =
+                repository.createDisplaySection(
+                    "Training"
+                )
+
+            awaitState {
+                it.sections.any {
+                        section -> section.id == sectionId
+                }
+            }
+
+            viewModel.onAction(
+                HabitAction.ShowSectionManager
+            )
+
+            viewModel.onAction(
+                HabitAction.EditDisplaySection(
+                    sectionId
+                )
+            )
+
+            awaitState {
+                it.sectionManager
+                    ?.editor
+                    ?.sectionId == sectionId
+            }
+
+            viewModel.onAction(
+                HabitAction.ChangeDisplaySectionName(
+                    "Exercise"
+                )
+            )
+
+            viewModel.onAction(
+                HabitAction.SaveDisplaySection
+            )
+
+            awaitState {
+                it.sectionManager?.editor == null &&
+                        it.sections.any { section ->
+                            section.id == sectionId &&
+                                    section.name == "Exercise"
+                        }
+            }
+        }
+
+    @Test
+    fun habitCanCreateDisplaySectionWhileSaving() =
+        runBlocking {
+            awaitState {
+                it.sections.isNotEmpty()
+            }
+
+            viewModel.onAction(
+                HabitAction.AddHabit
+            )
+
+            val editor =
+                requireNotNull(
+                    awaitState {
+                        it.editor != null
+                    }.editor
+                )
+
+            viewModel.onAction(
+                HabitAction.UpdateHabitEditor(
+                    editor.copy(
+                        name = "Lift",
+                        newDisplaySectionName =
+                            "Training",
+                    )
+                )
+            )
+
+            viewModel.onAction(
+                HabitAction.SaveHabit
+            )
+
+            val state =
+                awaitState {
+                    it.editor == null &&
+                            it.sections.any { section ->
+                                section.name ==
+                                        "Training" &&
+                                        section.habits.any {
+                                                habit ->
+                                            habit.name == "Lift"
+                                        }
+                            }
+                }
+
+            val section =
+                state.sections.single {
+                    it.name == "Training"
+                }
+
+            assertEquals(
+                0,
+                requireNotNull(
+                    repository
+                        .observeActiveHabits()
+                        .first()
+                        .single {
+                            it.name == "Lift"
+                        }
+                ).displayOrder,
+            )
+
+            assertTrue(section.habits.isNotEmpty())
+        }
+
+    @Test
+    fun habitEditPreservesDisplayOrder(): Unit =
+        runBlocking {
+            val habitId =
+                addHabit(
+                    name = "First",
+                    displayOrder = 0,
+                )
+
+            addHabit(
+                name = "Second",
+                displayOrder = 1,
+            )
+
+            awaitState {
+                it.hasHabit(habitId)
+            }
+
+            viewModel.onAction(
+                HabitAction.EditHabit(habitId)
+            )
+
+            val editor =
+                requireNotNull(
+                    awaitState {
+                        it.editor?.habitId ==
+                                habitId
+                    }.editor
+                )
+
+            viewModel.onAction(
+                HabitAction.UpdateHabitEditor(
+                    editor.copy(
+                        name = "Edited"
+                    )
+                )
+            )
+
+            viewModel.onAction(
+                HabitAction.SaveHabit
+            )
+
+            awaitState {
+                it.editor == null
+            }
+
+            assertEquals(
+                0,
+                repository
+                    .getHabit(habitId)
+                    ?.displayOrder,
             )
         }
 
@@ -687,15 +1175,17 @@ class HabitViewModelTest {
             DefaultHabitDisplaySections
                 .ANYTIME_ID,
         historyCategory: String? = null,
+        name: String = "Test habit",
+        displayOrder: Int = 0,
     ): Long =
         repository.createHabit(
             HabitEntity(
-                name = "Test habit",
+                name = name,
                 displaySectionId =
                     displaySectionId,
                 historyCategory =
                     historyCategory,
-                displayOrder = 0,
+                displayOrder = displayOrder,
                 allowsMultipleCompletions = false,
                 scheduleType = scheduleType,
                 scheduleTarget = 1,

@@ -753,12 +753,16 @@ class HabitViewModel(
                     HabitIntervalBasis.FIXED_SCHEDULE
 
         val newOrder =
-            if (
-                editor.newDisplaySectionName != null
-            ) {
-                0
-            } else {
-                nextOrder(newSectionId)
+            when {
+                editor.newDisplaySectionName != null ->
+                    0
+
+                newSectionId ==
+                        existing.displaySectionId ->
+                    existing.displayOrder
+
+                else ->
+                    nextOrder(newSectionId)
             }
 
         return existing.copy(
@@ -942,8 +946,8 @@ class HabitViewModel(
             return
         }
 
-        sectionManagerState.update {
-            it?.copy(
+        sectionManagerState.update { manager ->
+            manager?.copy(
                 editor =
                     editor.copy(
                         isSaving = true,
@@ -979,9 +983,13 @@ class HabitViewModel(
                 }
 
                 sectionManagerState.update { manager ->
-                    manager?.copy(
+                    val current =
+                        manager?.editor
+                            ?: return@update manager
+
+                    manager.copy(
                         editor =
-                            manager.editor?.copy(
+                            current.copy(
                                 isSaving = false,
                                 errorMessage =
                                     error.message
