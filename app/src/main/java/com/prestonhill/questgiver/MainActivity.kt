@@ -102,6 +102,7 @@ class MainActivity : ComponentActivity() {
                         settings =
                             settingsRepository.settings,
                         clock = appClock,
+                        habitRepository = repository,
                     )
 
                 val historyViewModel: HistoryViewModel =

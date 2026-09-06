@@ -838,6 +838,77 @@ class HabitViewModelTest {
         }
 
     @Test
+    fun habitHistoryInclusionCanBeChanged(): Unit =
+        runBlocking {
+            val habitId = addHabit()
+
+            awaitState {
+                it.hasHabit(habitId)
+            }
+
+            viewModel.onAction(
+                HabitAction.EditHabit(habitId)
+            )
+
+            val editor =
+                requireNotNull(
+                    awaitState {
+                        it.editor?.habitId ==
+                                habitId
+                    }.editor
+                )
+
+            assertTrue(
+                editor.isVisibleInHistory
+            )
+
+            viewModel.onAction(
+                HabitAction.UpdateHabitEditor(
+                    editor.copy(
+                        isVisibleInHistory = false
+                    )
+                )
+            )
+
+            viewModel.onAction(
+                HabitAction.SaveHabit
+            )
+
+            awaitState {
+                it.editor == null
+            }
+
+            assertFalse(
+                requireNotNull(
+                    repository.getHabit(habitId)
+                ).isVisibleInHistory
+            )
+        }
+
+    @Test
+    fun newHabitDefaultsToHistoryInclusion(): Unit =
+        runBlocking {
+            awaitState {
+                it.sections.isNotEmpty()
+            }
+
+            viewModel.onAction(
+                HabitAction.AddHabit
+            )
+
+            val editor =
+                requireNotNull(
+                    awaitState {
+                        it.editor != null
+                    }.editor
+                )
+
+            assertTrue(
+                editor.isVisibleInHistory
+            )
+        }
+
+    @Test
     fun sectionManagerOpensAndDismisses(): Unit =
         runBlocking {
             viewModel.onAction(

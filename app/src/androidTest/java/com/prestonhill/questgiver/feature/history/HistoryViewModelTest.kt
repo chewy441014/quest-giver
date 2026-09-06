@@ -17,6 +17,15 @@ import com.prestonhill.questgiver.data.repository.NutritionItemDraft
 import com.prestonhill.questgiver.data.repository.NutritionRepository
 import com.prestonhill.questgiver.data.repository.NutritionValuesInput
 import com.prestonhill.questgiver.data.repository.TaskCompletionResult
+import com.prestonhill.questgiver.core.time.AppDayCalculator
+import com.prestonhill.questgiver.data.local.database.entity.DefaultHabitDisplaySections
+import com.prestonhill.questgiver.data.local.database.entity.HabitEntity
+import com.prestonhill.questgiver.data.local.database.entity.HabitScheduleTypeDb
+import com.prestonhill.questgiver.data.repository.CompletionChangeResult
+import com.prestonhill.questgiver.data.repository.HabitRepository
+import com.prestonhill.questgiver.feature.habits.HabitHistoryDateRange
+import com.prestonhill.questgiver.feature.habits.HabitHistoryRangePreset
+import java.time.LocalTime
 import java.time.DayOfWeek
 import java.time.Clock
 import java.time.ZoneId
@@ -55,6 +64,8 @@ class HistoryViewModelTest {
     private lateinit var nutritionRepository:
             NutritionRepository
 
+    private lateinit var habitRepository:
+            HabitRepository
     private lateinit var settings:
             MutableStateFlow<AppSettings>
 
@@ -75,6 +86,16 @@ class HistoryViewModelTest {
                     Dispatchers.IO
                 )
                 .build()
+
+        habitRepository =
+            HabitRepository(database)
+
+        runBlocking {
+            DefaultHabitDisplaySections.all.forEach {
+                database.habitDao()
+                    .insertDisplaySection(it)
+            }
+        }
 
         repository = TaskRepository(database)
 
@@ -100,6 +121,8 @@ class HistoryViewModelTest {
                 repository = repository,
                 nutritionRepository =
                     nutritionRepository,
+                habitRepository =
+                    habitRepository,
                 settings = settings,
                 clock = clock,
             )
@@ -118,6 +141,347 @@ class HistoryViewModelTest {
         viewModelStore.clear()
         database.close()
     }
+
+    @Test
+    fun habitArchiveModeChangesPopulation(): Unit =
+        runBlocking {
+            addHabit(
+                name = "Active",
+                displayOrder = 0,
+            )
+
+            val archivedId =
+                addHabit(
+                    name = "Archived",
+                    displayOrder = 1,
+                )
+
+            assertTrue(
+                habitRepository.archiveHabit(
+                    habitId = archivedId,
+                    timestampMillis =
+                        clock.millis(),
+                )
+            )
+
+            val active =
+                awaitState {
+                    it.habits.stampCalendar
+                        .availableFilters
+                        .map { filter ->
+                            filter.label
+                        } ==
+                            listOf("Active")
+                }
+
+            assertFalse(
+                active.habits.showArchivedHabits
+            )
+
+            viewModel.onAction(
+                HistoryAction.ShowArchivedHabits(
+                    true
+                )
+            )
+
+            val archived =
+                awaitState {
+                    it.habits.showArchivedHabits &&
+                            it.habits
+                                .stampCalendar
+                                .availableFilters
+                                .map { filter ->
+                                    filter.label
+                                } ==
+                            listOf("Archived")
+                }
+
+            assertTrue(
+                archived.habits.showArchivedHabits
+            )
+        }
+
+    @Test
+    fun habitStampFiltersCanBeChanged(): Unit =
+        runBlocking {
+            addHabit(
+                name = "First",
+                displayOrder = 0,
+            )
+
+            addHabit(
+                name = "Second",
+                displayOrder = 1,
+            )
+
+            addHabit(
+                name = "Gym",
+                historyCategory = "Exercise",
+                displayOrder = 2,
+            )
+
+            val initial =
+                awaitState {
+                    it.habits.stampCalendar
+                        .availableFilters.size == 3
+                }
+
+            val firstKey =
+                initial.habits
+                    .stampCalendar
+                    .availableFilters
+                    .single {
+                        it.label == "First"
+                    }
+                    .key
+
+            viewModel.onAction(
+                HistoryAction.ToggleHabitStampFilter(
+                    firstKey
+                )
+            )
+
+            awaitState {
+                firstKey !in
+                        it.habits
+                            .stampCalendar
+                            .selectedFilterKeys
+            }
+
+            viewModel.onAction(
+                HistoryAction.SelectAllHabitStamps
+            )
+
+            awaitState {
+                it.habits.stampCalendar
+                    .selectedFilterKeys.size == 3
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .SetHabitStampGroupSelected(
+                        groupLabel =
+                            "Uncategorized habits",
+                        selected = false,
+                    )
+            )
+
+            val categoryOnly =
+                awaitState {
+                    val calendar =
+                        it.habits.stampCalendar
+
+                    calendar.selectedFilterKeys
+                        .size == 1 &&
+                            calendar.availableFilters
+                                .single { filter ->
+                                    filter.key in
+                                            calendar
+                                                .selectedFilterKeys
+                                }
+                                .groupLabel ==
+                            "Habit categories"
+                }
+
+            assertEquals(
+                1,
+                categoryOnly.habits
+                    .stampCalendar
+                    .selectedFilterKeys
+                    .size,
+            )
+        }
+
+    @Test
+    fun habitCalendarNavigationChangesMonth(): Unit =
+        runBlocking {
+            val currentMonth =
+                YearMonth.from(CURRENT_DATE)
+
+            awaitState {
+                it.habits.stampCalendar.month ==
+                        currentMonth
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .PreviousHabitCalendarMonth
+            )
+
+            awaitState {
+                it.habits.stampCalendar.month ==
+                        currentMonth.minusMonths(1)
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .NextHabitCalendarMonth
+            )
+
+            awaitState {
+                it.habits.stampCalendar.month ==
+                        currentMonth
+            }
+
+            /*
+             * The calendar cannot navigate into
+             * a future month.
+             */
+            viewModel.onAction(
+                HistoryAction
+                    .NextHabitCalendarMonth
+            )
+
+            assertEquals(
+                currentMonth,
+                viewModel.uiState.value
+                    .habits
+                    .stampCalendar
+                    .month,
+            )
+        }
+
+    @Test
+    fun habitCalendarDayOpensAndDismisses(): Unit =
+        runBlocking {
+            viewModel.onAction(
+                HistoryAction.OpenHabitCalendarDay(
+                    CURRENT_DATE
+                )
+            )
+
+            awaitState {
+                it.habits.stampCalendar
+                    .selectedDate ==
+                        CURRENT_DATE
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .DismissHabitCalendarDay
+            )
+
+            awaitState {
+                it.habits.stampCalendar
+                    .selectedDate == null
+            }
+        }
+
+    @Test
+    fun habitCorrectionRemovesCalendarStamp(): Unit =
+        runBlocking {
+            val habitId =
+                addHabit(
+                    name = "Corrected"
+                )
+
+            completeHabit(habitId)
+
+            awaitState {
+                it.habits.stampCalendar
+                    .days
+                    .singleOrNull { day ->
+                        day.date == CURRENT_DATE
+                    }
+                    ?.stampKeys
+                    ?.isNotEmpty() == true
+            }
+
+            removeHabitCompletion(habitId)
+
+            val corrected =
+                awaitState {
+                    it.habits.stampCalendar
+                        .days
+                        .singleOrNull { day ->
+                            day.date == CURRENT_DATE
+                        }
+                        ?.stampKeys
+                        ?.isEmpty() == true
+                }
+
+            /*
+             * The filter remains available even
+             * though the completion was corrected.
+             */
+            assertEquals(
+                listOf("Corrected"),
+                corrected.habits
+                    .stampCalendar
+                    .availableFilters
+                    .map {
+                        it.label
+                    },
+            )
+        }
+
+    @Test
+    fun changingHabitModeResetsCalendarSelection(): Unit =
+        runBlocking {
+            addHabit(name = "First")
+            addHabit(
+                name = "Second",
+                displayOrder = 1,
+            )
+
+            val initial =
+                awaitState {
+                    it.habits.stampCalendar
+                        .availableFilters.size == 2
+                }
+
+            val firstKey =
+                initial.habits
+                    .stampCalendar
+                    .availableFilters
+                    .first()
+                    .key
+
+            viewModel.onAction(
+                HistoryAction.ToggleHabitStampFilter(
+                    firstKey
+                )
+            )
+
+            viewModel.onAction(
+                HistoryAction.OpenHabitCalendarDay(
+                    CURRENT_DATE
+                )
+            )
+
+            awaitState {
+                it.habits.stampCalendar
+                    .selectedDate != null &&
+                        it.habits
+                            .stampCalendar
+                            .selectedFilterKeys
+                            .size == 1
+            }
+
+            viewModel.onAction(
+                HistoryAction.ShowArchivedHabits(
+                    true
+                )
+            )
+
+            val archived =
+                awaitState {
+                    it.habits.showArchivedHabits
+                }
+
+            assertNull(
+                archived.habits
+                    .stampCalendar
+                    .selectedDate
+            )
+
+            assertTrue(
+                archived.habits
+                    .stampCalendar
+                    .selectedFilterKeys
+                    .isEmpty()
+            )
+        }
 
     @Test
     fun navigationChanges(): Unit =
@@ -1873,6 +2237,113 @@ class HistoryViewModelTest {
         }
 
     @Test
+    fun habitRangeChangesPerformancePeriod(): Unit =
+        runBlocking {
+            addHabit(
+                name = "Range habit",
+                createdAt =
+                    CURRENT_DATE
+                        .minusDays(90)
+                        .atTime(12, 0)
+                        .atZone(ZONE)
+                        .toInstant()
+                        .toEpochMilli(),
+            )
+
+            val initial =
+                awaitState {
+                    it.habits.performance
+                        .singleOrNull()
+                        ?.totalPeriods == 29
+                }
+
+            assertEquals(
+                HabitHistoryRangePreset
+                    .THIRTY_DAYS,
+                initial.habits.rangePreset,
+            )
+
+            viewModel.onAction(
+                HistoryAction.SelectHabitRange(
+                    HabitHistoryRangePreset
+                        .SIXTY_DAYS
+                )
+            )
+
+            val sixtyDays =
+                awaitState {
+                    it.habits.rangePreset ==
+                            HabitHistoryRangePreset
+                                .SIXTY_DAYS &&
+                            it.habits.performance
+                                .singleOrNull()
+                                ?.totalPeriods == 59
+                }
+
+            assertEquals(
+                CURRENT_DATE.minusDays(59),
+                sixtyDays.habits
+                    .selectedRange
+                    ?.startDate,
+            )
+        }
+
+    @Test
+    fun habitCustomRangeIsApplied(): Unit =
+        runBlocking {
+            addHabit(
+                name = "Custom range habit",
+                createdAt =
+                    CURRENT_DATE
+                        .minusDays(30)
+                        .atTime(12, 0)
+                        .atZone(ZONE)
+                        .toInstant()
+                        .toEpochMilli(),
+            )
+
+            viewModel.onAction(
+                HistoryAction.OpenHabitCustomRange
+            )
+
+            awaitState {
+                it.habits.showCustomRangePicker
+            }
+
+            val customRange =
+                HabitHistoryDateRange(
+                    startDate =
+                        CURRENT_DATE.minusDays(3),
+                    endDate =
+                        CURRENT_DATE.minusDays(1),
+                )
+
+            viewModel.onAction(
+                HistoryAction.SetHabitCustomRange(
+                    customRange
+                )
+            )
+
+            val state =
+                awaitState {
+                    it.habits.rangePreset ==
+                            HabitHistoryRangePreset
+                                .CUSTOM &&
+                            it.habits.selectedRange ==
+                            customRange &&
+                            !it.habits
+                                .showCustomRangePicker
+                }
+
+            assertEquals(
+                3,
+                state.habits.performance
+                    .single()
+                    .totalPeriods,
+            )
+        }
+
+    @Test
     fun restoreMovesTask(): Unit =
         runBlocking {
             val taskId = addTask()
@@ -1930,6 +2401,85 @@ class HistoryViewModelTest {
                     .isArchived
             )
         }
+
+    private suspend fun addHabit(
+        name: String,
+        historyCategory: String? = null,
+        displayOrder: Int = 0,
+        createdAt: Long =
+            clock.millis() + displayOrder,
+    ): Long =
+        habitRepository.createHabit(
+            HabitEntity(
+                name = name,
+                displaySectionId =
+                    DefaultHabitDisplaySections
+                        .ANYTIME_ID,
+                historyCategory =
+                    historyCategory,
+                displayOrder = displayOrder,
+                scheduleType =
+                    HabitScheduleTypeDb.DAILY,
+                createdAtEpochMillis =
+                    createdAt,
+            )
+        )
+
+    private suspend fun completeHabit(
+        habitId: Long,
+        date: LocalDate = CURRENT_DATE,
+    ) {
+        val appDay =
+            habitDayCalculator()
+                .forDate(date)
+
+        assertEquals(
+            CompletionChangeResult.SUCCESS,
+            habitRepository.addCompletion(
+                habitId = habitId,
+                completionTimestampMillis =
+                    date.atTime(12, 0)
+                        .atZone(ZONE)
+                        .toInstant()
+                        .toEpochMilli(),
+                appDayStartMillis =
+                    appDay.startTimestampMillis,
+                appDayEndMillis =
+                    appDay.endTimestampMillis,
+                recordedTimestampMillis =
+                    clock.millis(),
+            ),
+        )
+    }
+
+    private suspend fun removeHabitCompletion(
+        habitId: Long,
+        date: LocalDate = CURRENT_DATE,
+    ) {
+        val appDay =
+            habitDayCalculator()
+                .forDate(date)
+
+        assertEquals(
+            CompletionChangeResult.SUCCESS,
+            habitRepository.removeCompletion(
+                habitId = habitId,
+                appDayStartMillis =
+                    appDay.startTimestampMillis,
+                appDayEndMillis =
+                    appDay.endTimestampMillis,
+                recordedTimestampMillis =
+                    clock.millis(),
+            ),
+        )
+    }
+
+    private fun habitDayCalculator() =
+        AppDayCalculator(
+            dayBoundary =
+                settings.value.dayBoundary,
+            zoneId = ZONE,
+        )
 
     private suspend fun addNutritionItem(
         calories: Double,

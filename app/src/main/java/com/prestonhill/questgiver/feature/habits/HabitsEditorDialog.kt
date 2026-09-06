@@ -164,6 +164,32 @@ fun HabitEditorDialog(
                 )
 
                 Row(
+                    verticalAlignment =
+                        Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        modifier =
+                            Modifier.testTag(
+                                HabitTags.INCLUDE_IN_HISTORY
+                            ),
+                        checked =
+                            editor.isVisibleInHistory,
+                        enabled = !editor.isSaving,
+                        onCheckedChange = { included ->
+                            onChange(
+                                editor.copy(
+                                    isVisibleInHistory =
+                                        included,
+                                    errorMessage = null,
+                                )
+                            )
+                        },
+                    )
+
+                    Text("Include in History")
+                }
+
+                Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Checkbox(

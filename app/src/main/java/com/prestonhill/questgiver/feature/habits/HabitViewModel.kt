@@ -707,6 +707,8 @@ class HabitViewModel(
         return HabitEntity(
             name = editor.name.trim(),
             displaySectionId = sectionId,
+            isVisibleInHistory =
+                editor.isVisibleInHistory,
             historyCategory =
                 editor.historyCategory
                     .trim()
@@ -768,6 +770,8 @@ class HabitViewModel(
         return existing.copy(
             name = editor.name.trim(),
             displaySectionId = newSectionId,
+            isVisibleInHistory =
+                editor.isVisibleInHistory,
             historyCategory =
                 editor.historyCategory
                     .trim()
@@ -1329,7 +1333,9 @@ private fun HabitEntity.toEditorState() =
         extraCompletionsMoveNextDueDate =
             extraCompletionsMoveNextDueDate,
         scheduleVisibility =
-            scheduleVisibility.toUi()
+            scheduleVisibility.toUi(),
+        isVisibleInHistory =
+            isVisibleInHistory,
     )
 
 private fun HabitScheduleType.toDb(): HabitScheduleTypeDb =

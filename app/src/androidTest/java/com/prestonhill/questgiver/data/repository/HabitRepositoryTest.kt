@@ -515,6 +515,70 @@ class HabitRepositoryTest {
         }
 
     @Test
+    fun archivingForcesHistoryInclusion() =
+        runBlocking {
+            val habitId =
+                repository.createHabit(
+                    HabitEntity(
+                        name = "Hidden history",
+                        displaySectionId =
+                            DefaultHabitDisplaySections
+                                .ANYTIME_ID,
+                        displayOrder = 0,
+                        isVisibleInHistory = false,
+                        scheduleType =
+                            HabitScheduleTypeDb.DAILY,
+                        scheduleTarget = 1,
+                        createdAtEpochMillis =
+                            TEST_TIME,
+                    )
+                )
+
+            assertTrue(
+                repository.archiveHabit(habitId)
+            )
+
+            assertTrue(
+                requireNotNull(
+                    repository.getHabit(habitId)
+                ).isVisibleInHistory
+            )
+
+            assertTrue(
+                repository.restoreHabit(habitId)
+            )
+
+            assertTrue(
+                requireNotNull(
+                    repository.getHabit(habitId)
+                ).isVisibleInHistory
+            )
+        }
+
+    @Test
+    fun archivedHistoryInclusionCannotChange() =
+        runBlocking {
+            val habitId = addHabit()
+
+            assertTrue(
+                repository.archiveHabit(habitId)
+            )
+
+            assertFalse(
+                repository.setHistoryVisibility(
+                    habitId = habitId,
+                    visible = false,
+                )
+            )
+
+            assertTrue(
+                requireNotNull(
+                    repository.getHabit(habitId)
+                ).isVisibleInHistory
+            )
+        }
+
+    @Test
     fun missingHabitUpdateDoesNotCreateSection() =
         runBlocking {
             val existingId = addHabit()

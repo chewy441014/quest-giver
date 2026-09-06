@@ -120,7 +120,14 @@ class HabitRepository(
                         } else {
                             habit.displayOrder
                         },
-
+                    isVisibleInHistory =
+                        if (
+                            existing.archivedAtEpochMillis != null
+                        ) {
+                            existing.isVisibleInHistory
+                        } else {
+                            habit.isVisibleInHistory
+                        },
                 // These properties cannot change after creation.
                 allowsMultipleCompletions =
                     existing.allowsMultipleCompletions,
@@ -443,14 +450,23 @@ class HabitRepository(
 
     suspend fun setHistoryVisibility(
         habitId: Long,
-        visible: Boolean
+        visible: Boolean,
     ): Boolean =
         database.withWriteTransaction {
-            val habit = habitDao.getHabit(habitId)
-                ?: return@withWriteTransaction false
+            val habit =
+                habitDao.getHabit(habitId)
+                    ?: return@withWriteTransaction false
+
+            if (
+                habit.archivedAtEpochMillis != null
+            ) {
+                return@withWriteTransaction false
+            }
 
             habitDao.updateHabit(
-                habit.copy(isVisibleInHistory = visible)
+                habit.copy(
+                    isVisibleInHistory = visible
+                )
             ) == 1
         }
 

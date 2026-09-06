@@ -58,6 +58,79 @@ class HabitScreenTest {
     }
 
     @Test
+    fun historyInclusionSendsChange(): Unit {
+        val actions =
+            mutableListOf<HabitAction>()
+
+        val editor =
+            HabitEditorUiState(
+                name = "Lift",
+                displaySectionId = "ANYTIME",
+                isVisibleInHistory = true,
+            )
+
+        showScreen(
+            state =
+                HabitScreenUiState(
+                    sections =
+                        listOf(
+                            HabitDisplaySectionUiState(
+                                id = "ANYTIME",
+                                name = "Anytime",
+                            )
+                        ),
+                    editor = editor,
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.INCLUDE_IN_HISTORY
+            )
+            .performClick()
+
+        assertEquals(
+            HabitAction.UpdateHabitEditor(
+                editor.copy(
+                    isVisibleInHistory = false
+                )
+            ),
+            actions.last(),
+        )
+    }
+
+    @Test
+    fun savingDisablesHistoryInclusion(): Unit {
+        showScreen(
+            state =
+                HabitScreenUiState(
+                    sections =
+                        listOf(
+                            HabitDisplaySectionUiState(
+                                id = "ANYTIME",
+                                name = "Anytime",
+                            )
+                        ),
+                    editor =
+                        HabitEditorUiState(
+                            name = "Lift",
+                            displaySectionId =
+                                "ANYTIME",
+                            isSaving = true,
+                        ),
+                ),
+            actions = mutableListOf(),
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.INCLUDE_IN_HISTORY
+            )
+            .assertIsNotEnabled()
+    }
+
+    @Test
     fun cancelDismissesConfirmation() {
         val actions = mutableListOf<HabitAction>()
 

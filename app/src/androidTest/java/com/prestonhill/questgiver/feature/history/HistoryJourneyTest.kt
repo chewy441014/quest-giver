@@ -26,11 +26,19 @@ import com.prestonhill.questgiver.data.local.database.entity.TaskScheduleTypeDb
 import com.prestonhill.questgiver.data.repository.NutritionRepository
 import com.prestonhill.questgiver.data.repository.TaskCompletionResult
 import com.prestonhill.questgiver.data.repository.TaskRepository
+import com.prestonhill.questgiver.core.time.AppDayCalculator
+import com.prestonhill.questgiver.data.local.database.entity.DefaultHabitDisplaySections
+import com.prestonhill.questgiver.data.local.database.entity.HabitEntity
+import com.prestonhill.questgiver.data.local.database.entity.HabitScheduleTypeDb
+import com.prestonhill.questgiver.data.repository.CompletionChangeResult
+import com.prestonhill.questgiver.data.repository.HabitRepository
+import java.time.LocalTime
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
@@ -63,6 +71,12 @@ class HistoryJourneyTest {
     private lateinit var nutritionRepository:
             NutritionRepository
 
+    private lateinit var habitRepository:
+            HabitRepository
+    private lateinit var settings:
+            MutableStateFlow<AppSettings>
+
+
     private var taskId = 0L
 
     @Before
@@ -81,7 +95,16 @@ class HistoryJourneyTest {
                 )
                 .build()
 
+        habitRepository =
+            HabitRepository(database)
+
         repository = TaskRepository(database)
+
+        settings =
+            MutableStateFlow(
+                AppSettings()
+            )
+
 
         nutritionRepository =
             NutritionRepository(database)
@@ -91,8 +114,9 @@ class HistoryJourneyTest {
                 repository = repository,
                 nutritionRepository =
                     nutritionRepository,
-                settings =
-                    flowOf(AppSettings()),
+                habitRepository =
+                    habitRepository,
+                settings = settings,
                 clock = CLOCK,
             )
 

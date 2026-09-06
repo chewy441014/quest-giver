@@ -12,6 +12,10 @@ import com.prestonhill.questgiver.core.time.RealBoundaryTimer
 import com.prestonhill.questgiver.feature.tasks.TaskScheduleCalculator
 import com.prestonhill.questgiver.data.repository.TaskCompletionResult
 import com.prestonhill.questgiver.data.repository.NutritionRepository
+import com.prestonhill.questgiver.data.repository.HabitRepository
+import com.prestonhill.questgiver.feature.habits.HabitHistoryDateRange
+import com.prestonhill.questgiver.feature.habits.HabitHistoryRangePreset
+import com.prestonhill.questgiver.feature.habits.HabitHistoryUiState
 import java.time.Clock
 import java.time.LocalTime
 import java.time.ZoneId
@@ -47,6 +51,12 @@ class HistoryViewModel(
     private val nutritionMapper:
     NutritionHistoryMapper =
         NutritionHistoryMapper(),
+    private val habitRepository:
+    HabitRepository,
+
+    private val habitMapper:
+    HabitHistoryMapper =
+        HabitHistoryMapper(),
 ) : ViewModel() {
     private val nav =
         MutableStateFlow(HistoryNavState())
@@ -205,6 +215,125 @@ class HistoryViewModel(
                     NutritionHistoryUiState(),
             )
 
+    private val habitHistoryState =
+        combine(
+            nav,
+            habitRepository.observeAllHabits(),
+            habitRepository.observeAllHabitLogs(),
+            timeState,
+        ) {
+                navigation,
+                habits,
+                logs,
+                time,
+            ->
+            val currentDate =
+                time.appDay.date
+
+            val customRange =
+                navigation.habitCustomRange
+                    ?: defaultHabitCustomRange(
+                        currentDate
+                    )
+
+            val selectedRange =
+                navigation
+                    .habitRangePreset
+                    .dateRange(
+                        currentDate = currentDate,
+                        customRange = customRange,
+                    )
+
+            val performance =
+                habitMapper.performance(
+                    habits = habits,
+                    logs = logs,
+                    range = selectedRange,
+                    currentDate = currentDate,
+                    calculator =
+                        HabitHistoryPerformanceCalculator(
+                            appDayCalculator =
+                                time.dayCalculator,
+                            weekStart =
+                                time.weekStart,
+                        ),
+                    showArchivedHabits =
+                        navigation.showArchivedHabits,
+                )
+
+            val currentMonth =
+                YearMonth.from(currentDate)
+
+            val calendarMonth =
+                navigation
+                    .habitCalendarMonth
+                    ?.takeUnless {
+                        it.isAfter(currentMonth)
+                    }
+                    ?: currentMonth
+
+            val mappedCalendar =
+                habitMapper.stampCalendar(
+                    habits = habits,
+                    logs = logs,
+                    month = calendarMonth,
+                    currentDate = currentDate,
+                    weekStart = time.weekStart,
+                    calculator =
+                        time.dayCalculator,
+                    showArchivedHabits =
+                        navigation
+                            .showArchivedHabits,
+                )
+
+            val availableKeys =
+                mappedCalendar
+                    .availableFilters
+                    .mapTo(linkedSetOf()) {
+                        it.key
+                    }
+
+            val selectedKeys =
+                navigation
+                    .selectedHabitStampFilterKeys
+                    ?.intersect(availableKeys)
+                    ?.takeIf {
+                        it.isNotEmpty() ||
+                                availableKeys.isEmpty()
+                    }
+                    ?: availableKeys
+
+            HabitHistoryUiState(
+                showArchivedHabits =
+                    navigation.showArchivedHabits,
+                rangePreset =
+                    navigation.habitRangePreset,
+                selectedRange = selectedRange,
+                customRange = customRange,
+                showCustomRangePicker =
+                    navigation
+                        .showHabitCustomRangePicker,
+                performance = performance,
+                stampCalendar =
+                    mappedCalendar.copy(
+                        selectedFilterKeys =
+                            selectedKeys,
+                        selectedDate =
+                            navigation
+                                .selectedHabitCalendarDate,
+                    ),
+            )
+        }
+            .stateIn(
+                scope = viewModelScope,
+                started =
+                    SharingStarted.WhileSubscribed(
+                        stopTimeoutMillis = 5_000
+                    ),
+                initialValue =
+                    HabitHistoryUiState(),
+            )
+
     private val taskScreenState =
         combine(
             nav,
@@ -323,13 +452,16 @@ class HistoryViewModel(
         combine(
             taskScreenState,
             nutritionHistoryState,
+            habitHistoryState,
             nav,
         ) {
                 screen,
                 nutrition,
+                habits,
                 navigation,
             ->
             screen.copy(
+                habits = habits,
                 nutrition =
                     nutrition.copy(
                         showCustomRangePicker =
@@ -474,6 +606,104 @@ class HistoryViewModel(
                             TaskHistoryPage
                                 .DASHBOARD,
                     ).clearOverlays()
+                }
+
+            is HistoryAction.SelectHabitRange ->
+                nav.update {
+                    it.copy(
+                        habitRangePreset =
+                            action.preset
+                    )
+                }
+
+            HistoryAction.OpenHabitCustomRange ->
+                nav.update {
+                    it.copy(
+                        showHabitCustomRangePicker =
+                            true
+                    )
+                }
+
+            HistoryAction.DismissHabitCustomRange ->
+                nav.update {
+                    it.copy(
+                        showHabitCustomRangePicker =
+                            false
+                    )
+                }
+
+            is HistoryAction.SetHabitCustomRange -> {
+                val currentDate =
+                    timeState.value.appDay.date
+
+                if (
+                    !action.range.endDate
+                        .isAfter(currentDate)
+                ) {
+                    nav.update {
+                        it.copy(
+                            habitRangePreset =
+                                HabitHistoryRangePreset
+                                    .CUSTOM,
+                            habitCustomRange =
+                                action.range,
+                            showHabitCustomRangePicker =
+                                false,
+                        )
+                    }
+                }
+            }
+
+            is HistoryAction.ShowArchivedHabits ->
+                nav.update {
+                    it.copy(
+                        showArchivedHabits =
+                            action.show,
+                        selectedHabitStampFilterKeys =
+                            null,
+                        selectedHabitCalendarDate =
+                            null,
+                    )
+                }
+
+            HistoryAction.PreviousHabitCalendarMonth ->
+                moveHabitCalendarMonth(-1L)
+
+            HistoryAction.NextHabitCalendarMonth ->
+                moveHabitCalendarMonth(1L)
+
+            is HistoryAction.ToggleHabitStampFilter ->
+                toggleHabitStampFilter(action.key)
+
+            HistoryAction.SelectAllHabitStamps ->
+                nav.update {
+                    it.copy(
+                        selectedHabitStampFilterKeys =
+                            null
+                    )
+                }
+
+            is HistoryAction
+            .SetHabitStampGroupSelected ->
+                setHabitStampGroupSelected(
+                    groupLabel = action.groupLabel,
+                    selected = action.selected,
+                )
+
+            is HistoryAction.OpenHabitCalendarDay ->
+                nav.update {
+                    it.copy(
+                        selectedHabitCalendarDate =
+                            action.date
+                    )
+                }
+
+            HistoryAction.DismissHabitCalendarDay ->
+                nav.update {
+                    it.copy(
+                        selectedHabitCalendarDate =
+                            null
+                    )
                 }
 
             is HistoryAction
@@ -1030,6 +1260,126 @@ class HistoryViewModel(
         }
     }
 
+    private fun moveHabitCalendarMonth(
+        offset: Long,
+    ) {
+        require(offset == -1L || offset == 1L)
+
+        val currentMonth =
+            YearMonth.from(
+                timeState.value.appDay.date
+            )
+
+        nav.update { current ->
+            val displayed =
+                current.habitCalendarMonth
+                    ?: currentMonth
+
+            current.copy(
+                habitCalendarMonth =
+                    displayed
+                        .plusMonths(offset)
+                        .coerceAtMost(currentMonth),
+                selectedHabitCalendarDate =
+                    null,
+            )
+        }
+    }
+
+    private fun toggleHabitStampFilter(
+        key: String,
+    ) {
+        val calendar =
+            uiState.value
+                .habits
+                .stampCalendar
+
+        val available =
+            calendar.availableFilters
+                .mapTo(linkedSetOf()) {
+                    it.key
+                }
+
+        if (key !in available) {
+            return
+        }
+
+        val selected =
+            calendar.selectedFilterKeys
+
+        val updated =
+            if (key in selected) {
+                if (selected.size == 1) {
+                    selected
+                } else {
+                    selected - key
+                }
+            } else {
+                selected + key
+            }
+
+        nav.update {
+            it.copy(
+                selectedHabitStampFilterKeys =
+                    updated.takeUnless { keys ->
+                        keys == available
+                    }
+            )
+        }
+    }
+
+    private fun setHabitStampGroupSelected(
+        groupLabel: String,
+        selected: Boolean,
+    ) {
+        val calendar =
+            uiState.value
+                .habits
+                .stampCalendar
+
+        val available =
+            calendar.availableFilters
+                .mapTo(linkedSetOf()) {
+                    it.key
+                }
+
+        val groupKeys =
+            calendar.availableFilters
+                .filter {
+                    it.groupLabel == groupLabel
+                }
+                .mapTo(linkedSetOf()) {
+                    it.key
+                }
+
+        if (groupKeys.isEmpty()) {
+            return
+        }
+
+        val current =
+            calendar.selectedFilterKeys
+
+        val updated =
+            if (selected) {
+                current + groupKeys
+            } else {
+                (current - groupKeys)
+                    .takeIf {
+                        it.isNotEmpty()
+                    }
+                    ?: current
+            }
+
+        nav.update {
+            it.copy(
+                selectedHabitStampFilterKeys =
+                    updated.takeUnless { keys ->
+                        keys == available
+                    }
+            )
+        }
+    }
+
     private fun setTaskCompletion(
         taskId: Long,
         scheduledEpochDay: Long,
@@ -1157,6 +1507,22 @@ private data class HistoryNavState(
     val taskCalendarMonth: YearMonth? = null,
     val selectedTaskStampFilterKeys: Set<String>? = null,
     val selectedTaskCalendarDate: LocalDate? = null,
+    val showArchivedHabits: Boolean = false,
+    val habitCalendarMonth: YearMonth? = null,
+    val selectedHabitStampFilterKeys:
+    Set<String>? = null,
+    val selectedHabitCalendarDate:
+    LocalDate? = null,
+    val habitRangePreset:
+    HabitHistoryRangePreset =
+        HabitHistoryRangePreset
+            .THIRTY_DAYS,
+
+    val habitCustomRange:
+    HabitHistoryDateRange? = null,
+
+    val showHabitCustomRangePicker:
+    Boolean = false,
 )
 
 private fun HistoryNavState.clearOverlays() =
@@ -1168,6 +1534,8 @@ private fun HistoryNavState.clearOverlays() =
         showNutritionCustomRangePicker = false,
         selectedNutritionCalendarDate = null,
         selectedTaskCalendarDate = null,
+        selectedHabitCalendarDate = null,
+        showHabitCustomRangePicker = false,
     )
 
 class HistoryViewModelFactory(
@@ -1180,6 +1548,8 @@ class HistoryViewModelFactory(
         RealBoundaryTimer,
     private val nutritionRepository:
     NutritionRepository,
+    private val habitRepository:
+    HabitRepository,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(
         modelClass: Class<T>,
@@ -1197,6 +1567,7 @@ class HistoryViewModelFactory(
                 settings = settings,
                 clock = clock,
                 timer = timer,
+                habitRepository = habitRepository,
             ) as T
         }
 

@@ -1,6 +1,7 @@
 package com.prestonhill.questgiver.feature.history
 
 import com.prestonhill.questgiver.core.settings.AppSettings
+import com.prestonhill.questgiver.feature.habits.HabitHistoryUiState
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.DayOfWeek
@@ -215,6 +216,8 @@ data class TaskHistoryUiState(
 data class HistoryScreenUiState(
     val section: HistorySection =
         HistorySection.TASKS,
+    val habits: HabitHistoryUiState =
+        HabitHistoryUiState(),
     val tasks: TaskHistoryUiState =
         TaskHistoryUiState(),
     val nutrition: NutritionHistoryUiState =

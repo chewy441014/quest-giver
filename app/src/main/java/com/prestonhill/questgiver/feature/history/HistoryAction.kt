@@ -1,5 +1,7 @@
 package com.prestonhill.questgiver.feature.history
 
+import com.prestonhill.questgiver.feature.habits.HabitHistoryDateRange
+import com.prestonhill.questgiver.feature.habits.HabitHistoryRangePreset
 import java.time.LocalDate
 
 sealed interface HistoryAction {
@@ -107,5 +109,50 @@ sealed interface HistoryAction {
         val groupLabel: String,
         val selected: Boolean,
     ) : HistoryAction
+
+    data class ShowArchivedHabits(
+        val show: Boolean,
+    ) : HistoryAction
+
+    data object PreviousHabitCalendarMonth :
+        HistoryAction
+
+    data object NextHabitCalendarMonth :
+        HistoryAction
+
+    data class ToggleHabitStampFilter(
+        val key: String,
+    ) : HistoryAction
+
+    data object SelectAllHabitStamps :
+        HistoryAction
+
+    data class SetHabitStampGroupSelected(
+        val groupLabel: String,
+        val selected: Boolean,
+    ) : HistoryAction
+
+    data class OpenHabitCalendarDay(
+        val date: LocalDate,
+    ) : HistoryAction
+
+    data object DismissHabitCalendarDay :
+        HistoryAction
+
+    data class SelectHabitRange(
+        val preset:
+        HabitHistoryRangePreset,
+    ) : HistoryAction
+
+    data class SetHabitCustomRange(
+        val range:
+        HabitHistoryDateRange,
+    ) : HistoryAction
+
+    data object OpenHabitCustomRange :
+        HistoryAction
+
+    data object DismissHabitCustomRange :
+        HistoryAction
 
 }

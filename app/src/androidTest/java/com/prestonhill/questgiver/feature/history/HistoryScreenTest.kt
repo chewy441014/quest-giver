@@ -15,6 +15,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performScrollToNode
+import com.prestonhill.questgiver.feature.habits.HabitHistoryUiState
 import java.time.YearMonth
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
@@ -877,21 +878,6 @@ class HistoryScreenTest {
     }
 
     @Test
-    fun habitTemplateIsVisible(): Unit {
-        showScreen(
-            state = HistoryScreenUiState(
-                section = HistorySection.HABITS
-            )
-        )
-
-        composeRule
-            .onNodeWithText(
-                "No habit history to show yet."
-            )
-            .assertIsDisplayed()
-    }
-
-    @Test
     fun emptyNutritionRangeShowsMessage(): Unit {
         showScreen(
             state =
@@ -1639,6 +1625,275 @@ class HistoryScreenTest {
     }
 
     @Test
+    fun habitDashboardShowsCalendar(): Unit {
+        showScreen(
+            state = habitCalendarScreenState()
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.HABIT_DASHBOARD
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.HABIT_STAMP_CALENDAR
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("Active habits")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun habitArchivedToggleSendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = habitCalendarScreenState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.HABIT_ARCHIVED_TOGGLE
+            )
+            .assertIsOff()
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.ShowArchivedHabits(
+                    true
+                )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun archivedHabitDashboardShowsArchivedState(): Unit {
+        showScreen(
+            state =
+                habitCalendarScreenState(
+                    showArchived = true
+                )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.HABIT_ARCHIVED_TOGGLE
+            )
+            .assertIsOn()
+
+        composeRule
+            .onNodeWithText("Archived habits")
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText(
+                "Archived habit calendar"
+            )
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun habitStampFilterSendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = habitCalendarScreenState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.habitStampFilter(
+                    HABIT_FILTER
+                )
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .ToggleHabitStampFilter(
+                        HABIT_FILTER
+                    )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun habitStampGroupSendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = habitCalendarScreenState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.HABIT_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(
+                    HistoryTags.habitStampGroup(
+                        "Habit categories"
+                    )
+                )
+            )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.habitStampGroup(
+                    "Habit categories"
+                )
+            )
+            .assertIsOn()
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .SetHabitStampGroupSelected(
+                        groupLabel =
+                            "Habit categories",
+                        selected = false,
+                    )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun habitPreviousMonthSendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = habitCalendarScreenState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.HABIT_STAMP_PREVIOUS
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .PreviousHabitCalendarMonth
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun habitStampedDaySendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = habitCalendarScreenState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.habitStampDay(
+                    CURRENT_DATE
+                )
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .OpenHabitCalendarDay(
+                        CURRENT_DATE
+                    )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun habitDayDialogUsesSelectedFilters(): Unit {
+        showScreen(
+            state =
+                habitCalendarScreenState(
+                    selectedKeys =
+                        setOf(HABIT_FILTER),
+                    selectedDate =
+                        CURRENT_DATE,
+                )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .HABIT_STAMP_DAY_DIALOG
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.habitDayStamp(
+                    HABIT_FILTER
+                )
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.habitDayStamp(
+                    HABIT_CATEGORY_FILTER
+                )
+            )
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun habitDayDialogCanClose(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state =
+                habitCalendarScreenState(
+                    selectedDate =
+                        CURRENT_DATE
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                "${HistoryTags.HABIT_STAMP_PREFIX}_" +
+                        "day_close"
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .DismissHabitCalendarDay
+            ),
+            actions,
+        )
+    }
+
+    @Test
     fun archivedTaskHasNoCheckbox(): Unit {
         showScreen(
             state = taskState(
@@ -1666,6 +1921,79 @@ class HistoryScreenTest {
             section =
                 HistorySection.NUTRITION,
             nutrition = nutrition,
+        )
+
+    private fun habitCalendarScreenState(
+        showArchived: Boolean = false,
+        selectedKeys: Set<String> =
+            setOf(
+                HABIT_FILTER,
+                HABIT_CATEGORY_FILTER,
+            ),
+        selectedDate: LocalDate? = null,
+    ): HistoryScreenUiState =
+        HistoryScreenUiState(
+            section = HistorySection.HABITS,
+            habits =
+                HabitHistoryUiState(
+                    showArchivedHabits =
+                        showArchived,
+                    stampCalendar =
+                        HistoryStampCalendarUiState(
+                            month =
+                                YearMonth.from(
+                                    CURRENT_DATE
+                                ),
+                            currentDate =
+                                CURRENT_DATE,
+                            availableFilters =
+                                listOf(
+                                    HistoryStampFilterUiState(
+                                        key =
+                                            HABIT_FILTER,
+                                        label =
+                                            "Morning walk",
+                                        groupLabel =
+                                            "Uncategorized habits",
+                                        colors =
+                                            HistoryStampColorsUiState(
+                                                left = 0,
+                                                middle = 1,
+                                                right = 2,
+                                            ),
+                                    ),
+                                    HistoryStampFilterUiState(
+                                        key =
+                                            HABIT_CATEGORY_FILTER,
+                                        label = "Gym",
+                                        groupLabel =
+                                            "Habit categories",
+                                        colors =
+                                            HistoryStampColorsUiState(
+                                                left = 3,
+                                                middle = 4,
+                                                right = 5,
+                                            ),
+                                    ),
+                                ),
+                            selectedFilterKeys =
+                                selectedKeys,
+                            days =
+                                listOf(
+                                    HistoryStampCalendarDayUiState(
+                                        date =
+                                            CURRENT_DATE,
+                                        stampKeys =
+                                            listOf(
+                                                HABIT_FILTER,
+                                                HABIT_CATEGORY_FILTER,
+                                            ),
+                                    )
+                                ),
+                            selectedDate =
+                                selectedDate,
+                        ),
+                ),
         )
 
     private fun taskCalendarScreenState(
@@ -1970,5 +2298,11 @@ class HistoryScreenTest {
 
         const val CATEGORY_FILTER =
             "category:health"
+
+        const val HABIT_FILTER =
+            "habit:1"
+
+        const val HABIT_CATEGORY_FILTER =
+            "habit-category:gym"
     }
 }

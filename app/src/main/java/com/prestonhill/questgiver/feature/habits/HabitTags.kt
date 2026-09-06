@@ -34,6 +34,9 @@ object HabitTags {
     const val NEW_SECTION_NAME =
         "habit_new_section_name"
 
+    const val INCLUDE_IN_HISTORY =
+        "habit_include_in_history"
+
     fun sectionRow(sectionId: String) =
         "habit_section_row_$sectionId"
 

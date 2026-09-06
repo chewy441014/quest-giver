@@ -126,7 +126,7 @@ class TaskHistoryMapper {
                         groupLabel =
                             RECURRING_TASK_GROUP,
                         colors =
-                            stampColors(key),
+                            historyStampColors(key),
                     )
                 }
                 .toList()
@@ -168,7 +168,7 @@ class TaskHistoryMapper {
                         groupLabel =
                             CATEGORY_GROUP,
                         colors =
-                            stampColors(key),
+                            historyStampColors(key),
                     )
                 }
 
@@ -281,7 +281,7 @@ private fun categoryStampKey(
                 .trim()
                 .lowercase(Locale.ROOT)
 
-private fun stampColors(
+internal fun historyStampColors(
     key: String,
 ): HistoryStampColorsUiState =
     HistoryStampColorsUiState(

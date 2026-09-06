@@ -171,7 +171,8 @@ interface HabitDao {
     @Query(
         """
         UPDATE habits
-        SET archivedAtEpochMillis = :timestamp
+        SET archivedAtEpochMillis = :timestamp,
+            isVisibleInHistory = 1
         WHERE id = :habitId
         """
     )
