@@ -388,11 +388,63 @@ class HabitHistoryPerformanceCalculatorTest {
             )
 
         /*
-         * Successes: Aug 24, Aug 27, Sep 1.
-         * Failures: Aug 30 and Sep 4.
+         * Success: August 27.
+         * Failures: August 30 and September 4.
+         * August 24 only establishes the anchor.
+         * The late September 1 completion starts
+         * the next interval without scoring.
          */
-        assertEquals(3, result.completedPeriods)
-        assertEquals(5, result.totalPeriods)
+        assertEquals(1, result.completedPeriods)
+        assertEquals(3, result.totalPeriods)
+    }
+
+    @Test
+    fun initialCompletionOnlyEstablishesAnchor(): Unit {
+        val created =
+            LocalDate.of(
+                2026,
+                8,
+                24,
+            )
+
+        val habit =
+            habit(
+                scheduleType =
+                    HabitScheduleTypeDb.INTERVAL,
+                intervalDays = 3,
+                intervalBasis =
+                    HabitIntervalBasisDb
+                        .FROM_COMPLETION,
+                createdDate = created,
+            )
+
+        val result =
+            calculate(
+                habit = habit,
+                logs =
+                    listOf(
+                        log(
+                            id = 1L,
+                            habitId = habit.id,
+                            date = created,
+                        )
+                    ),
+                range =
+                    range(
+                        start = created,
+                        end = created.plusDays(2),
+                    ),
+                currentDate =
+                    created.plusDays(2),
+            )
+
+        assertEquals(
+            HabitHistoryPerformanceResult(
+                completedPeriods = 0,
+                totalPeriods = 0,
+            ),
+            result,
+        )
     }
 
     @Test
@@ -486,16 +538,16 @@ class HabitHistoryPerformanceCalculatorTest {
 
         assertEquals(
             HabitHistoryPerformanceResult(
-                completedPeriods = 2,
-                totalPeriods = 3,
+                completedPeriods = 1,
+                totalPeriods = 2,
             ),
             fixedAnchor,
         )
 
         assertEquals(
             HabitHistoryPerformanceResult(
-                completedPeriods = 1,
-                totalPeriods = 2,
+                completedPeriods = 0,
+                totalPeriods = 1,
             ),
             movingAnchor,
         )

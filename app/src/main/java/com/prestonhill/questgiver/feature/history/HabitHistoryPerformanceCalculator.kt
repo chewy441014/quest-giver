@@ -154,9 +154,9 @@ class HabitHistoryPerformanceCalculator(
                 }
                 .eachCount()
 
-        return datesBetween(
-            firstDate,
-            finalDate,
+        return historyDates(
+            start = firstDate,
+            end = finalDate,
         )
             .map { date ->
                 PeriodOutcome(
@@ -399,13 +399,12 @@ class HabitHistoryPerformanceCalculator(
         }
 
         val outcomes =
-            mutableListOf(
-                PeriodOutcome(
-                    date = dates.first(),
-                    completed = true,
-                )
-            )
+            mutableListOf<PeriodOutcome>()
 
+        /*
+         * The first completion establishes the
+         * initial anchor but is not itself scored.
+         */
         var anchor = dates.first()
 
         dates.drop(1).forEach { date ->
@@ -435,20 +434,16 @@ class HabitHistoryPerformanceCalculator(
                 }
 
                 else -> {
+                    /*
+                     * The due interval was missed.
+                     * The late completion establishes
+                     * the next anchor without earning
+                     * an additional success.
+                     */
                     outcomes +=
                         PeriodOutcome(
                             date = dueDate,
                             completed = false,
-                        )
-
-                    /*
-                     * A late completion establishes
-                     * the next interval.
-                     */
-                    outcomes +=
-                        PeriodOutcome(
-                            date = date,
-                            completed = true,
                         )
 
                     anchor = date
@@ -470,12 +465,8 @@ class HabitHistoryPerformanceCalculator(
         }
 
         return outcomes.filter {
-            !it.date.isBefore(
-                range.startDate
-            ) &&
-                    !it.date.isAfter(
-                        range.endDate
-                    ) &&
+            !it.date.isBefore(range.startDate) &&
+                    !it.date.isAfter(range.endDate) &&
                     it.date.isBefore(
                         cutoffExclusive
                     )
@@ -528,17 +519,6 @@ class HabitHistoryPerformanceCalculator(
         )
     }
 
-    private fun datesBetween(
-        start: LocalDate,
-        endInclusive: LocalDate,
-    ): List<LocalDate> =
-        generateSequence(start) { date ->
-            date.plusDays(1)
-                .takeUnless {
-                    it.isAfter(endInclusive)
-                }
-        }
-            .toList()
 }
 
 private data class PeriodOutcome(

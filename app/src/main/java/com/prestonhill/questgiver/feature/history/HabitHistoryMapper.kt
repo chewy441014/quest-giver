@@ -30,8 +30,22 @@ class HabitHistoryMapper {
                 end = range.endDate,
             )
 
-        val activeLogs =
+        val countsByHabit =
             activeHabitLogs(logs)
+                .groupBy {
+                    it.habitId
+                }
+                .mapValues { (_, habitLogs) ->
+                    habitLogs
+                        .groupingBy {
+                            calculator
+                                .containing(
+                                    it.completionTimestampMillis
+                                )
+                                .date
+                        }
+                        .eachCount()
+                }
 
         val eligibleHabits =
             habits.asSequence()
@@ -73,18 +87,8 @@ class HabitHistoryMapper {
                         }
 
                 val countsByDate =
-                    activeLogs.asSequence()
-                        .filter {
-                            it.habitId == habit.id
-                        }
-                        .groupingBy {
-                            calculator
-                                .containing(
-                                    it.completionTimestampMillis
-                                )
-                                .date
-                        }
-                        .eachCount()
+                    countsByHabit[habit.id]
+                        .orEmpty()
 
                 val colorKey =
                     "habit-completion:${habit.id}"
@@ -473,7 +477,7 @@ fun defaultHabitCustomRange(
     )
 }
 
-private fun historyDates(
+internal fun historyDates(
     start: LocalDate,
     end: LocalDate,
 ): List<LocalDate> =
