@@ -13,6 +13,8 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
 import java.time.YearMonth
 import java.time.LocalDate
@@ -1681,6 +1683,8 @@ class HistoryScreenTest {
                 )
         )
 
+        scrollHabitDashboardTo(HistoryTags.HABIT_ARCHIVED_TOGGLE)
+
         composeRule
             .onNodeWithTag(
                 HistoryTags.HABIT_ARCHIVED_TOGGLE
@@ -1708,12 +1712,18 @@ class HistoryScreenTest {
             actions = actions,
         )
 
+        scrollHabitDashboardTo(
+            HistoryTags.HABIT_STAMP_CALENDAR
+        )
+
         composeRule
             .onNodeWithTag(
                 HistoryTags.habitStampFilter(
                     HABIT_FILTER
                 )
             )
+            .performScrollTo()
+            .assertIsDisplayed()
             .performClick()
 
         assertEquals(
@@ -1806,12 +1816,18 @@ class HistoryScreenTest {
             actions = actions,
         )
 
+        scrollHabitDashboardTo(
+            HistoryTags.HABIT_STAMP_CALENDAR
+        )
+
         composeRule
             .onNodeWithTag(
                 HistoryTags.habitStampDay(
                     CURRENT_DATE
                 )
             )
+            .performScrollTo()
+            .assertIsDisplayed()
             .performClick()
 
         assertEquals(
@@ -1820,6 +1836,211 @@ class HistoryScreenTest {
                     .OpenHabitCalendarDay(
                         CURRENT_DATE
                     )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun habitPerformanceIsDisplayed(): Unit {
+        showScreen(
+            state =
+                habitCalendarScreenState(
+                    performance =
+                        listOf(
+                            performanceState()
+                        )
+                )
+        )
+
+        scrollHabitDashboardTo(
+            HistoryTags.habitPerformance(
+                HABIT_ID
+            )
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.habitPerformance(
+                    HABIT_ID
+                )
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText(
+                "Strength training"
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText(
+                "2/4 periods completed"
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("50%")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun habitWithNoFinishedPeriodsShowsMessage(): Unit {
+        showScreen(
+            state =
+                habitCalendarScreenState(
+                    performance =
+                        listOf(
+                            performanceState(
+                                completedPeriods = 0,
+                                totalPeriods = 0,
+                                completionRate = 0f,
+                            )
+                        )
+                )
+        )
+
+        scrollHabitDashboardTo(
+            HistoryTags.habitPerformance(
+                HABIT_ID
+            )
+        )
+
+        composeRule
+            .onNodeWithText(
+                "No finished periods in this range."
+            )
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun habitRangeSendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = habitCalendarScreenState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.habitRange(
+                    HabitHistoryRangePreset
+                        .SIXTY_DAYS
+                )
+            )
+            .performScrollTo()
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.SelectHabitRange(
+                    HabitHistoryRangePreset
+                        .SIXTY_DAYS
+                )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun customHabitRangeOpensPicker(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = habitCalendarScreenState(),
+            actions = actions,
+        )
+
+        scrollHabitDashboardTo(
+            HistoryTags.HABIT_RANGE_LIST
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.HABIT_RANGE_LIST
+            )
+            .performScrollToIndex(
+                HabitHistoryRangePreset
+                    .CUSTOM
+                    .ordinal
+            )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.habitRange(
+                    HabitHistoryRangePreset.CUSTOM
+                )
+            )
+            .performClick()
+
+
+        assertEquals(
+            listOf(
+                HistoryAction.OpenHabitCustomRange
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun habitRangePickerConfirmsRange(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        val state =
+            habitCalendarScreenState(
+                showCustomRangePicker = true
+            )
+
+        showScreen(
+            state = state,
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.HABIT_RANGE_CONFIRM
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction.SetHabitCustomRange(
+                    requireNotNull(
+                        state.habits.customRange
+                    )
+                )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun habitRangePickerCanCancel(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state =
+                habitCalendarScreenState(
+                    showCustomRangePicker = true
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.HABIT_RANGE_CANCEL
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .DismissHabitCustomRange
             ),
             actions,
         )
@@ -1892,6 +2113,234 @@ class HistoryScreenTest {
     }
 
     @Test
+    fun habitCompletionChartIsDisplayed(): Unit {
+        showScreen(
+            state = habitCalendarScreenState()
+        )
+
+        scrollHabitDashboardTo(
+            HistoryTags.HABIT_COMPLETION_CHART
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.HABIT_COMPLETION_CHART
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText(
+                "Daily multi-completions"
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.HABIT_COMPLETION_PLOT
+            )
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun habitCompletionFilterSendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = habitCalendarScreenState(),
+            actions = actions,
+        )
+
+        scrollHabitDashboardTo(
+            HistoryTags
+                .HABIT_COMPLETION_CHART
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .habitCompletionChartFilter(
+                        HABIT_ID
+                    )
+            )
+            .assertIsSelected()
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .ToggleHabitCompletionSeries(
+                        HABIT_ID
+                    )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun allHabitCompletionSeriesSendsAction(): Unit {
+        val actions =
+            mutableListOf<HistoryAction>()
+
+        showScreen(
+            state = habitCalendarScreenState(),
+            actions = actions,
+        )
+
+        scrollHabitDashboardTo(
+            HistoryTags
+                .HABIT_COMPLETION_CHART
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags
+                    .HABIT_COMPLETION_CHART_ALL
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HistoryAction
+                    .SelectAllHabitCompletionSeries
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun noMultiCompletionHabitsShowsMessage(): Unit {
+        showScreen(
+            state =
+                habitCalendarScreenState(
+                    completionChart =
+                        HabitCompletionChartUiState()
+                )
+        )
+
+        scrollHabitDashboardTo(
+            HistoryTags
+                .HABIT_COMPLETION_CHART
+        )
+
+        composeRule
+            .onNodeWithText(
+                "No multi-completion habits " +
+                        "are available."
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.HABIT_COMPLETION_PLOT
+            )
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun unavailableHabitRangeShowsNoData(): Unit {
+        val date =
+            CURRENT_DATE.minusDays(1)
+
+        val chart =
+            HabitCompletionChartUiState(
+                dates = listOf(date),
+                series =
+                    listOf(
+                        HabitCompletionSeriesUiState(
+                            habitId = HABIT_ID,
+                            name = "Archived water",
+                            colorIndex = 0,
+                            points =
+                                listOf(
+                                    HabitCompletionPointUiState(
+                                        date = date,
+                                        completionCount =
+                                            null,
+                                    )
+                                ),
+                        )
+                    ),
+                selectedHabitIds =
+                    setOf(HABIT_ID),
+            )
+
+        showScreen(
+            state =
+                habitCalendarScreenState(
+                    completionChart = chart
+                )
+        )
+
+        scrollHabitDashboardTo(
+            HistoryTags
+                .HABIT_COMPLETION_CHART
+        )
+
+        composeRule
+            .onNodeWithText(
+                "No multi-completion habit " +
+                        "data for this range."
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.HABIT_COMPLETION_PLOT
+            )
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun zeroCompletionDaysStillDrawChart(): Unit {
+        val dates =
+            listOf(
+                CURRENT_DATE.minusDays(1),
+                CURRENT_DATE,
+            )
+
+        val chart =
+            HabitCompletionChartUiState(
+                dates = dates,
+                series =
+                    listOf(
+                        HabitCompletionSeriesUiState(
+                            habitId = HABIT_ID,
+                            name = "Water",
+                            colorIndex = 0,
+                            points =
+                                dates.map { date ->
+                                    HabitCompletionPointUiState(
+                                        date = date,
+                                        completionCount = 0,
+                                    )
+                                },
+                        )
+                    ),
+                selectedHabitIds =
+                    setOf(HABIT_ID),
+            )
+
+        showScreen(
+            state =
+                habitCalendarScreenState(
+                    completionChart = chart
+                )
+        )
+
+        scrollHabitDashboardTo(
+            HistoryTags
+                .HABIT_COMPLETION_CHART
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.HABIT_COMPLETION_PLOT
+            )
+            .assertIsDisplayed()
+    }
+
+    @Test
     fun archivedTaskHasNoCheckbox(): Unit {
         showScreen(
             state = taskState(
@@ -1908,6 +2357,18 @@ class HistoryScreenTest {
                 )
             )
             .assertDoesNotExist()
+    }
+
+    private fun scrollHabitDashboardTo(
+        tag: String,
+    ) {
+        composeRule
+            .onNodeWithTag(
+                HistoryTags.HABIT_DASHBOARD
+            )
+            .performScrollToNode(
+                hasTestTag(tag)
+            )
     }
 
     private fun nutritionScreenState(
@@ -1929,6 +2390,27 @@ class HistoryScreenTest {
                 HABIT_CATEGORY_FILTER,
             ),
         selectedDate: LocalDate? = null,
+        rangePreset:
+        HabitHistoryRangePreset =
+            HabitHistoryRangePreset.THIRTY_DAYS,
+
+        selectedRange:
+        HabitHistoryDateRange? =
+            HABIT_RANGE,
+
+        customRange:
+        HabitHistoryDateRange? =
+            HABIT_CUSTOM_RANGE,
+
+        showCustomRangePicker:
+        Boolean = false,
+
+        performance:
+        List<HabitHistoryPerformanceUiState> =
+            emptyList(),
+        completionChart:
+        HabitCompletionChartUiState =
+            completionChartState(),
     ): HistoryScreenUiState =
         HistoryScreenUiState(
             section = HistorySection.HABITS,
@@ -1936,6 +2418,13 @@ class HistoryScreenTest {
                 HabitHistoryUiState(
                     showArchivedHabits =
                         showArchived,
+                    rangePreset = rangePreset,
+                    selectedRange = selectedRange,
+                    customRange = customRange,
+                    showCustomRangePicker =
+                        showCustomRangePicker,
+                    performance = performance,
+                    completionChart = completionChart,
                     stampCalendar =
                         HistoryStampCalendarUiState(
                             month =
@@ -1993,6 +2482,86 @@ class HistoryScreenTest {
                         ),
                 ),
         )
+
+    private fun performanceState(
+        completedPeriods: Int = 2,
+        totalPeriods: Int = 4,
+        completionRate: Float = 0.5f,
+    ): HabitHistoryPerformanceUiState =
+        HabitHistoryPerformanceUiState(
+            habitId = HABIT_ID,
+            name = "Strength training",
+            schedule = "3 per week",
+            completedPeriods =
+                completedPeriods,
+            totalPeriods = totalPeriods,
+            completionRate = completionRate,
+        )
+
+    private fun completionChartState(
+        selectedHabitIds: Set<Long> =
+            setOf(
+                HABIT_ID,
+                SECOND_HABIT_ID,
+            ),
+    ): HabitCompletionChartUiState {
+        val dates =
+            listOf(
+                CURRENT_DATE.minusDays(2),
+                CURRENT_DATE.minusDays(1),
+                CURRENT_DATE,
+            )
+
+        return HabitCompletionChartUiState(
+            dates = dates,
+            series =
+                listOf(
+                    HabitCompletionSeriesUiState(
+                        habitId = HABIT_ID,
+                        name = "Water",
+                        colorIndex = 0,
+                        points =
+                            listOf(
+                                HabitCompletionPointUiState(
+                                    date = dates[0],
+                                    completionCount = 0,
+                                ),
+                                HabitCompletionPointUiState(
+                                    date = dates[1],
+                                    completionCount = 2,
+                                ),
+                                HabitCompletionPointUiState(
+                                    date = dates[2],
+                                    completionCount = 1,
+                                ),
+                            ),
+                    ),
+                    HabitCompletionSeriesUiState(
+                        habitId =
+                            SECOND_HABIT_ID,
+                        name = "Practice",
+                        colorIndex = 1,
+                        points =
+                            listOf(
+                                HabitCompletionPointUiState(
+                                    date = dates[0],
+                                    completionCount = null,
+                                ),
+                                HabitCompletionPointUiState(
+                                    date = dates[1],
+                                    completionCount = 0,
+                                ),
+                                HabitCompletionPointUiState(
+                                    date = dates[2],
+                                    completionCount = 3,
+                                ),
+                            ),
+                    ),
+                ),
+            selectedHabitIds =
+                selectedHabitIds,
+        )
+    }
 
     private fun taskCalendarScreenState(
         selectedKeys: Set<String> =
@@ -2302,5 +2871,25 @@ class HistoryScreenTest {
 
         const val HABIT_CATEGORY_FILTER =
             "habit-category:gym"
+
+        const val HABIT_ID = 81L
+
+        val HABIT_RANGE =
+            HabitHistoryDateRange(
+                startDate =
+                    CURRENT_DATE.minusDays(29),
+                endDate = CURRENT_DATE,
+            )
+
+        val HABIT_CUSTOM_RANGE =
+            HabitHistoryDateRange(
+                startDate =
+                    LocalDate.of(2026, 8, 1),
+                endDate =
+                    LocalDate.of(2026, 8, 31),
+            )
+
+        const val SECOND_HABIT_ID = 22L
+
     }
 }

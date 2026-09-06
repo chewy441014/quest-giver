@@ -11,6 +11,131 @@ import java.time.YearMonth
 import java.util.Locale
 
 class HabitHistoryMapper {
+
+    fun completionChart(
+        habits: List<HabitEntity>,
+        logs: List<HabitLogEntity>,
+        range: HabitHistoryDateRange,
+        currentDate: LocalDate,
+        calculator: AppDayCalculator,
+        showArchivedHabits: Boolean,
+    ): HabitCompletionChartUiState {
+        require(
+            !range.endDate.isAfter(currentDate)
+        )
+
+        val dates =
+            historyDates(
+                start = range.startDate,
+                end = range.endDate,
+            )
+
+        val activeLogs =
+            activeHabitLogs(logs)
+
+        val eligibleHabits =
+            habits.asSequence()
+                .filter { habit ->
+                    habit.isVisibleInHistory &&
+                            habit
+                                .allowsMultipleCompletions &&
+                            (
+                                    habit.archivedAtEpochMillis !=
+                                            null
+                                    ) ==
+                            showArchivedHabits
+                }
+                .sortedWith(
+                    compareByDescending<HabitEntity> {
+                        it.createdAtEpochMillis
+                    }
+                        .thenByDescending {
+                            it.id
+                        }
+                )
+                .toList()
+
+        val series =
+            eligibleHabits.map { habit ->
+                val createdDate =
+                    calculator
+                        .containing(
+                            habit.createdAtEpochMillis
+                        )
+                        .date
+
+                val archivedDate =
+                    habit.archivedAtEpochMillis
+                        ?.let {
+                            calculator
+                                .containing(it)
+                                .date
+                        }
+
+                val countsByDate =
+                    activeLogs.asSequence()
+                        .filter {
+                            it.habitId == habit.id
+                        }
+                        .groupingBy {
+                            calculator
+                                .containing(
+                                    it.completionTimestampMillis
+                                )
+                                .date
+                        }
+                        .eachCount()
+
+                val colorKey =
+                    "habit-completion:${habit.id}"
+
+                HabitCompletionSeriesUiState(
+                    habitId = habit.id,
+                    name = habit.name,
+                    colorIndex =
+                        historyStampColors(
+                            colorKey
+                        ).left,
+                    points =
+                        dates.map { date ->
+                            val existsOnDate =
+                                !date.isBefore(
+                                    createdDate
+                                ) &&
+                                        (
+                                                archivedDate ==
+                                                        null ||
+                                                        !date.isAfter(
+                                                            archivedDate
+                                                        )
+                                                )
+
+                            HabitCompletionPointUiState(
+                                date = date,
+                                completionCount =
+                                    if (existsOnDate) {
+                                        countsByDate
+                                            .getOrDefault(
+                                                date,
+                                                0,
+                                            )
+                                    } else {
+                                        null
+                                    },
+                            )
+                        },
+                )
+            }
+
+        return HabitCompletionChartUiState(
+            dates = dates,
+            series = series,
+            selectedHabitIds =
+                series.mapTo(linkedSetOf()) {
+                    it.habitId
+                },
+        )
+    }
     fun stampCalendar(
         habits: List<HabitEntity>,
         logs: List<HabitLogEntity>,
@@ -347,6 +472,18 @@ fun defaultHabitCustomRange(
             previousMonth.atEndOfMonth(),
     )
 }
+
+private fun historyDates(
+    start: LocalDate,
+    end: LocalDate,
+): List<LocalDate> =
+    generateSequence(start) { date ->
+        date.plusDays(1)
+            .takeUnless {
+                it.isAfter(end)
+            }
+    }
+        .toList()
 
 private fun HabitEntity.historyScheduleText():
         String =

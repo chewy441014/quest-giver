@@ -190,6 +190,50 @@ data class HistoryTaskUiState(
     val isArchived: Boolean = false,
 )
 
+data class HabitCompletionPointUiState(
+    val date: LocalDate,
+    /*
+     * Null means the habit did not exist or
+     * was already archived on this date.
+     * Zero means it existed but had no
+     * completions.
+     */
+    val completionCount: Int?,
+)
+
+data class HabitCompletionSeriesUiState(
+    val habitId: Long,
+    val name: String,
+    val colorIndex: Int,
+    val points:
+    List<HabitCompletionPointUiState>,
+) {
+    init {
+        require(
+            colorIndex in 0 until
+                    HistoryStampColorsUiState
+                        .COLOR_COUNT
+        )
+    }
+}
+
+data class HabitCompletionChartUiState(
+    val dates: List<LocalDate> =
+        emptyList(),
+    val series:
+    List<HabitCompletionSeriesUiState> =
+        emptyList(),
+    val selectedHabitIds:
+    Set<Long> = emptySet(),
+) {
+    val visibleSeries:
+            List<HabitCompletionSeriesUiState>
+        get() =
+            series.filter {
+                it.habitId in selectedHabitIds
+            }
+}
+
 data class TaskHistoryUiState(
     val page: TaskHistoryPage =
         TaskHistoryPage.DASHBOARD,
@@ -241,6 +285,9 @@ data class HabitHistoryUiState(
     val stampCalendar:
     HistoryStampCalendarUiState =
         HistoryStampCalendarUiState(),
+    val completionChart:
+    HabitCompletionChartUiState =
+        HabitCompletionChartUiState(),
 )
 
 data class HabitHistoryDateRange(

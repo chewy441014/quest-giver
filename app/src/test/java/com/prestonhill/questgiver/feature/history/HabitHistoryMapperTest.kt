@@ -559,6 +559,268 @@ class HabitHistoryMapperTest {
     }
 
     @Test
+    fun completionChartUsesEligiblePopulation(): Unit {
+        val habits =
+            listOf(
+                habit(
+                    id = 1L,
+                    name = "Older",
+                    createdAt = 1_000L,
+                    allowsMultipleCompletions = true,
+                ),
+                habit(
+                    id = 2L,
+                    name = "Newest",
+                    createdAt = 3_000L,
+                    allowsMultipleCompletions = true,
+                ),
+                habit(
+                    id = 3L,
+                    name = "Single completion",
+                    createdAt = 4_000L,
+                ),
+                habit(
+                    id = 4L,
+                    name = "Excluded",
+                    createdAt = 5_000L,
+                    visibleInHistory = false,
+                    allowsMultipleCompletions = true,
+                ),
+                habit(
+                    id = 5L,
+                    name = "Archived",
+                    createdAt = 2_000L,
+                    archivedAt = 6_000L,
+                    allowsMultipleCompletions = true,
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                "Newest",
+                "Older",
+            ),
+            mapCompletionChart(habits)
+                .series
+                .map {
+                    it.name
+                },
+        )
+
+        assertEquals(
+            listOf("Archived"),
+            mapCompletionChart(
+                habits = habits,
+                showArchived = true,
+            )
+                .series
+                .map {
+                    it.name
+                },
+        )
+    }
+
+    @Test
+    fun completionChartCountsLogsAndCorrections(): Unit {
+        val firstDate =
+            CURRENT_DATE.minusDays(2)
+
+        val secondDate =
+            CURRENT_DATE.minusDays(1)
+
+        val habit =
+            habit(
+                id = 1L,
+                createdAt =
+                    timestamp(
+                        firstDate.minusDays(1),
+                        12,
+                    ),
+                allowsMultipleCompletions = true,
+            )
+
+        val chart =
+            mapCompletionChart(
+                habits = listOf(habit),
+                logs =
+                    listOf(
+                        log(
+                            id = 10L,
+                            habitId = habit.id,
+                            timestamp =
+                                timestamp(
+                                    firstDate,
+                                    10,
+                                ),
+                        ),
+                        log(
+                            id = 11L,
+                            habitId = habit.id,
+                            timestamp =
+                                timestamp(
+                                    firstDate,
+                                    11,
+                                ),
+                        ),
+                        log(
+                            id = 12L,
+                            habitId = habit.id,
+                            timestamp =
+                                timestamp(
+                                    firstDate,
+                                    11,
+                                ),
+                            delta = -1,
+                            reversesLogId = 11L,
+                        ),
+                        log(
+                            id = 13L,
+                            habitId = habit.id,
+                            timestamp =
+                                timestamp(
+                                    secondDate,
+                                    12,
+                                ),
+                        ),
+                    ),
+                range =
+                    HabitHistoryDateRange(
+                        startDate = firstDate,
+                        endDate = CURRENT_DATE,
+                    ),
+            )
+
+        val points =
+            chart.series
+                .single()
+                .points
+                .associate {
+                    it.date to
+                            it.completionCount
+                }
+
+        assertEquals(1, points[firstDate])
+        assertEquals(1, points[secondDate])
+        assertEquals(0, points[CURRENT_DATE])
+    }
+
+    @Test
+    fun completionChartKeepsFullAxisAcrossLifetime(): Unit {
+        val createdDate =
+            CURRENT_DATE.minusDays(2)
+
+        val archivedDate =
+            CURRENT_DATE.minusDays(1)
+
+        val habit =
+            habit(
+                id = 1L,
+                createdAt =
+                    timestamp(
+                        createdDate,
+                        12,
+                    ),
+                archivedAt =
+                    timestamp(
+                        archivedDate,
+                        12,
+                    ),
+                allowsMultipleCompletions = true,
+            )
+
+        val chart =
+            mapCompletionChart(
+                habits = listOf(habit),
+                logs =
+                    listOf(
+                        log(
+                            id = 1L,
+                            habitId = habit.id,
+                            timestamp =
+                                timestamp(
+                                    archivedDate,
+                                    10,
+                                ),
+                        )
+                    ),
+                showArchived = true,
+            )
+
+        val points =
+            chart.series
+                .single()
+                .points
+                .associate {
+                    it.date to
+                            it.completionCount
+                }
+
+        assertEquals(
+            5,
+            chart.dates.size,
+        )
+
+        assertEquals(
+            null,
+            points[
+                CURRENT_DATE.minusDays(4)
+            ],
+        )
+
+        assertEquals(
+            null,
+            points[
+                CURRENT_DATE.minusDays(3)
+            ],
+        )
+
+        assertEquals(
+            0,
+            points[createdDate],
+        )
+
+        assertEquals(
+            1,
+            points[archivedDate],
+        )
+
+        assertEquals(
+            null,
+            points[CURRENT_DATE],
+        )
+    }
+
+    @Test
+    fun completionChartColorSurvivesRename(): Unit {
+        val original =
+            habit(
+                id = 1L,
+                name = "Original",
+                allowsMultipleCompletions = true,
+            )
+
+        val renamed =
+            original.copy(
+                name = "Renamed"
+            )
+
+        assertEquals(
+            mapCompletionChart(
+                habits = listOf(original)
+            )
+                .series
+                .single()
+                .colorIndex,
+            mapCompletionChart(
+                habits = listOf(renamed)
+            )
+                .series
+                .single()
+                .colorIndex,
+        )
+    }
+
+    @Test
     fun stampColorsRemainStableAfterRename(): Unit {
         val original =
             habit(
@@ -645,6 +907,28 @@ class HabitHistoryMapperTest {
             it.date == date
         }
 
+    private fun mapCompletionChart(
+        habits: List<HabitEntity>,
+        logs: List<HabitLogEntity> =
+            emptyList(),
+        range: HabitHistoryDateRange =
+            HabitHistoryDateRange(
+                startDate =
+                    CURRENT_DATE.minusDays(4),
+                endDate = CURRENT_DATE,
+            ),
+        showArchived: Boolean = false,
+    ): HabitCompletionChartUiState =
+        mapper.completionChart(
+            habits = habits,
+            logs = logs,
+            range = range,
+            currentDate = CURRENT_DATE,
+            calculator = calculator,
+            showArchivedHabits =
+                showArchived,
+        )
+
     private fun habit(
         id: Long,
         name: String = "Habit $id",
@@ -659,6 +943,8 @@ class HabitHistoryMapperTest {
         intervalDays: Int? = null,
         intervalBasis:
         HabitIntervalBasisDb? = null,
+        allowsMultipleCompletions: Boolean =
+            false,
     ): HabitEntity =
         HabitEntity(
             id = id,
@@ -667,6 +953,8 @@ class HabitHistoryMapperTest {
             historyCategory =
                 historyCategory,
             displayOrder = id.toInt(),
+            allowsMultipleCompletions =
+                allowsMultipleCompletions,
             isVisibleInHistory =
                 visibleInHistory,
             scheduleType = scheduleType,

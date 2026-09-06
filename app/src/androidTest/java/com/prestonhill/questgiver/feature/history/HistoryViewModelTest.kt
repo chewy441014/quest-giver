@@ -1284,6 +1284,135 @@ class HistoryViewModelTest {
         }
 
     @Test
+    fun habitCompletionSeriesCanBeFiltered(): Unit =
+        runBlocking {
+            val firstId =
+                addHabit(
+                    name = "First",
+                    displayOrder = 0,
+                    allowsMultipleCompletions =
+                        true,
+                )
+
+            val secondId =
+                addHabit(
+                    name = "Second",
+                    displayOrder = 1,
+                    allowsMultipleCompletions =
+                        true,
+                )
+
+            awaitState {
+                it.habits.completionChart
+                    .selectedHabitIds ==
+                        setOf(
+                            secondId,
+                            firstId,
+                        )
+            }
+
+            viewModel.onAction(
+                HistoryAction
+                    .ToggleHabitCompletionSeries(
+                        firstId
+                    )
+            )
+
+            val filtered =
+                awaitState {
+                    it.habits.completionChart
+                        .selectedHabitIds ==
+                            setOf(secondId)
+                }
+
+            assertEquals(
+                listOf(secondId),
+                filtered.habits
+                    .completionChart
+                    .visibleSeries
+                    .map {
+                        it.habitId
+                    },
+            )
+
+            viewModel.onAction(
+                HistoryAction
+                    .SelectAllHabitCompletionSeries
+            )
+
+            awaitState {
+                it.habits.completionChart
+                    .selectedHabitIds ==
+                        setOf(
+                            secondId,
+                            firstId,
+                        )
+            }
+        }
+
+    @Test
+    fun habitCompletionChartUpdatesAfterCorrection():
+            Unit =
+        runBlocking {
+            val habitId =
+                addHabit(
+                    name = "Water",
+                    allowsMultipleCompletions =
+                        true,
+                )
+
+            completeHabit(habitId)
+            completeHabit(habitId)
+
+            awaitState {
+                it.habits.completionChart
+                    .series
+                    .singleOrNull {
+                            series ->
+                        series.habitId == habitId
+                    }
+                    ?.points
+                    ?.singleOrNull { point ->
+                        point.date == CURRENT_DATE
+                    }
+                    ?.completionCount == 2
+            }
+
+            removeHabitCompletion(habitId)
+
+            val corrected =
+                awaitState {
+                    it.habits.completionChart
+                        .series
+                        .singleOrNull {
+                                series ->
+                            series.habitId == habitId
+                        }
+                        ?.points
+                        ?.singleOrNull { point ->
+                            point.date ==
+                                    CURRENT_DATE
+                        }
+                        ?.completionCount == 1
+                }
+
+            assertEquals(
+                1,
+                corrected.habits
+                    .completionChart
+                    .series
+                    .single {
+                        it.habitId == habitId
+                    }
+                    .points
+                    .single {
+                        it.date == CURRENT_DATE
+                    }
+                    .completionCount,
+            )
+        }
+
+    @Test
     fun nutritionRangeCanChange(): Unit =
         runBlocking {
             awaitState {
@@ -2283,6 +2412,14 @@ class HistoryViewModelTest {
                     .selectedRange
                     ?.startDate,
             )
+
+            assertEquals(
+                60,
+                sixtyDays.habits
+                    .completionChart
+                    .dates
+                    .size,
+            )
         }
 
     @Test
@@ -2405,10 +2542,14 @@ class HistoryViewModelTest {
         displayOrder: Int = 0,
         createdAt: Long =
             clock.millis() + displayOrder,
+        allowsMultipleCompletions:
+        Boolean = false,
     ): Long =
         habitRepository.createHabit(
             HabitEntity(
                 name = name,
+                allowsMultipleCompletions =
+                    allowsMultipleCompletions,
                 displaySectionId =
                     DefaultHabitDisplaySections
                         .ANYTIME_ID,

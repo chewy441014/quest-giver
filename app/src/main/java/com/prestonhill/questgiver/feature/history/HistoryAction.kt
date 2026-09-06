@@ -153,4 +153,11 @@ sealed interface HistoryAction {
     data object DismissHabitCustomRange :
         HistoryAction
 
+    data class ToggleHabitCompletionSeries(
+        val habitId: Long,
+    ) : HistoryAction
+
+    data object SelectAllHabitCompletionSeries :
+        HistoryAction
+
 }

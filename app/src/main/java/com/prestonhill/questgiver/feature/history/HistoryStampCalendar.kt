@@ -694,7 +694,7 @@ private fun DrawScope.drawThreeStripeStamp(
     clipPath(circle) {
         drawRect(
             color =
-                stampColor(colors.left),
+                historyColor(colors.left),
             topLeft =
                 Offset(
                     bounds.left,
@@ -709,7 +709,7 @@ private fun DrawScope.drawThreeStripeStamp(
 
         drawRect(
             color =
-                stampColor(colors.middle),
+                historyColor(colors.middle),
             topLeft =
                 Offset(
                     bounds.left +
@@ -725,7 +725,7 @@ private fun DrawScope.drawThreeStripeStamp(
 
         drawRect(
             color =
-                stampColor(colors.right),
+                historyColor(colors.right),
             topLeft =
                 Offset(
                     bounds.left +
@@ -754,7 +754,7 @@ private fun stampPositionSeed(
     return result
 }
 
-private fun stampColor(
+internal fun historyColor(
     index: Int,
 ): Color =
     STAMP_COLORS[index]

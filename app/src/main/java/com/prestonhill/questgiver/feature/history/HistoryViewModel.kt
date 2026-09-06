@@ -260,6 +260,38 @@ class HistoryViewModel(
                         navigation.showArchivedHabits,
                 )
 
+            val mappedCompletionChart =
+                habitMapper.completionChart(
+                    habits = habits,
+                    logs = logs,
+                    range = selectedRange,
+                    currentDate = currentDate,
+                    calculator =
+                        time.dayCalculator,
+                    showArchivedHabits =
+                        navigation.showArchivedHabits,
+                )
+
+            val availableCompletionIds =
+                mappedCompletionChart
+                    .series
+                    .mapTo(linkedSetOf()) {
+                        it.habitId
+                    }
+
+            val selectedCompletionIds =
+                navigation
+                    .selectedHabitCompletionIds
+                    ?.intersect(
+                        availableCompletionIds
+                    )
+                    ?.takeIf {
+                        it.isNotEmpty() ||
+                                availableCompletionIds
+                                    .isEmpty()
+                    }
+                    ?: availableCompletionIds
+
             val currentMonth =
                 YearMonth.from(currentDate)
 
@@ -305,6 +337,11 @@ class HistoryViewModel(
             HabitHistoryUiState(
                 showArchivedHabits =
                     navigation.showArchivedHabits,
+                completionChart =
+                    mappedCompletionChart.copy(
+                        selectedHabitIds =
+                            selectedCompletionIds
+                    ),
                 rangePreset =
                     navigation.habitRangePreset,
                 selectedRange = selectedRange,
@@ -607,6 +644,21 @@ class HistoryViewModel(
                     ).clearOverlays()
                 }
 
+            is HistoryAction
+            .ToggleHabitCompletionSeries ->
+                toggleHabitCompletionSeries(
+                    action.habitId
+                )
+
+            HistoryAction
+                .SelectAllHabitCompletionSeries ->
+                nav.update {
+                    it.copy(
+                        selectedHabitCompletionIds =
+                            null
+                    )
+                }
+
             is HistoryAction.SelectHabitRange ->
                 nav.update {
                     it.copy(
@@ -659,6 +711,8 @@ class HistoryViewModel(
                         showArchivedHabits =
                             action.show,
                         selectedHabitStampFilterKeys =
+                            null,
+                        selectedHabitCompletionIds =
                             null,
                         selectedHabitCalendarDate =
                             null,
@@ -1379,6 +1433,48 @@ class HistoryViewModel(
         }
     }
 
+    private fun toggleHabitCompletionSeries(
+        habitId: Long,
+    ) {
+        val chart =
+            uiState.value
+                .habits
+                .completionChart
+
+        val available =
+            chart.series
+                .mapTo(linkedSetOf()) {
+                    it.habitId
+                }
+
+        if (habitId !in available) {
+            return
+        }
+
+        val selected =
+            chart.selectedHabitIds
+
+        val updated =
+            if (habitId in selected) {
+                if (selected.size == 1) {
+                    selected
+                } else {
+                    selected - habitId
+                }
+            } else {
+                selected + habitId
+            }
+
+        nav.update {
+            it.copy(
+                selectedHabitCompletionIds =
+                    updated.takeUnless { ids ->
+                        ids == available
+                    }
+            )
+        }
+    }
+
     private fun setTaskCompletion(
         taskId: Long,
         scheduledEpochDay: Long,
@@ -1508,6 +1604,8 @@ private data class HistoryNavState(
     val selectedTaskCalendarDate: LocalDate? = null,
     val showArchivedHabits: Boolean = false,
     val habitCalendarMonth: YearMonth? = null,
+    val selectedHabitCompletionIds:
+    Set<Long>? = null,
     val selectedHabitStampFilterKeys:
     Set<String>? = null,
     val selectedHabitCalendarDate:

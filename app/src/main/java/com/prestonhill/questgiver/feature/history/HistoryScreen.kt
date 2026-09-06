@@ -186,6 +186,21 @@ object HistoryTags {
     const val HABIT_RANGE_CANCEL =
         "history_habit_range_cancel"
 
+    const val HABIT_COMPLETION_CHART =
+        "history_habit_completion_chart"
+
+    const val HABIT_COMPLETION_CHART_ALL =
+        "history_habit_completion_chart_all"
+
+    const val HABIT_COMPLETION_PLOT =
+        "history_habit_completion_plot"
+
+    fun habitCompletionChartFilter(
+        habitId: Long,
+    ) =
+        "history_habit_completion_chart_filter_" +
+                habitId
+
     fun habitRange(
         preset: HabitHistoryRangePreset,
     ) =
@@ -614,6 +629,26 @@ private fun HabitHistoryDashboard(
                     state = performance
                 )
             }
+        }
+
+        item {
+            HabitCompletionChartCard(
+                state = state.completionChart,
+                onToggleHabit = { habitId ->
+                    onAction(
+                        HistoryAction
+                            .ToggleHabitCompletionSeries(
+                                habitId
+                            )
+                    )
+                },
+                onSelectAll = {
+                    onAction(
+                        HistoryAction
+                            .SelectAllHabitCompletionSeries
+                    )
+                },
+            )
         }
 
         item {
@@ -1441,7 +1476,7 @@ private fun NutritionGoalCalendar(
                             ) {
                                 StampCircle(
                                     color =
-                                        type.stampColor()
+                                        type.historyColor()
                                 )
 
                                 Text(type.label)
@@ -1596,7 +1631,7 @@ private fun RowScope.NutritionCalendarDayCell(
                             ).coerceAtLeast(0f)
 
                 drawCircle(
-                    color = type.stampColor(),
+                    color = type.historyColor(),
                     radius = radius,
                     center =
                         Offset(
@@ -1742,7 +1777,7 @@ private fun NutritionCalendarDayDialog(
                     ) {
                         StampCircle(
                             color =
-                                type.stampColor()
+                                type.historyColor()
                         )
 
                         Text(
@@ -1782,7 +1817,7 @@ private fun StampCircle(
     )
 }
 
-private fun NutritionStampType.stampColor():
+private fun NutritionStampType.historyColor():
         Color =
     when (this) {
         NutritionStampType.CALORIES ->
