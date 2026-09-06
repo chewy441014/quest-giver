@@ -79,17 +79,65 @@ fun HabitEditorDialog(
                                 )
                             ),
                         selected =
-                            editor.displaySectionId ==
+                            editor.newDisplaySectionName == null &&
+                                    editor.displaySectionId ==
                                     section.id,
                         label = section.name,
                         onClick = {
                             onChange(
                                 editor.copy(
                                     displaySectionId =
-                                        section.id
+                                        section.id,
+                                    newDisplaySectionName =
+                                        null,
+                                    errorMessage = null,
                                 )
                             )
                         },
+                    )
+                }
+
+                if (editor.newDisplaySectionName == null) {
+                    ChoiceRow(
+                        modifier =
+                            Modifier.testTag(
+                                HabitTags.NEW_SECTION
+                            ),
+                        selected = false,
+                        label = "+ Add a section",
+                        onClick = {
+                            onChange(
+                                editor.copy(
+                                    newDisplaySectionName = "",
+                                    errorMessage = null,
+                                )
+                            )
+                        },
+                    )
+                } else {
+                    OutlinedTextField(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .testTag(
+                                    HabitTags.NEW_SECTION_NAME
+                                ),
+                        value =
+                            editor.newDisplaySectionName,
+                        onValueChange = { value ->
+                            onChange(
+                                editor.copy(
+                                    newDisplaySectionName =
+                                        value,
+                                    errorMessage = null,
+                                )
+                            )
+                        },
+                        label = {
+                            Text("New section name")
+                        },
+                        singleLine = true,
+                        enabled = !editor.isSaving,
                     )
                 }
 

@@ -29,6 +29,9 @@ import com.prestonhill.questgiver.feature.history.HistoryScreenUiState
 import com.prestonhill.questgiver.feature.nutrition.NutritionAction
 import com.prestonhill.questgiver.feature.nutrition.NutritionScreen
 import com.prestonhill.questgiver.feature.nutrition.NutritionScreenUiState
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.platform.testTag
+import com.prestonhill.questgiver.feature.habits.HabitTags
 
 enum class AppPage(
     val title: String,
@@ -83,6 +86,22 @@ fun AppShell(
                     Text(currentPage.title)
                 },
                 actions = {
+                    if (currentPage == AppPage.HABITS) {
+                        OutlinedButton(
+                            modifier =
+                                Modifier.testTag(
+                                    HabitTags.SECTIONS
+                                ),
+                            onClick = {
+                                onHabitAction(
+                                    HabitAction.ShowSectionManager
+                                )
+                            },
+                        ) {
+                            Text("Sections")
+                        }
+                    }
+
                     TextButton(
                         onClick = onOpenSettings,
                     ) {

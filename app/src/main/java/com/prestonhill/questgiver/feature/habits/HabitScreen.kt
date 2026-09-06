@@ -28,6 +28,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.semantics.semantics
 
 @Composable
 fun HabitScreen(
@@ -145,6 +149,29 @@ fun HabitScreen(
         )
     }
 
+    uiState.sectionManager?.let { manager ->
+        when {
+            manager.confirmation != null ->
+                DeleteDisplaySectionDialog(
+                    confirmation =
+                        manager.confirmation,
+                    onAction = onAction,
+                )
+
+            manager.editor != null ->
+                DisplaySectionEditorDialog(
+                    editor = manager.editor,
+                    onAction = onAction,
+                )
+
+            else ->
+                DisplaySectionManagerDialog(
+                    sections = uiState.sections,
+                    onAction = onAction,
+                )
+        }
+    }
+
     if (uiState.showArchivedHabits) {
         ArchivedHabitsDialog(
             habits = uiState.archivedHabits,
@@ -232,6 +259,389 @@ private fun SectionHeader(
 
         Text(if (uiState.isExpanded) "▾" else "▸")
     }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DisplaySectionManagerDialog(
+    sections:
+    List<HabitDisplaySectionUiState>,
+    onAction: (HabitAction) -> Unit,
+) {
+    AlertDialog(
+        modifier =
+            Modifier.testTag(
+                HabitTags.SECTION_MANAGER
+            ),
+        onDismissRequest = {
+            onAction(
+                HabitAction.DismissSectionManager
+            )
+        },
+        title = {
+            Text("Sections")
+        },
+        text = {
+            Column(
+                verticalArrangement =
+                    Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    "Long press a section to edit."
+                )
+
+                LazyColumn(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 400.dp),
+                ) {
+                    items(
+                        items = sections,
+                        key = { it.id },
+                    ) { section ->
+                        Row(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .testTag(
+                                        HabitTags.sectionRow(
+                                            section.id
+                                        )
+                                    )
+                                    .combinedClickable(
+                                        onClick = {},
+                                        onLongClick = {
+                                            if (
+                                                section.canEdit
+                                            ) {
+                                                onAction(
+                                                    HabitAction
+                                                        .EditDisplaySection(
+                                                            section.id
+                                                        )
+                                                )
+                                            }
+                                        },
+                                    )
+                                    .padding(
+                                        vertical = 4.dp
+                                    ),
+                            verticalAlignment =
+                                Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = section.name,
+                                modifier =
+                                    Modifier.weight(1f),
+                            )
+
+                            IconButton(
+                                modifier =
+                                    Modifier
+                                        .testTag(
+                                            HabitTags
+                                                .moveSectionUp(
+                                                    section.id
+                                                )
+                                        )
+                                        .semantics {
+                                            contentDescription =
+                                                "Move ${section.name} up"
+                                        },
+                                enabled =
+                                    section.canMoveUp &&
+                                            !section.isChanging,
+                                onClick = {
+                                    onAction(
+                                        HabitAction
+                                            .MoveDisplaySectionUp(
+                                                section.id
+                                            )
+                                    )
+                                },
+                            ) {
+                                Text("↑")
+                            }
+
+                            IconButton(
+                                modifier =
+                                    Modifier
+                                        .testTag(
+                                            HabitTags
+                                                .moveSectionDown(
+                                                    section.id
+                                                )
+                                        )
+                                        .semantics {
+                                            contentDescription =
+                                                "Move ${section.name} down"
+                                        },
+                                enabled =
+                                    section.canMoveDown &&
+                                            !section.isChanging,
+                                onClick = {
+                                    onAction(
+                                        HabitAction
+                                            .MoveDisplaySectionDown(
+                                                section.id
+                                            )
+                                    )
+                                },
+                            ) {
+                                Text("↓")
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                modifier =
+                    Modifier.testTag(
+                        HabitTags.ADD_SECTION
+                    ),
+                onClick = {
+                    onAction(
+                        HabitAction.AddDisplaySection
+                    )
+                },
+            ) {
+                Text("Add section")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = {
+                    onAction(
+                        HabitAction
+                            .DismissSectionManager
+                    )
+                },
+            ) {
+                Text("Close")
+            }
+        },
+    )
+}
+
+@Composable
+private fun DisplaySectionEditorDialog(
+    editor: HabitSectionEditorUiState,
+    onAction: (HabitAction) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {
+            if (!editor.isSaving) {
+                onAction(
+                    HabitAction
+                        .DismissDisplaySectionEditor
+                )
+            }
+        },
+        title = {
+            Text(
+                if (editor.isCreating) {
+                    "Add section"
+                } else {
+                    "Edit section"
+                }
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement =
+                    Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedTextField(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag(
+                                HabitTags.SECTION_NAME
+                            ),
+                    value = editor.name,
+                    onValueChange = {
+                        onAction(
+                            HabitAction
+                                .ChangeDisplaySectionName(
+                                    it
+                                )
+                        )
+                    },
+                    label = {
+                        Text("Name")
+                    },
+                    singleLine = true,
+                    enabled = !editor.isSaving,
+                )
+
+                editor.errorMessage?.let {
+                    Text(
+                        text = it,
+                        color =
+                            MaterialTheme
+                                .colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                modifier =
+                    Modifier.testTag(
+                        HabitTags.SAVE_SECTION
+                    ),
+                enabled = editor.canSave,
+                onClick = {
+                    onAction(
+                        HabitAction.SaveDisplaySection
+                    )
+                },
+            ) {
+                Text(
+                    if (editor.isSaving) {
+                        "Saving..."
+                    } else {
+                        "Save"
+                    }
+                )
+            }
+        },
+        dismissButton = {
+            Row {
+                if (!editor.isCreating) {
+                    TextButton(
+                        modifier =
+                            Modifier.testTag(
+                                HabitTags.deleteSection(
+                                    requireNotNull(
+                                        editor.sectionId
+                                    )
+                                )
+                            ),
+                        enabled = !editor.isSaving,
+                        onClick = {
+                            onAction(
+                                HabitAction
+                                    .RequestDeleteDisplaySection(
+                                        requireNotNull(
+                                            editor.sectionId
+                                        )
+                                    )
+                            )
+                        },
+                    ) {
+                        Text("Delete")
+                    }
+                }
+
+                TextButton(
+                    modifier =
+                        Modifier.testTag(
+                            HabitTags.CANCEL_SECTION
+                        ),
+                    enabled = !editor.isSaving,
+                    onClick = {
+                        onAction(
+                            HabitAction
+                                .DismissDisplaySectionEditor
+                        )
+                    },
+                ) {
+                    Text("Cancel")
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun DeleteDisplaySectionDialog(
+    confirmation:
+    HabitSectionDeleteUiState,
+    onAction: (HabitAction) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {
+            if (!confirmation.isDeleting) {
+                onAction(
+                    HabitAction
+                        .DismissDeleteDisplaySection
+                )
+            }
+        },
+        title = {
+            Text(
+                "Delete ${confirmation.sectionName}?"
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement =
+                    Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    "Habits in this section will " +
+                            "move to Uncategorized."
+                )
+
+                confirmation.errorMessage?.let {
+                    Text(
+                        text = it,
+                        color =
+                            MaterialTheme
+                                .colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                modifier =
+                    Modifier.testTag(
+                        HabitTags
+                            .CONFIRM_SECTION_DELETE
+                    ),
+                enabled =
+                    !confirmation.isDeleting,
+                onClick = {
+                    onAction(
+                        HabitAction
+                            .ConfirmDeleteDisplaySection
+                    )
+                },
+            ) {
+                Text(
+                    if (confirmation.isDeleting) {
+                        "Deleting..."
+                    } else {
+                        "Delete"
+                    }
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                modifier =
+                    Modifier.testTag(
+                        HabitTags
+                            .CANCEL_SECTION_DELETE
+                    ),
+                enabled =
+                    !confirmation.isDeleting,
+                onClick = {
+                    onAction(
+                        HabitAction
+                            .DismissDeleteDisplaySection
+                    )
+                },
+            ) {
+                Text("Cancel")
+            }
+        },
+    )
 }
 
 @Composable
