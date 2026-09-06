@@ -26,13 +26,7 @@ import com.prestonhill.questgiver.data.local.database.entity.TaskScheduleTypeDb
 import com.prestonhill.questgiver.data.repository.NutritionRepository
 import com.prestonhill.questgiver.data.repository.TaskCompletionResult
 import com.prestonhill.questgiver.data.repository.TaskRepository
-import com.prestonhill.questgiver.core.time.AppDayCalculator
-import com.prestonhill.questgiver.data.local.database.entity.DefaultHabitDisplaySections
-import com.prestonhill.questgiver.data.local.database.entity.HabitEntity
-import com.prestonhill.questgiver.data.local.database.entity.HabitScheduleTypeDb
-import com.prestonhill.questgiver.data.repository.CompletionChangeResult
 import com.prestonhill.questgiver.data.repository.HabitRepository
-import java.time.LocalTime
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -40,7 +34,6 @@ import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals

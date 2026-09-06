@@ -1,24 +1,18 @@
-package com.prestonhill.questgiver.feature.habits
+package com.prestonhill.questgiver.feature.history
 
 import com.prestonhill.questgiver.core.time.AppDayCalculator
 import com.prestonhill.questgiver.data.local.database.entity.HabitEntity
+import com.prestonhill.questgiver.data.local.database.entity.HabitIntervalBasisDb
 import com.prestonhill.questgiver.data.local.database.entity.HabitLogEntity
 import com.prestonhill.questgiver.data.local.database.entity.HabitScheduleTypeDb
-import com.prestonhill.questgiver.feature.history.HabitHistoryMapper
-import com.prestonhill.questgiver.feature.history.HistoryStampCalendarDayUiState
-import com.prestonhill.questgiver.feature.history.HistoryStampCalendarUiState
-import com.prestonhill.questgiver.feature.history.dateRange
-import com.prestonhill.questgiver.feature.history.defaultHabitCustomRange
-import com.prestonhill.questgiver.data.local.database.entity.HabitIntervalBasisDb
-import com.prestonhill.questgiver.feature.history.HabitHistoryPerformanceCalculator
+import org.junit.Assert
+import org.junit.Assert.assertEquals
+import org.junit.Test
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
 import java.time.ZoneId
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
 
 class HabitHistoryMapperTest {
     private val mapper =
@@ -341,7 +335,7 @@ class HabitHistoryMapperTest {
             calendar.availableFilters.size,
         )
 
-        assertTrue(
+        Assert.assertTrue(
             calendar.day()
                 .stampKeys
                 .isEmpty()
@@ -472,7 +466,7 @@ class HabitHistoryMapperTest {
             calendar.day().stampKeys.size,
         )
 
-        assertTrue(
+        Assert.assertTrue(
             calendar.days
                 .single {
                     it.date ==

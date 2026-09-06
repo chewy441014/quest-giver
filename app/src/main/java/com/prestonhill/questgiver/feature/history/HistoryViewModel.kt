@@ -13,9 +13,6 @@ import com.prestonhill.questgiver.feature.tasks.TaskScheduleCalculator
 import com.prestonhill.questgiver.data.repository.TaskCompletionResult
 import com.prestonhill.questgiver.data.repository.NutritionRepository
 import com.prestonhill.questgiver.data.repository.HabitRepository
-import com.prestonhill.questgiver.feature.habits.HabitHistoryDateRange
-import com.prestonhill.questgiver.feature.habits.HabitHistoryRangePreset
-import com.prestonhill.questgiver.feature.habits.HabitHistoryUiState
 import java.time.Clock
 import java.time.LocalTime
 import java.time.ZoneId
@@ -26,6 +23,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -97,6 +95,7 @@ class HistoryViewModel(
                     ),
             )
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     private val nutritionHistoryState =
         combine(
             nav,

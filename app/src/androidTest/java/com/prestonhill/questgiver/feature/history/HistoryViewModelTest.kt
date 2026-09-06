@@ -23,9 +23,6 @@ import com.prestonhill.questgiver.data.local.database.entity.HabitEntity
 import com.prestonhill.questgiver.data.local.database.entity.HabitScheduleTypeDb
 import com.prestonhill.questgiver.data.repository.CompletionChangeResult
 import com.prestonhill.questgiver.data.repository.HabitRepository
-import com.prestonhill.questgiver.feature.habits.HabitHistoryDateRange
-import com.prestonhill.questgiver.feature.habits.HabitHistoryRangePreset
-import java.time.LocalTime
 import java.time.DayOfWeek
 import java.time.Clock
 import java.time.ZoneId

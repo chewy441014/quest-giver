@@ -1,8 +1,4 @@
 package com.prestonhill.questgiver.feature.habits
-
-import com.prestonhill.questgiver.feature.history.HistoryStampCalendarUiState
-import java.time.LocalDate
-
 enum class HabitDueStatus {
     DUE,
     COMPLETED,
@@ -122,62 +118,11 @@ data class HabitSectionEditorUiState(
                     !isSaving
 }
 
-data class HabitHistoryUiState(
-    val showArchivedHabits: Boolean = false,
-    val rangePreset:
-    HabitHistoryRangePreset =
-        HabitHistoryRangePreset
-            .THIRTY_DAYS,
-    val selectedRange:
-    HabitHistoryDateRange? = null,
-    val customRange:
-    HabitHistoryDateRange? = null,
-    val showCustomRangePicker:
-    Boolean = false,
-    val performance:
-    List<HabitHistoryPerformanceUiState> =
-        emptyList(),
-    val stampCalendar:
-    HistoryStampCalendarUiState =
-        HistoryStampCalendarUiState(),
-)
-
 data class HabitSectionDeleteUiState(
     val sectionId: String,
     val sectionName: String,
     val isDeleting: Boolean = false,
     val errorMessage: String? = null,
-)
-
-enum class HabitHistoryRangePreset(
-    val label: String,
-) {
-    THIRTY_DAYS("30 days"),
-    SIXTY_DAYS("60 days"),
-    NINETY_DAYS("90 days"),
-    SIX_MONTHS("6 months"),
-    ONE_YEAR("1 year"),
-    CUSTOM("Custom"),
-}
-
-data class HabitHistoryDateRange(
-    val startDate: LocalDate,
-    val endDate: LocalDate,
-) {
-    init {
-        require(
-            !startDate.isAfter(endDate)
-        )
-    }
-}
-
-data class HabitHistoryPerformanceUiState(
-    val habitId: Long,
-    val name: String,
-    val schedule: String,
-    val completedPeriods: Int,
-    val totalPeriods: Int,
-    val completionRate: Float,
 )
 
 data class HabitScreenUiState(

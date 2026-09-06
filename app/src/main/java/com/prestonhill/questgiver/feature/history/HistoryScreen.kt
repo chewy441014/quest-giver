@@ -69,11 +69,6 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
 import androidx.compose.ui.platform.LocalLocale
-import com.prestonhill.questgiver.feature.habits.HabitHistoryDateRange
-import com.prestonhill.questgiver.feature.habits.HabitHistoryPerformanceUiState
-import com.prestonhill.questgiver.feature.habits.HabitHistoryRangePreset
-import com.prestonhill.questgiver.feature.habits.HabitHistoryUiState
-
 object HistoryTags {
     const val TASK_DASHBOARD =
         "history_task_dashboard"
@@ -190,9 +185,6 @@ object HistoryTags {
 
     const val HABIT_RANGE_CANCEL =
         "history_habit_range_cancel"
-
-    const val HABIT_PERFORMANCE =
-        "history_habit_performance"
 
     fun habitRange(
         preset: HabitHistoryRangePreset,

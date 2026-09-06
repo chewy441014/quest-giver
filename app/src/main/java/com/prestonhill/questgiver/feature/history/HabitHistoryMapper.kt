@@ -5,9 +5,6 @@ import com.prestonhill.questgiver.data.local.database.entity.HabitEntity
 import com.prestonhill.questgiver.data.local.database.entity.HabitIntervalBasisDb
 import com.prestonhill.questgiver.data.local.database.entity.HabitLogEntity
 import com.prestonhill.questgiver.data.local.database.entity.HabitScheduleTypeDb
-import com.prestonhill.questgiver.feature.habits.HabitHistoryDateRange
-import com.prestonhill.questgiver.feature.habits.HabitHistoryPerformanceUiState
-import com.prestonhill.questgiver.feature.habits.HabitHistoryRangePreset
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
