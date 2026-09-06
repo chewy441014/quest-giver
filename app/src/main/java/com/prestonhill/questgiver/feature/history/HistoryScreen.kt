@@ -75,9 +75,6 @@ object HistoryTags {
     const val ALL_TASKS =
         "history_all_tasks"
 
-    const val TASK_HISTORY_PLACEHOLDER =
-        "history_task_history_placeholder"
-
     const val ARCHIVED_TOGGLE =
         "history_archived_toggle"
 
@@ -2609,18 +2606,6 @@ private fun HistoryTaskDialog(
                             }
                         )
                     }
-                }
-
-                OutlinedButton(
-                    modifier =
-                        Modifier.testTag(
-                            HistoryTags
-                                .TASK_HISTORY_PLACEHOLDER
-                        ),
-                    enabled = false,
-                    onClick = {},
-                ) {
-                    Text("View task history")
                 }
             }
         },

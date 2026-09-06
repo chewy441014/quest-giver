@@ -1,6 +1,5 @@
 package com.prestonhill.questgiver.feature.shell
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
@@ -14,7 +13,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.prestonhill.questgiver.feature.habits.HabitAction
 import com.prestonhill.questgiver.feature.habits.HabitScreen
@@ -174,15 +172,3 @@ fun AppShell(
     }
 }
 
-@Composable
-private fun PlaceholderPage(
-    text: String,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text)
-    }
-}

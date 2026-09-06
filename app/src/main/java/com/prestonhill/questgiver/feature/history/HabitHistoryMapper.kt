@@ -323,8 +323,13 @@ class HabitHistoryMapper {
         calculator:
         HabitHistoryPerformanceCalculator,
         showArchivedHabits: Boolean,
-    ): List<HabitHistoryPerformanceUiState> =
-        habits.asSequence()
+    ): List<HabitHistoryPerformanceUiState> {
+        val logsByHabitId =
+            logs.groupBy {
+                it.habitId
+            }
+
+        return habits.asSequence()
             .filter { habit ->
                 habit.isVisibleInHistory &&
                         (
@@ -345,7 +350,9 @@ class HabitHistoryMapper {
                 val result =
                     calculator.calculate(
                         habit = habit,
-                        logs = logs,
+                        logs =
+                            logsByHabitId[habit.id]
+                                .orEmpty(),
                         range = range,
                         currentDate = currentDate,
                     )
@@ -364,6 +371,7 @@ class HabitHistoryMapper {
                 )
             }
             .toList()
+    }
 }
 
 private fun activeHabitLogs(

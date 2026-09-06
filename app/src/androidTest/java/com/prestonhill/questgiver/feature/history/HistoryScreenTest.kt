@@ -1207,23 +1207,6 @@ class HistoryScreenTest {
     }
 
     @Test
-    fun taskHistoryPlaceholderIsDisabled(): Unit {
-        showScreen(
-            state = taskState(
-                inspectedTaskId = TASK_ID,
-            )
-        )
-
-        composeRule
-            .onNodeWithTag(
-                HistoryTags
-                    .TASK_HISTORY_PLACEHOLDER
-            )
-            .assertIsDisplayed()
-            .assertIsNotEnabled()
-    }
-
-    @Test
     fun archivedToggleSendsAction(): Unit {
         val actions =
             mutableListOf<HistoryAction>()
