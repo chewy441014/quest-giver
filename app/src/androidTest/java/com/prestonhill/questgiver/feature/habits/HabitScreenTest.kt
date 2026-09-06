@@ -8,7 +8,10 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -268,6 +271,297 @@ class HabitScreenTest {
     }
 
     @Test
+    fun sectionManagerSendsActions(): Unit {
+        val actions =
+            mutableListOf<HabitAction>()
+
+        showScreen(
+            state = sectionManagerState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.ADD_SECTION
+            )
+            .performClick()
+
+        assertEquals(
+            HabitAction.AddDisplaySection,
+            actions.last(),
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.moveSectionDown(
+                    "ANYTIME"
+                )
+            )
+            .performClick()
+
+        assertEquals(
+            HabitAction.MoveDisplaySectionDown(
+                "ANYTIME"
+            ),
+            actions.last(),
+        )
+    }
+
+    @Test
+    fun sectionLongPressSendsEdit(): Unit {
+        val actions =
+            mutableListOf<HabitAction>()
+
+        showScreen(
+            state = sectionManagerState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.sectionRow(
+                    "ANYTIME"
+                )
+            )
+            .performTouchInput {
+                longClick()
+            }
+
+        assertEquals(
+            listOf(
+                HabitAction.EditDisplaySection(
+                    "ANYTIME"
+                )
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun uncategorizedLongPressDoesNothing(): Unit {
+        val actions =
+            mutableListOf<HabitAction>()
+
+        showScreen(
+            state = sectionManagerState(),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.sectionRow(
+                    "UNCATEGORIZED"
+                )
+            )
+            .performTouchInput {
+                longClick()
+            }
+
+        assertTrue(actions.isEmpty())
+    }
+
+    @Test
+    fun sectionEditorSendsActions(): Unit {
+        val actions =
+            mutableListOf<HabitAction>()
+
+        showScreen(
+            state =
+                sectionManagerState(
+                    editor =
+                        HabitSectionEditorUiState(
+                            sectionId = "ANYTIME",
+                            name = "Anytime",
+                        )
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.SECTION_NAME
+            )
+            .performTextReplacement(
+                "Daytime"
+            )
+
+        assertEquals(
+            HabitAction.ChangeDisplaySectionName(
+                "Daytime"
+            ),
+            actions.last(),
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.SAVE_SECTION
+            )
+            .performClick()
+
+        assertEquals(
+            HabitAction.SaveDisplaySection,
+            actions.last(),
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.deleteSection(
+                    "ANYTIME"
+                )
+            )
+            .performClick()
+
+        assertEquals(
+            HabitAction.RequestDeleteDisplaySection(
+                "ANYTIME"
+            ),
+            actions.last(),
+        )
+    }
+
+    @Test
+    fun newSectionHasNoDeleteButton(): Unit {
+        showScreen(
+            state =
+                sectionManagerState(
+                    editor =
+                        HabitSectionEditorUiState(
+                            name = "Training"
+                        )
+                ),
+            actions = mutableListOf(),
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.deleteSection(
+                    "ANYTIME"
+                )
+            )
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun sectionDeleteConfirmationSendsAction(): Unit {
+        val actions =
+            mutableListOf<HabitAction>()
+
+        showScreen(
+            state =
+                sectionManagerState(
+                    confirmation =
+                        HabitSectionDeleteUiState(
+                            sectionId = "TRAINING",
+                            sectionName = "Training",
+                        )
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.CONFIRM_SECTION_DELETE
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                HabitAction
+                    .ConfirmDeleteDisplaySection
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun habitEditorCanSelectNewSection(): Unit {
+        val actions =
+            mutableListOf<HabitAction>()
+
+        val editor =
+            HabitEditorUiState(
+                name = "Lift",
+                displaySectionId = "ANYTIME",
+            )
+
+        showScreen(
+            state =
+                HabitScreenUiState(
+                    sections =
+                        listOf(
+                            HabitDisplaySectionUiState(
+                                id = "ANYTIME",
+                                name = "Anytime",
+                            )
+                        ),
+                    editor = editor,
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.NEW_SECTION
+            )
+            .performClick()
+
+        assertEquals(
+            HabitAction.UpdateHabitEditor(
+                editor.copy(
+                    newDisplaySectionName = ""
+                )
+            ),
+            actions.last(),
+        )
+    }
+
+    @Test
+    fun newSectionNameSendsChange(): Unit {
+        val actions =
+            mutableListOf<HabitAction>()
+
+        val editor =
+            HabitEditorUiState(
+                name = "Lift",
+                displaySectionId = "ANYTIME",
+                newDisplaySectionName = "",
+            )
+
+        showScreen(
+            state =
+                HabitScreenUiState(
+                    sections =
+                        listOf(
+                            HabitDisplaySectionUiState(
+                                id = "ANYTIME",
+                                name = "Anytime",
+                            )
+                        ),
+                    editor = editor,
+                ),
+            actions = actions,
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.NEW_SECTION_NAME
+            )
+            .performTextReplacement(
+                "Training"
+            )
+
+        assertEquals(
+            HabitAction.UpdateHabitEditor(
+                editor.copy(
+                    newDisplaySectionName =
+                        "Training"
+                )
+            ),
+            actions.last(),
+        )
+    }
+
+    @Test
     fun operationErrorCanBeDismissed() {
         val actions = mutableListOf<HabitAction>()
 
@@ -304,6 +598,33 @@ class HabitScreenTest {
             }
         }
     }
+
+    private fun sectionManagerState(
+        editor: HabitSectionEditorUiState? = null,
+        confirmation:
+        HabitSectionDeleteUiState? = null,
+    ): HabitScreenUiState =
+        HabitScreenUiState(
+            sections =
+                listOf(
+                    HabitDisplaySectionUiState(
+                        id = "ANYTIME",
+                        name = "Anytime",
+                        canMoveDown = true,
+                    ),
+                    HabitDisplaySectionUiState(
+                        id = "UNCATEGORIZED",
+                        name = "Uncategorized",
+                        canMoveUp = true,
+                        canEdit = false,
+                    ),
+                ),
+            sectionManager =
+                HabitSectionManagerUiState(
+                    editor = editor,
+                    confirmation = confirmation,
+                ),
+        )
 
     private fun detailState():
             HabitScreenUiState =

@@ -32,8 +32,11 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import com.prestonhill.questgiver.core.settings.AppSettings
-import com.prestonhill.questgiver.data.local.database.entity.DefaultHabitDisplaySections
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.performTouchInput
+import org.junit.Assert.assertEquals
 import com.prestonhill.questgiver.data.local.database.HABIT_DISPLAY_SECTION_CALLBACK
+import com.prestonhill.questgiver.data.local.database.entity.DefaultHabitDisplaySections
 import kotlinx.coroutines.flow.flowOf
 
 class HabitJourneyTest {
@@ -114,6 +117,7 @@ class HabitJourneyTest {
     @Test
     fun completeHabitJourney() {
         createHabit()
+        manageDisplaySection()
         completeAndReverse()
         editAndHide()
         revealHiddenHabit()
@@ -164,6 +168,22 @@ class HabitJourneyTest {
             .performTextInput(ORIGINAL_NAME)
 
         composeRule
+            .onNodeWithTag(
+                HabitTags.NEW_SECTION
+            )
+            .performScrollTo()
+            .performClick()
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.NEW_SECTION_NAME
+            )
+            .performScrollTo()
+            .performTextInput(
+                ORIGINAL_SECTION_NAME
+            )
+
+        composeRule
             .onNodeWithTag(HabitTags.SAVE)
             .performClick()
 
@@ -180,6 +200,163 @@ class HabitJourneyTest {
         habitId = habit.id
         habitSectionId =
             habit.displaySectionId
+    }
+
+    private fun manageDisplaySection() {
+        val originalSectionId =
+            habitSectionId
+
+        /*
+         * AppShell owns the Sections button and has
+         * its own Compose test, so open the manager
+         * through the ViewModel here.
+         */
+        composeRule.runOnIdle {
+            viewModel.onAction(
+                HabitAction.ShowSectionManager
+            )
+        }
+
+        waitForTag(
+            HabitTags.SECTION_MANAGER
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.moveSectionUp(
+                    originalSectionId
+                )
+            )
+            .performClick()
+
+        runBlocking {
+            repository
+                .observeDisplaySections()
+                .first { sections ->
+                    val sectionIndex =
+                        sections.indexOfFirst {
+                            it.id ==
+                                    originalSectionId
+                        }
+
+                    val uncategorizedIndex =
+                        sections.indexOfFirst {
+                            it.id ==
+                                    DefaultHabitDisplaySections
+                                        .UNCATEGORIZED_ID
+                        }
+
+                    sectionIndex >= 0 &&
+                            sectionIndex <
+                            uncategorizedIndex
+                }
+        }
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.sectionRow(
+                    originalSectionId
+                )
+            )
+            .performTouchInput {
+                longClick()
+            }
+
+        waitForTag(
+            HabitTags.SECTION_NAME
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.SECTION_NAME
+            )
+            .performTextReplacement(
+                EDITED_SECTION_NAME
+            )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.SAVE_SECTION
+            )
+            .performClick()
+
+        waitForTag(
+            HabitTags.SECTION_MANAGER
+        )
+
+        waitForText(
+            EDITED_SECTION_NAME
+        )
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.sectionRow(
+                    originalSectionId
+                )
+            )
+            .performTouchInput {
+                longClick()
+            }
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.deleteSection(
+                    originalSectionId
+                )
+            )
+            .performClick()
+
+        composeRule
+            .onNodeWithTag(
+                HabitTags.CONFIRM_SECTION_DELETE
+            )
+            .performClick()
+
+        waitForTag(
+            HabitTags.SECTION_MANAGER
+        )
+
+        runBlocking {
+            val moved =
+                repository
+                    .observeActiveHabits()
+                    .first { habits ->
+                        habits.any { habit ->
+                            habit.id == habitId &&
+                                    habit.displaySectionId ==
+                                    DefaultHabitDisplaySections
+                                        .UNCATEGORIZED_ID
+                        }
+                    }
+                    .single {
+                        it.id == habitId
+                    }
+
+            assertEquals(
+                DefaultHabitDisplaySections
+                    .UNCATEGORIZED_ID,
+                moved.displaySectionId,
+            )
+
+            assertTrue(
+                repository
+                    .observeDisplaySections()
+                    .first()
+                    .none {
+                        it.id == originalSectionId
+                    }
+            )
+        }
+
+        habitSectionId =
+            DefaultHabitDisplaySections
+                .UNCATEGORIZED_ID
+
+        composeRule
+            .onNodeWithText("Close")
+            .performClick()
+
+        waitForText(ORIGINAL_NAME)
     }
 
     private fun completeAndReverse() {
@@ -326,5 +503,11 @@ class HabitJourneyTest {
     private companion object {
         const val ORIGINAL_NAME = "Evening walk"
         const val EDITED_NAME = "Morning walk"
+
+        const val ORIGINAL_SECTION_NAME =
+            "Training"
+
+        const val EDITED_SECTION_NAME =
+            "Exercise"
     }
 }

@@ -31,7 +31,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.ui.semantics.semantics
 
 @Composable
 fun HabitScreen(
