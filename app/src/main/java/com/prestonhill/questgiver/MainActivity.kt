@@ -3,7 +3,6 @@ package com.prestonhill.questgiver
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -18,6 +17,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import com.prestonhill.questgiver.core.settings.AppSettings
+import com.prestonhill.questgiver.ui.theme.QuestGiverTheme
+import androidx.compose.runtime.mutableIntStateOf
+import com.prestonhill.questgiver.feature.shell.AppPage
+import com.prestonhill.questgiver.feature.nutrition.NutritionDestination
 import com.prestonhill.questgiver.feature.shell.AppShell
 import com.prestonhill.questgiver.data.local.preferences.appSettingsDataStore
 import com.prestonhill.questgiver.data.repository.AppSettingsRepository
@@ -30,6 +34,7 @@ import com.prestonhill.questgiver.feature.tasks.TaskViewModelFactory
 import com.prestonhill.questgiver.feature.history.HistoryViewModel
 import com.prestonhill.questgiver.feature.history.HistoryViewModelFactory
 import com.prestonhill.questgiver.data.repository.NutritionRepository
+import com.prestonhill.questgiver.feature.nutrition.NutritionAction
 import com.prestonhill.questgiver.feature.nutrition.NutritionViewModel
 import com.prestonhill.questgiver.feature.nutrition.NutritionViewModelFactory
 
@@ -86,7 +91,16 @@ class MainActivity : ComponentActivity() {
             )
 
         setContent {
-            MaterialTheme {
+            val appSettings by
+            settingsRepository.settings
+                .collectAsStateWithLifecycle(
+                    initialValue = AppSettings()
+                )
+
+            QuestGiverTheme(
+                themePreference =
+                    appSettings.themePreference
+            ) {
                 val taskViewModel: TaskViewModel =
                     viewModel(factory = taskViewModelFactory)
 
@@ -148,6 +162,12 @@ class MainActivity : ComponentActivity() {
                     nutritionViewModel.refresh()
                 }
 
+                var selectedPageIndex by rememberSaveable {
+                    mutableIntStateOf(
+                        AppPage.HABITS.ordinal
+                    )
+                }
+
                 var showSettings by rememberSaveable {
                     mutableStateOf(false)
                 }
@@ -160,7 +180,7 @@ class MainActivity : ComponentActivity() {
                     SettingsScreen(
                         state = settingsState,
                         onAction = settingsViewModel::onAction,
-                        onBack = {
+                        onClose = {
                             showSettings = false
                         },
                     )
@@ -181,6 +201,25 @@ class MainActivity : ComponentActivity() {
                             nutritionState,
                         onNutritionAction =
                             nutritionViewModel::onAction,
+                        selectedPage =
+                            AppPage.entries[selectedPageIndex],
+                        onPageChanged = { page ->
+                            val previousPage =
+                                AppPage.entries[selectedPageIndex]
+
+                            if (
+                                previousPage == AppPage.NUTRITION &&
+                                page != AppPage.NUTRITION &&
+                                nutritionState.destination ==
+                                NutritionDestination.Manage
+                            ) {
+                                nutritionViewModel.onAction(
+                                    NutritionAction.DismissDestination
+                                )
+                            }
+
+                            selectedPageIndex = page.ordinal
+                        },
                     )
                 }
             }

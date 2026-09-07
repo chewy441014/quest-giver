@@ -59,6 +59,16 @@ class SettingsViewModel(
                 }
             }
 
+            is SettingsAction.SetThemePreference -> {
+                save(
+                    "Theme preference could not be saved."
+                ) {
+                    repository.setThemePreference(
+                        action.preference
+                    )
+                }
+            }
+
             is SettingsAction.SetWeekStart -> {
                 save("Week start could not be saved.") {
                     repository.setWeekStart(action.day)

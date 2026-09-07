@@ -26,6 +26,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import kotlin.time.Duration.Companion.milliseconds
+import com.prestonhill.questgiver.core.settings.AppThemePreference
 
 @RunWith(AndroidJUnit4::class)
 class SettingsViewModelTest {
@@ -95,6 +96,39 @@ class SettingsViewModelTest {
         dataStoreScope.cancel()
         testFile.delete()
     }
+
+    @Test
+    fun themePreferenceIsSaved(): Unit =
+        runBlocking {
+            awaitState {
+                !it.isLoading
+            }
+
+            viewModel.onAction(
+                SettingsAction.SetThemePreference(
+                    AppThemePreference.DARK
+                )
+            )
+
+            val state =
+                awaitState {
+                    !it.isSaving &&
+                            it.settings.themePreference ==
+                            AppThemePreference.DARK
+                }
+
+            assertEquals(
+                AppThemePreference.DARK,
+                state.settings.themePreference,
+            )
+
+            assertEquals(
+                AppThemePreference.DARK,
+                repository.settings
+                    .first()
+                    .themePreference,
+            )
+        }
 
     @Test
     fun nutritionGoalEditorUsesCurrentSettings(): Unit =

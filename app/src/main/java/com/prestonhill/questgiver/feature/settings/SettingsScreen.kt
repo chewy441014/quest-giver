@@ -37,8 +37,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Switch
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.res.painterResource
+import com.prestonhill.questgiver.R
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.text.input.KeyboardType
+import com.prestonhill.questgiver.core.settings.AppThemePreference
 import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -46,7 +51,7 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 object SettingsTags {
-    const val BACK = "settings_back"
+    const val CLOSE = "settings_close"
     const val DAY_BOUNDARY = "settings_day_boundary"
     const val WEEK_START = "settings_week_start"
     const val CONFIRM_TIME = "settings_confirm_time"
@@ -67,6 +72,13 @@ object SettingsTags {
     const val MAXIMUM_PROTEIN_GOAL =
         "settings_maximum_protein_goal"
 
+    const val THEME = "settings_theme"
+
+    fun theme(
+        preference: AppThemePreference,
+    ) =
+        "settings_theme_${preference.name}"
+
     fun weekDay(day: DayOfWeek) =
         "settings_week_${day.name}"
 }
@@ -75,7 +87,7 @@ object SettingsTags {
 fun SettingsScreen(
     state: SettingsUiState,
     onAction: (SettingsAction) -> Unit,
-    onBack: () -> Unit,
+    onClose: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -83,13 +95,22 @@ fun SettingsScreen(
                 title = {
                     Text("Settings")
                 },
-                navigationIcon = {
-                    TextButton(
+                actions = {
+                    IconButton(
                         modifier =
-                            Modifier.testTag(SettingsTags.BACK),
-                        onClick = onBack,
+                            Modifier.testTag(
+                                SettingsTags.CLOSE
+                            ),
+                        onClick = onClose,
                     ) {
-                        Text("Back")
+                        Icon(
+                            painter =
+                                painterResource(
+                                    R.drawable.ic_close_24
+                                ),
+                            contentDescription =
+                                "Close settings",
+                        )
                     }
                 },
             )
@@ -426,6 +447,19 @@ private fun SettingsContent(
             )
         }
 
+        ThemeSetting(
+            preference =
+                state.settings.themePreference,
+            enabled = !state.isSaving,
+            onSelected = { preference ->
+                onAction(
+                    SettingsAction.SetThemePreference(
+                        preference
+                    )
+                )
+            },
+        )
+
         DayBoundarySetting(
             time = state.settings.dayBoundary,
             enabled = !state.isSaving,
@@ -603,6 +637,68 @@ private fun DayBoundarySetting(
 }
 
 @Composable
+private fun ThemeSetting(
+    preference: AppThemePreference,
+    enabled: Boolean,
+    onSelected:
+        (AppThemePreference) -> Unit,
+) {
+    var expanded by remember {
+        mutableStateOf(false)
+    }
+
+    Box {
+        Column(
+            verticalArrangement =
+                Arrangement.spacedBy(8.dp),
+        ) {
+            Text("Theme")
+
+            OutlinedButton(
+                modifier =
+                    Modifier.testTag(
+                        SettingsTags.THEME
+                    ),
+                enabled = enabled,
+                onClick = {
+                    expanded = true
+                },
+            ) {
+                Text(preference.displayName())
+            }
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = {
+                expanded = false
+            },
+        ) {
+            AppThemePreference.entries
+                .forEach { option ->
+                    DropdownMenuItem(
+                        modifier =
+                            Modifier.testTag(
+                                SettingsTags.theme(
+                                    option
+                                )
+                            ),
+                        text = {
+                            Text(
+                                option.displayName()
+                            )
+                        },
+                        onClick = {
+                            expanded = false
+                            onSelected(option)
+                        },
+                    )
+                }
+        }
+    }
+}
+
+@Composable
 private fun WeekStartSetting(
     day: DayOfWeek,
     enabled: Boolean,
@@ -681,3 +777,16 @@ private fun DayOfWeek.displayName(): String =
         TextStyle.FULL,
         Locale.getDefault(),
     )
+
+private fun AppThemePreference.displayName():
+        String =
+    when (this) {
+        AppThemePreference.SYSTEM ->
+            "System default"
+
+        AppThemePreference.LIGHT ->
+            "Light"
+
+        AppThemePreference.DARK ->
+            "Dark"
+    }

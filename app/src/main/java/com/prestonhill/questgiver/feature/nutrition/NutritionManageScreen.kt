@@ -32,12 +32,17 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.res.painterResource
+import com.prestonhill.questgiver.R
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 
 object NutritionManageTags {
     const val SCREEN =
         "nutrition_manage_screen"
-    const val BACK =
-        "nutrition_manage_back"
+    const val CLOSE =
+        "nutrition_manage_close"
     const val SEARCH =
         "nutrition_manage_search"
     const val FILTER =
@@ -105,32 +110,39 @@ fun NutritionManageScreen(
         Row(
             modifier =
                 Modifier.fillMaxWidth(),
-            horizontalArrangement =
-                Arrangement.SpaceBetween,
             verticalAlignment =
                 Alignment.CenterVertically,
         ) {
-            TextButton(
+            Text(
+                "Manage Foods",
+                style =
+                    MaterialTheme.typography.titleLarge,
+            )
+
+            Spacer(
+                modifier = Modifier.weight(1f)
+            )
+
+            IconButton(
                 modifier =
                     Modifier.testTag(
-                        NutritionManageTags.BACK
+                        NutritionManageTags.CLOSE
                     ),
                 onClick = {
                     onAction(
-                        NutritionAction
-                            .DismissDestination
+                        NutritionAction.DismissDestination
                     )
                 },
             ) {
-                Text("Back")
+                Icon(
+                    painter =
+                        painterResource(
+                            R.drawable.ic_close_24
+                        ),
+                    contentDescription =
+                        "Close Manage Foods",
+                )
             }
-
-            Text(
-                "Manage foods",
-                style =
-                    MaterialTheme
-                        .typography.titleLarge,
-            )
         }
 
         OutlinedTextField(

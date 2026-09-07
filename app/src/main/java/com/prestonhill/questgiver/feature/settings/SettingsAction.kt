@@ -2,6 +2,7 @@ package com.prestonhill.questgiver.feature.settings
 
 import java.time.DayOfWeek
 import java.time.LocalTime
+import com.prestonhill.questgiver.core.settings.AppThemePreference
 
 sealed interface SettingsAction {
     data class SetDayBoundary(
@@ -13,6 +14,10 @@ sealed interface SettingsAction {
     ) : SettingsAction
 
     data object DismissError : SettingsAction
+
+    data class SetThemePreference(
+        val preference: AppThemePreference,
+    ) : SettingsAction
 
     data class SetDaylightSaving(
         val enabled: Boolean,

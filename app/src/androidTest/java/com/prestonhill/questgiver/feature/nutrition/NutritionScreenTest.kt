@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.test.espresso.Espresso.pressBack
 import java.time.LocalDate
 import java.time.LocalTime
 import org.junit.Assert.assertEquals
@@ -93,6 +94,33 @@ class NutritionScreenTest {
                 "Archived item"
             )
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun androidBackClosesManageFoods(): Unit {
+        val actions =
+            mutableListOf<NutritionAction>()
+
+        showScreen(
+            state =
+                screenState().copy(
+                    destination =
+                        NutritionDestination.Manage,
+                ),
+            actions = actions,
+        )
+
+        composeRule.waitForIdle()
+        pressBack()
+        composeRule.waitForIdle()
+
+        assertEquals(
+            listOf(
+                NutritionAction
+                    .DismissDestination
+            ),
+            actions,
+        )
     }
 
     @Test

@@ -8,7 +8,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
 import org.junit.Assert.assertEquals
@@ -30,7 +29,7 @@ class NutritionManageScreenTest {
             .assertIsDisplayed()
 
         composeRule
-            .onNodeWithText("Manage foods")
+            .onNodeWithText("Manage Foods")
             .assertIsDisplayed()
 
         composeRule
@@ -45,7 +44,7 @@ class NutritionManageScreenTest {
     }
 
     @Test
-    fun backSendsDismissAction(): Unit {
+    fun closeSendsDismissAction(): Unit {
         val actions =
             mutableListOf<NutritionAction>()
 
@@ -53,7 +52,7 @@ class NutritionManageScreenTest {
 
         composeRule
             .onNodeWithTag(
-                NutritionManageTags.BACK
+                NutritionManageTags.CLOSE
             )
             .performClick()
 

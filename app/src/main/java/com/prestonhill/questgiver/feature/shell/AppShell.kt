@@ -29,7 +29,12 @@ import com.prestonhill.questgiver.feature.nutrition.NutritionScreen
 import com.prestonhill.questgiver.feature.nutrition.NutritionScreenUiState
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import com.prestonhill.questgiver.R
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import com.prestonhill.questgiver.feature.habits.HabitTags
+import androidx.compose.runtime.LaunchedEffect
 
 enum class AppPage(
     val title: String,
@@ -53,6 +58,13 @@ enum class AppPage(
     ),
 }
 
+object AppShellTags {
+    const val SETTINGS = "app_settings"
+
+    fun page(page: AppPage) =
+        "app_page_${page.name}"
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppShell(
@@ -65,14 +77,25 @@ fun AppShell(
     onHistoryAction: (HistoryAction) -> Unit,
     nutritionState: NutritionScreenUiState,
     onNutritionAction: (NutritionAction) -> Unit,
+    selectedPage: AppPage =
+        AppPage.HABITS,
+    onPageChanged: (AppPage) -> Unit = {},
 ) {
     val pages = AppPage.entries
 
     val pagerState =
         rememberPagerState(
-            initialPage = AppPage.HABITS.ordinal,
+            initialPage = selectedPage.ordinal,
             pageCount = pages::size,
         )
+
+    LaunchedEffect(
+        pagerState.settledPage
+    ) {
+        onPageChanged(
+            pages[pagerState.settledPage]
+        )
+    }
 
     val coroutineScope = rememberCoroutineScope()
     val currentPage = pages[pagerState.currentPage]
@@ -100,10 +123,21 @@ fun AppShell(
                         }
                     }
 
-                    TextButton(
+                    IconButton(
+                        modifier =
+                            Modifier.testTag(
+                                AppShellTags.SETTINGS
+                            ),
                         onClick = onOpenSettings,
                     ) {
-                        Text("Settings")
+                        Icon(
+                            painter =
+                                painterResource(
+                                    R.drawable.ic_settings_24
+                                ),
+                            contentDescription =
+                                "Open settings",
+                        )
                     }
                 },
             )
@@ -112,6 +146,10 @@ fun AppShell(
             NavigationBar {
                 pages.forEachIndexed { index, page ->
                     NavigationBarItem(
+                        modifier =
+                            Modifier.testTag(
+                                AppShellTags.page(page)
+                            ),
                         selected =
                             pagerState.currentPage == index,
                         onClick = {

@@ -7,6 +7,8 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import com.prestonhill.questgiver.core.settings.AppThemePreference
 import com.prestonhill.questgiver.core.settings.AppSettings
 import java.io.IOException
 import java.time.DayOfWeek
@@ -89,11 +91,22 @@ class AppSettingsRepository(
                             )
                         }
 
+                val themePreference =
+                    preferences[THEME_PREFERENCE]
+                        ?.let { storedValue ->
+                            AppThemePreference.entries
+                                .firstOrNull {
+                                    it.name == storedValue
+                                }
+                        }
+                        ?: AppThemePreference.SYSTEM
+
                 AppSettings(
                     dayBoundary =
                         LocalTime.ofSecondOfDay(
                             boundaryMinutes * 60L
                         ),
+                    themePreference = themePreference,
                     weekStart =
                         DayOfWeek.of(weekStartValue),
                     daylightSavingEnabled =
@@ -192,6 +205,15 @@ class AppSettingsRepository(
             }
         }
     }
+
+    suspend fun setThemePreference(
+        preference: AppThemePreference,
+    ) {
+        dataStore.edit { preferences ->
+            preferences[THEME_PREFERENCE] =
+                preference.name
+        }
+    }
     suspend fun setDaylightSaving(
         enabled: Boolean,
     ) {
@@ -271,5 +293,10 @@ class AppSettingsRepository(
 
         const val DEFAULT_PROTEIN_GOAL_GRAMS =
             40.0
+
+        val THEME_PREFERENCE =
+            stringPreferencesKey(
+                "theme_preference"
+            )
     }
 }

@@ -265,7 +265,7 @@ class NutritionJourneyTest {
 
         composeRule
             .onNodeWithTag(
-                NutritionManageTags.BACK
+                NutritionManageTags.CLOSE
             )
             .performClick()
 
@@ -450,7 +450,7 @@ class NutritionJourneyTest {
 
         composeRule
             .onNodeWithTag(
-                NutritionManageTags.BACK
+                NutritionManageTags.CLOSE
             )
             .performClick()
 
@@ -668,7 +668,7 @@ class NutritionJourneyTest {
 
         composeRule
             .onNodeWithTag(
-                NutritionManageTags.BACK
+                NutritionManageTags.CLOSE
             )
             .performClick()
     }

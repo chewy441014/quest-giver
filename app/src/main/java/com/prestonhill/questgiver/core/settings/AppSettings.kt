@@ -18,6 +18,9 @@ data class AppSettings(
         DEFAULT_PROTEIN_GOAL_GRAMS,
     val maximumProteinGoalGrams:
     Double? = null,
+    val themePreference:
+    AppThemePreference =
+        AppThemePreference.SYSTEM,
 ) {
     companion object {
         const val DEFAULT_CALORIE_GOAL =
@@ -32,4 +35,10 @@ data class AppSettings(
         const val LOWEST_PROTEIN_GOAL_GRAMS =
             5.0
     }
+}
+
+enum class AppThemePreference {
+    SYSTEM,
+    LIGHT,
+    DARK,
 }

@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import com.prestonhill.questgiver.core.settings.AppSettings
+import com.prestonhill.questgiver.core.settings.AppThemePreference
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -39,6 +40,37 @@ class SettingsScreenTest {
         assertEquals(
             listOf(
                 SettingsAction.EditNutritionGoals
+            ),
+            actions,
+        )
+    }
+
+    @Test
+    fun themeSelectionSendsAction(): Unit {
+        val actions =
+            mutableListOf<SettingsAction>()
+
+        showScreen(actions = actions)
+
+        composeRule
+            .onNodeWithTag(
+                SettingsTags.THEME
+            )
+            .performClick()
+
+        composeRule
+            .onNodeWithTag(
+                SettingsTags.theme(
+                    AppThemePreference.DARK
+                )
+            )
+            .performClick()
+
+        assertEquals(
+            listOf(
+                SettingsAction.SetThemePreference(
+                    AppThemePreference.DARK
+                )
             ),
             actions,
         )
@@ -274,6 +306,25 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun closeButtonClosesSettings(): Unit {
+        var closed = false
+
+        showScreen(
+            onClose = {
+                closed = true
+            }
+        )
+
+        composeRule
+            .onNodeWithTag(
+                SettingsTags.CLOSE
+            )
+            .performClick()
+
+        assertTrue(closed)
+    }
+
+    @Test
     fun savingDisablesNutritionGoalEditor(): Unit {
         showScreen(
             state =
@@ -335,13 +386,14 @@ class SettingsScreenTest {
         actions:
         MutableList<SettingsAction> =
             mutableListOf(),
+        onClose: () -> Unit = {},
     ) {
         composeRule.setContent {
             MaterialTheme {
                 SettingsScreen(
                     state = state,
                     onAction = actions::add,
-                    onBack = {},
+                    onClose = onClose,
                 )
             }
         }
@@ -412,7 +464,7 @@ class SettingsScreenTest {
                                 else -> currentState
                             }
                     },
-                    onBack = {},
+                    onClose = {},
                 )
             }
         }

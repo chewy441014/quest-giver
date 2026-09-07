@@ -11,13 +11,84 @@ import com.prestonhill.questgiver.feature.habits.HabitTags
 import com.prestonhill.questgiver.feature.history.HistoryScreenUiState
 import com.prestonhill.questgiver.feature.nutrition.NutritionScreenUiState
 import com.prestonhill.questgiver.feature.tasks.TaskScreenUiState
+import androidx.compose.ui.test.assertIsSelected
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
 class AppShellTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun settingsGearOpensSettings(): Unit {
+        var opened = false
+
+        showShell(
+            onOpenSettings = {
+                opened = true
+            }
+        )
+
+        composeRule
+            .onNodeWithTag(
+                AppShellTags.SETTINGS
+            )
+            .performClick()
+
+        assertTrue(opened)
+    }
+
+    @Test
+    fun selectedPageIsRestored(): Unit {
+        showShell(
+            selectedPage =
+                AppPage.NUTRITION
+        )
+
+        composeRule
+            .onNodeWithTag(
+                AppShellTags.page(
+                    AppPage.NUTRITION
+                )
+            )
+            .assertIsSelected()
+    }
+
+    @Test
+    fun pageChangeIsReported(): Unit {
+        val pages =
+            mutableListOf<AppPage>()
+
+        showShell(
+            onPageChanged = pages::add
+        )
+
+        composeRule.waitForIdle()
+        pages.clear()
+
+        composeRule
+            .onNodeWithTag(
+                AppShellTags.page(
+                    AppPage.NUTRITION
+                )
+            )
+            .performClick()
+
+        composeRule.waitUntil(
+            timeoutMillis = 5_000
+        ) {
+            pages.lastOrNull() ==
+                    AppPage.NUTRITION
+        }
+
+        assertEquals(
+            listOf(AppPage.NUTRITION),
+            pages,
+        )
+    }
 
     @Test
     fun sectionsButtonSendsHabitAction(): Unit {
@@ -58,5 +129,39 @@ class AppShellTest {
             ),
             habitActions,
         )
+    }
+    private fun showShell(
+        selectedPage: AppPage =
+            AppPage.HABITS,
+        habitActions:
+        MutableList<HabitAction> =
+            mutableListOf(),
+        onOpenSettings: () -> Unit = {},
+        onPageChanged: (AppPage) -> Unit = {},
+    ) {
+        composeRule.setContent {
+            MaterialTheme {
+                AppShell(
+                    taskState =
+                        TaskScreenUiState(),
+                    onTaskAction = {},
+                    habitState =
+                        HabitScreenUiState(),
+                    onHabitAction =
+                        habitActions::add,
+                    onOpenSettings =
+                        onOpenSettings,
+                    historyState =
+                        HistoryScreenUiState(),
+                    onHistoryAction = {},
+                    nutritionState =
+                        NutritionScreenUiState(),
+                    onNutritionAction = {},
+                    selectedPage = selectedPage,
+                    onPageChanged =
+                        onPageChanged,
+                )
+            }
+        }
     }
 }

@@ -4,15 +4,10 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.datastore.preferences.core.doublePreferencesKey
-import org.junit.Assert.assertNotNull
-import java.io.File
-import java.time.DayOfWeek
-import java.time.LocalTime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,12 +16,17 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
+import java.io.File
+import java.time.DayOfWeek
+import java.time.LocalTime
+import com.prestonhill.questgiver.core.settings.AppThemePreference
 
 @RunWith(AndroidJUnit4::class)
 class AppSettingsRepositoryTest {
@@ -113,6 +113,40 @@ class AppSettingsRepositoryTest {
         }
 
     @Test
+    fun themePreferenceIsSaved(): Unit =
+        runBlocking {
+            repository.setThemePreference(
+                AppThemePreference.DARK
+            )
+
+            val dark =
+                repository.settings.first {
+                    it.themePreference ==
+                            AppThemePreference.DARK
+                }
+
+            assertEquals(
+                AppThemePreference.DARK,
+                dark.themePreference,
+            )
+
+            repository.setThemePreference(
+                AppThemePreference.LIGHT
+            )
+
+            val light =
+                repository.settings.first {
+                    it.themePreference ==
+                            AppThemePreference.LIGHT
+                }
+
+            assertEquals(
+                AppThemePreference.LIGHT,
+                light.themePreference,
+            )
+        }
+
+    @Test
     fun defaultSettings() = runBlocking {
         val settings =
             repository.settings.first()
@@ -120,6 +154,11 @@ class AppSettingsRepositoryTest {
         assertEquals(
             LocalTime.MIDNIGHT,
             settings.dayBoundary
+        )
+
+        assertEquals(
+            AppThemePreference.SYSTEM,
+            settings.themePreference,
         )
 
         assertEquals(

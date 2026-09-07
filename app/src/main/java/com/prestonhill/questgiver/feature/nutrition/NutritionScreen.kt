@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -63,6 +64,16 @@ fun NutritionScreen(
     state: NutritionScreenUiState,
     onAction: (NutritionAction) -> Unit,
 ) {
+    BackHandler(
+        enabled =
+            state.destination ==
+                    NutritionDestination.Manage
+    ) {
+        onAction(
+            NutritionAction.DismissDestination
+        )
+    }
+
     if (state.isLoading) {
         Box(
             modifier = Modifier.fillMaxSize(),
